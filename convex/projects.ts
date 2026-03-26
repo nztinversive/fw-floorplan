@@ -1,0 +1,106 @@
+import { mutationGeneric, queryGeneric } from "convex/server";
+import { v } from "convex/values";
+
+export const list = queryGeneric({
+  args: {},
+  handler: async (ctx) => {
+    const projects = await ctx.db.query("projects").collect();
+    return projects.sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+});
+
+export const get = queryGeneric({
+  args: {
+    id: v.id("projects")
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.id);
+    if (!project) {
+      return null;
+    }
+
+    const floorPlans = await ctx.db
+      .query("floorPlans")
+      .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
+      .collect();
+
+    return {
+      ...project,
+      floorPlans: floorPlans.sort((a, b) => a.floor - b.floor)
+    };
+  }
+});
+
+export const create = mutationGeneric({
+  args: {
+    name: v.string(),
+    address: v.optional(v.string()),
+    clientName: v.optional(v.string()),
+    thumbnail: v.optional(v.id("_storage"))
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    return await ctx.db.insert("projects", {
+      name: args.name,
+      address: args.address,
+      clientName: args.clientName,
+      createdAt: now,
+      updatedAt: now,
+      thumbnail: args.thumbnail
+    });
+  }
+});
+
+export const update = mutationGeneric({
+  args: {
+    id: v.id("projects"),
+    name: v.optional(v.string()),
+    address: v.optional(v.string()),
+    clientName: v.optional(v.string()),
+    thumbnail: v.optional(v.id("_storage"))
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.id);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    await ctx.db.patch(args.id, {
+      name: args.name ?? project.name,
+      address: args.address ?? project.address,
+      clientName: args.clientName ?? project.clientName,
+      thumbnail: args.thumbnail ?? project.thumbnail,
+      updatedAt: Date.now()
+    });
+
+    return args.id;
+  }
+});
+
+export const remove = mutationGeneric({
+  args: {
+    id: v.id("projects")
+  },
+  handler: async (ctx, args) => {
+    const floorPlans = await ctx.db
+      .query("floorPlans")
+      .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
+      .collect();
+    const renders = await ctx.db
+      .query("renders")
+      .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
+      .collect();
+
+    for (const floorPlan of floorPlans) {
+      await ctx.db.delete(floorPlan._id);
+    }
+
+    for (const render of renders) {
+      await ctx.db.delete(render._id);
+    }
+
+    await ctx.db.delete(args.id);
+    return args.id;
+  }
+});
+

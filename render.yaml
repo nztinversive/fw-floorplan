@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: fw-floorplan
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NEXT_PUBLIC_CONVEX_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
