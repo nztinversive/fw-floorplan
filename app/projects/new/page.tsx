@@ -33,7 +33,9 @@ type ExtractedFloorPlan = {
   rooms: FloorPlanData["rooms"]
   doors: FloorPlanData["doors"]
   windows: FloorPlanData["windows"]
+  dimensions: Array<{ wallId: string; lengthFt: number; widthFt: number }>
   scale: number
+  confidence: number
 }
 
 async function uploadAssetToStorage(uploadUrl: string, asset: UploadAsset): Promise<Id<"_storage">> {
@@ -59,6 +61,7 @@ export default function NewProjectPage() {
   const [form, setForm] = useState<FormState>(INITIAL_FORM)
   const [upload, setUpload] = useState<UploadAsset | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [status, setStatus] = useState("")
   const createProject = useMutation(api.projects.create)
   const uploadSource = useMutation(api.floorPlans.uploadSource)
   const saveFloorPlan = useMutation(api.floorPlans.save)
@@ -82,10 +85,12 @@ export default function NewProjectPage() {
       let sourceImage: Id<"_storage"> | undefined
 
       if (upload) {
+        setStatus("Uploading floor plan...")
         const uploadUrl = await uploadSource({})
         sourceImage = await uploadAssetToStorage(uploadUrl, upload)
       }
 
+      setStatus("Creating project...")
       const projectId = await createProject({
         name: form.name.trim(),
         address: form.address.trim() || undefined,
@@ -97,6 +102,7 @@ export default function NewProjectPage() {
 
       if (sourceImage) {
         try {
+          setStatus("Analyzing floor plan with AI... (15-30 seconds)")
           const extracted = (await extractFloorPlan({ storageId: sourceImage })) as ExtractedFloorPlan
           floorPlanData = syncDerivedData({
             walls: extracted.walls,
@@ -108,8 +114,10 @@ export default function NewProjectPage() {
             scale: extracted.scale > 0 ? extracted.scale : 24,
             gridSize: 6
           })
+          setStatus(`Extraction complete — confidence ${Math.round(extracted.confidence * 100)}%`)
         } catch (error) {
           console.error("AI extraction failed, using seed floor plan instead.", error)
+          setStatus("AI extraction failed — using default layout")
         }
       }
 
@@ -187,7 +195,7 @@ export default function NewProjectPage() {
 
         <div className="button-row" style={{ marginTop: "1.25rem" }}>
           <button type="submit" className="button" disabled={!isValid || isSaving}>
-            {isSaving ? "Creating..." : "Create project"}
+            {isSaving ? (status || "Creating...") : "Create project"}
           </button>
           <Link href="/" className="button-ghost">
             Cancel
