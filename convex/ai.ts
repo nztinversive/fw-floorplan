@@ -248,7 +248,30 @@ export const extractFloorPlan = actionGeneric({
       }
     });
 
-    return JSON.parse(extractTextOutput(response));
+    const parsed = JSON.parse(extractTextOutput(response));
+
+    // Post-process: auto-number duplicate room labels
+    if (parsed.rooms && Array.isArray(parsed.rooms)) {
+      const labelCounts: Record<string, number> = {};
+      const labelTotals: Record<string, number> = {};
+
+      // First pass: count occurrences
+      for (const room of parsed.rooms) {
+        const label = room.label || "Room";
+        labelTotals[label] = (labelTotals[label] || 0) + 1;
+      }
+
+      // Second pass: number duplicates
+      for (const room of parsed.rooms) {
+        const label = room.label || "Room";
+        if (labelTotals[label] > 1) {
+          labelCounts[label] = (labelCounts[label] || 0) + 1;
+          room.label = `${label} ${labelCounts[label]}`;
+        }
+      }
+    }
+
+    return parsed;
   }
 });
 

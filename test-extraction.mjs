@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const imgPath = "C:\\Users\\Atlas-playground\\.openclaw\\media\\inbound\\file_242---7014a2ce-2095-4cb0-b561-e6da0eedba7d.jpg";
+const imgPath = "C:\\Users\\Atlas-playground\\.openclaw\\media\\inbound\\file_243---6df6516b-0864-4024-a534-76fb643c3273.jpg";
 const imgBase64 = readFileSync(imgPath).toString("base64");
 const testImageUrl = `data:image/png;base64,${imgBase64}`;
 
