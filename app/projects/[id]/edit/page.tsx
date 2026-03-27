@@ -10,6 +10,7 @@ import { useDebouncedCallback } from "use-debounce"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import Breadcrumb from "@/components/Breadcrumb"
+import CanvasGuidance from "@/components/CanvasGuidance"
 import FloorPlanCanvas from "@/components/FloorPlanCanvas"
 import PropertiesPanel from "@/components/PropertiesPanel"
 import { SkeletonPanel } from "@/components/Skeleton"
@@ -369,7 +370,10 @@ export default function ProjectEditorPage() {
       <div className="editor-shell editor-dark">
         <Toolbar stageRef={stageRef} />
         <div className="editor-grid">
-          <FloorPlanCanvas stageRef={stageRef} />
+          <div style={{ position: "relative" }}>
+            <FloorPlanCanvas stageRef={stageRef} />
+            <CanvasGuidance />
+          </div>
           <PropertiesPanel />
         </div>
       </div>

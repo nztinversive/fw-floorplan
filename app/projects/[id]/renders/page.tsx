@@ -10,6 +10,7 @@ import { useMemo, useState } from "react"
 import Breadcrumb from "@/components/Breadcrumb"
 import ConfirmDialog from "@/components/ConfirmDialog"
 import RenderCard from "@/components/RenderCard"
+import RenderProgress from "@/components/RenderProgress"
 import { SkeletonPanel } from "@/components/Skeleton"
 import StyleSelector from "@/components/StyleSelector"
 import { useToast } from "@/components/Toast"
@@ -407,7 +408,7 @@ export default function ProjectRendersPage() {
                 {isGenerating ? "Generating..." : "Generate Render"}
               </button>
 
-              {isGenerating ? <div className="loading-note">Generating your render... ~30 seconds</div> : null}
+              <RenderProgress isGenerating={isGenerating} />
               {errorMessage ? <div className="muted" style={{ color: "#9a3412" }}>{errorMessage}</div> : null}
             </div>
           </aside>
