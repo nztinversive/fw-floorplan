@@ -3,37 +3,46 @@
 import Image from "next/image"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo } from "react"
+import { useQuery } from "convex/react"
 import { DraftingCompass, Image as ImageIcon } from "lucide-react"
 
+import { api } from "@/convex/_generated/api"
+import type { Id } from "@/convex/_generated/dataModel"
 import { formatDate } from "@/lib/file-utils"
-import { getProject } from "@/lib/local-data"
-import type { StoredProject } from "@/lib/types"
+
+function getDisplayImage(src?: string) {
+  return src?.startsWith("http") || src?.startsWith("data:") ? src : undefined
+}
 
 export default function ProjectOverviewPage() {
   const params = useParams<{ id: string }>()
-  const projectId = Array.isArray(params?.id) ? params.id[0] : params?.id
-  const [project, setProject] = useState<StoredProject | null>(null)
-  const [hasLoaded, setHasLoaded] = useState(false)
+  const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as Id<"projects"> | undefined
+  const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
 
-  useEffect(() => {
-    if (!projectId) {
-      setHasLoaded(true)
-      return
-    }
+  const primaryFloor = useMemo(
+    () => project?.floorPlans.find((entry: { floor: number }) => entry.floor === 1),
+    [project]
+  )
+  const thumbnail = getDisplayImage(project?.thumbnail)
 
-    setProject(getProject(projectId))
-    setHasLoaded(true)
-  }, [projectId])
+  if (projectId && project === undefined) {
+    return (
+      <main className="page-shell">
+        <div className="empty-state">
+          <div className="section-title">Loading project</div>
+          <div className="muted">Fetching project details from Convex.</div>
+        </div>
+      </main>
+    )
+  }
 
-  const primaryFloor = useMemo(() => project?.floorPlans.find((entry) => entry.floor === 1), [project])
-
-  if (hasLoaded && !project) {
+  if (!projectId || project === null) {
     return (
       <main className="page-shell">
         <div className="empty-state">
           <div className="section-title">Project not found</div>
-          <div className="muted">The local record may have been removed or never created on this device.</div>
+          <div className="muted">The project may have been removed or has not been created yet.</div>
           <Link href="/" className="button-secondary">
             Return to dashboard
           </Link>
@@ -63,9 +72,9 @@ export default function ProjectOverviewPage() {
             <span className="badge">Floor {primaryFloor?.floor ?? 1}</span>
           </div>
           <div className="overview-thumb" style={{ position: "relative" }}>
-            {project?.thumbnail ? (
+            {thumbnail ? (
               <Image
-                src={project.thumbnail}
+                src={thumbnail}
                 alt={`${project.name} floor plan`}
                 fill
                 sizes="(max-width: 1024px) 100vw, 70vw"
@@ -119,7 +128,7 @@ export default function ProjectOverviewPage() {
             </div>
             <div className="status-line">
               <span className="status-dot" />
-              Changes save back into local browser storage.
+              Changes save back into Convex automatically.
             </div>
             <div className="divider" style={{ margin: "1rem 0" }} />
             <div className="muted">

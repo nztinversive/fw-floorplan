@@ -4,9 +4,13 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import type { FormEvent } from "react"
 import { useMemo, useState } from "react"
+import { useAction, useMutation } from "convex/react"
 
 import UploadZone, { type UploadAsset } from "@/components/UploadZone"
-import { createProject } from "@/lib/local-data"
+import { api } from "@/convex/_generated/api"
+import type { Id } from "@/convex/_generated/dataModel"
+import { createSeedFloorPlan, syncDerivedData } from "@/lib/geometry"
+import type { FloorPlanData } from "@/lib/types"
 
 type FormState = {
   name: string
@@ -20,11 +24,45 @@ const INITIAL_FORM: FormState = {
   clientName: ""
 }
 
+type UploadResponse = {
+  storageId: Id<"_storage">
+}
+
+type ExtractedFloorPlan = {
+  walls: FloorPlanData["walls"]
+  rooms: FloorPlanData["rooms"]
+  doors: FloorPlanData["doors"]
+  windows: FloorPlanData["windows"]
+  scale: number
+}
+
+async function uploadAssetToStorage(uploadUrl: string, asset: UploadAsset): Promise<Id<"_storage">> {
+  const blob = await fetch(asset.dataUrl).then((response) => response.blob())
+  const response = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": asset.mimeType
+    },
+    body: blob
+  })
+
+  if (!response.ok) {
+    throw new Error("Upload failed")
+  }
+
+  const payload = (await response.json()) as UploadResponse
+  return payload.storageId
+}
+
 export default function NewProjectPage() {
   const router = useRouter()
   const [form, setForm] = useState<FormState>(INITIAL_FORM)
   const [upload, setUpload] = useState<UploadAsset | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const createProject = useMutation(api.projects.create)
+  const uploadSource = useMutation(api.floorPlans.uploadSource)
+  const saveFloorPlan = useMutation(api.floorPlans.save)
+  const extractFloorPlan = useAction(api.ai.extractFloorPlan)
 
   const isValid = useMemo(() => form.name.trim().length > 0, [form.name])
 
@@ -32,7 +70,7 @@ export default function NewProjectPage() {
     setForm((current) => ({ ...current, [key]: value }))
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!isValid || isSaving) {
       return
@@ -40,15 +78,53 @@ export default function NewProjectPage() {
 
     setIsSaving(true)
 
-    const project = createProject({
-      name: form.name.trim(),
-      address: form.address.trim() || undefined,
-      clientName: form.clientName.trim() || undefined,
-      sourceImage: upload?.dataUrl,
-      thumbnail: upload?.previewUrl ?? (upload?.mimeType.startsWith("image/") ? upload.dataUrl : undefined)
-    })
+    try {
+      let sourceImage: Id<"_storage"> | undefined
 
-    router.push(`/projects/${project.id}`)
+      if (upload) {
+        const uploadUrl = await uploadSource({})
+        sourceImage = await uploadAssetToStorage(uploadUrl, upload)
+      }
+
+      const projectId = await createProject({
+        name: form.name.trim(),
+        address: form.address.trim() || undefined,
+        clientName: form.clientName.trim() || undefined,
+        thumbnail: sourceImage
+      })
+
+      let floorPlanData = createSeedFloorPlan(sourceImage).data
+
+      if (sourceImage) {
+        try {
+          const extracted = (await extractFloorPlan({ storageId: sourceImage })) as ExtractedFloorPlan
+          floorPlanData = syncDerivedData({
+            walls: extracted.walls,
+            rooms: extracted.rooms,
+            doors: extracted.doors,
+            windows: extracted.windows,
+            dimensions: [],
+            furniture: [],
+            scale: extracted.scale > 0 ? extracted.scale : 24,
+            gridSize: 6
+          })
+        } catch (error) {
+          console.error("AI extraction failed, using seed floor plan instead.", error)
+        }
+      }
+
+      await saveFloorPlan({
+        projectId,
+        floor: 1,
+        sourceImage,
+        data: floorPlanData
+      })
+
+      router.push(`/projects/${projectId}`)
+    } catch (error) {
+      console.error("Unable to create project.", error)
+      setIsSaving(false)
+    }
   }
 
   return (
