@@ -3,9 +3,9 @@
 import Image from "next/image"
 import Link from "next/link"
 import { useParams } from "next/navigation"
-import { useMemo } from "react"
 import { useQuery } from "convex/react"
-import { DraftingCompass, Image as ImageIcon } from "lucide-react"
+import { DraftingCompass, Image as ImageIcon, Link2 } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
@@ -19,12 +19,45 @@ export default function ProjectOverviewPage() {
   const params = useParams<{ id: string }>()
   const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as Id<"projects"> | undefined
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
+  const copyTimerRef = useRef<number | null>(null)
+  const [shareFeedback, setShareFeedback] = useState<"idle" | "copied" | "error">("idle")
 
   const primaryFloor = useMemo(
     () => project?.floorPlans.find((entry: { floor: number }) => entry.floor === 1),
     [project]
   )
   const thumbnail = getDisplayImage(project?.thumbnail)
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) {
+        window.clearTimeout(copyTimerRef.current)
+      }
+    }
+  }, [])
+
+  async function handleCopyShareLink() {
+    if (!projectId) {
+      return
+    }
+
+    try {
+      const shareUrl = `${window.location.origin}/projects/${projectId}/share`
+      await navigator.clipboard.writeText(shareUrl)
+      setShareFeedback("copied")
+      if (copyTimerRef.current) {
+        window.clearTimeout(copyTimerRef.current)
+      }
+      copyTimerRef.current = window.setTimeout(() => setShareFeedback("idle"), 1800)
+    } catch (error) {
+      console.error("Unable to copy share link.", error)
+      setShareFeedback("error")
+      if (copyTimerRef.current) {
+        window.clearTimeout(copyTimerRef.current)
+      }
+      copyTimerRef.current = window.setTimeout(() => setShareFeedback("idle"), 2200)
+    }
+  }
 
   if (projectId && project === undefined) {
     return (
@@ -102,7 +135,16 @@ export default function ProjectOverviewPage() {
               <ImageIcon size={18} />
               Renders
             </Link>
+            <button type="button" className="button-ghost" onClick={handleCopyShareLink}>
+              <Link2 size={18} />
+              Copy share link
+            </button>
           </div>
+          {shareFeedback !== "idle" ? (
+            <div className={`copy-feedback ${shareFeedback === "error" ? "is-error" : ""}`}>
+              {shareFeedback === "copied" ? "Copied!" : "Unable to copy link"}
+            </div>
+          ) : null}
         </section>
 
         <aside className="editor-sidebar">

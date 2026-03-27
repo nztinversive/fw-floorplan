@@ -65,7 +65,7 @@ export default function PropertiesPanel() {
     }
 
     const wall = selection.item
-    const angle = Math.atan2(wall.y2 - wall.y1, wall.x2 - wall.x1)
+    const angle = (getWallAngle(wall) * Math.PI) / 180
     updateElement(wall.id, {
       x2: wall.x1 + Math.cos(angle) * nextLength,
       y2: wall.y1 + Math.sin(angle) * nextLength

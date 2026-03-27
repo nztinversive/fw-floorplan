@@ -79,7 +79,15 @@ const renderSettings = v.object({
   colorPalette: v.string(),
   landscaping: v.string(),
   timeOfDay: v.string(),
-  season: v.string()
+  season: v.string(),
+  viewAngle: v.optional(
+    v.union(
+      v.literal("front-three-quarter"),
+      v.literal("front-elevation"),
+      v.literal("rear-elevation"),
+      v.literal("aerial")
+    )
+  )
 });
 
 export default defineSchema({

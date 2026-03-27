@@ -304,6 +304,23 @@ button {
   grid-template-columns: repeat(auto-fit, minmax(140px, max-content));
 }
 
+.copy-feedback {
+  margin-top: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(29, 125, 86, 0.12);
+  color: var(--fw-success);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.copy-feedback.is-error {
+  background: rgba(154, 52, 18, 0.12);
+  color: #9a3412;
+}
+
 .button,
 .button-secondary,
 .button-ghost,
@@ -388,6 +405,36 @@ button:disabled,
 .field {
   display: grid;
   gap: 0.45rem;
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.pill-button {
+  border: 1px solid var(--fw-border);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--fw-navy);
+  border-radius: 999px;
+  padding: 0.65rem 0.9rem;
+  min-height: 2.75rem;
+  transition:
+    transform 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.pill-button:hover {
+  transform: translateY(-1px);
+}
+
+.pill-button.is-active {
+  background: var(--fw-navy);
+  border-color: var(--fw-navy);
+  color: white;
 }
 
 .field-label {
@@ -701,6 +748,22 @@ button:disabled,
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
+.render-card {
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.render-card.is-comparison-mode {
+  cursor: pointer;
+}
+
+.render-card.is-selected {
+  border-color: rgba(212, 168, 75, 0.72);
+  box-shadow: 0 16px 32px rgba(212, 168, 75, 0.18);
+}
+
 .render-media {
   aspect-ratio: 3 / 2;
   background:
@@ -720,6 +783,13 @@ button:disabled,
   grid-template-columns: 1fr auto;
   align-items: center;
   padding: 0.9rem 1rem 0;
+}
+
+.render-toolbar-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .render-actions {
@@ -742,6 +812,97 @@ button:disabled,
 .render-meta-time {
   color: var(--fw-slate);
   font-size: 0.88rem;
+}
+
+.comparison-shell,
+.comparison-meta,
+.share-page-shell,
+.share-hero-copy,
+.share-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.comparison-header,
+.share-brand-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.comparison-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr 1fr;
+}
+
+.comparison-card {
+  border: 1px solid var(--fw-border);
+  border-radius: 1.2rem;
+  background: rgba(255, 255, 255, 0.84);
+  overflow: hidden;
+}
+
+.comparison-media {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  background:
+    linear-gradient(135deg, rgba(27, 42, 74, 0.9), rgba(100, 116, 139, 0.7)),
+    var(--fw-navy);
+}
+
+.comparison-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.comparison-empty {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.comparison-meta {
+  padding: 1rem;
+}
+
+.comparison-labels {
+  margin-top: 0.25rem;
+}
+
+.share-hero {
+  gap: 1.25rem;
+}
+
+.share-meta-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.share-stat {
+  font-size: 1.1rem;
+  line-height: 1.35;
+}
+
+.share-canvas-panel {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.share-canvas-frame {
+  height: min(70vh, 640px);
+  min-height: 420px;
+}
+
+.share-render-card {
+  height: 100%;
 }
 
 @keyframes renderPulse {
@@ -783,7 +944,8 @@ button:disabled,
 @media (max-width: 1024px) {
   .overview-grid,
   .editor-grid,
-  .render-controls {
+  .render-controls,
+  .comparison-grid {
     grid-template-columns: 1fr;
   }
 
@@ -805,7 +967,9 @@ button:disabled,
 
   .page-heading,
   .panel-header,
-  .canvas-caption {
+  .canvas-caption,
+  .comparison-header,
+  .share-brand-row {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -826,5 +990,9 @@ button:disabled,
   .mobile-note {
     display: grid;
     margin-bottom: 1rem;
+  }
+
+  .share-canvas-frame {
+    min-height: 360px;
   }
 }

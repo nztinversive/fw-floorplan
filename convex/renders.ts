@@ -4,7 +4,18 @@ import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { action, internalMutation, mutation, query } from "./_generated/server";
+import {
+  RENDER_VIEW_ANGLE_PROMPTS,
+  type RenderViewAngle
+} from "../lib/render-angles";
 import { STYLE_PRESET_MAP, type StylePresetId } from "../lib/style-presets";
+
+const viewAngleValidator = v.union(
+  v.literal("front-three-quarter"),
+  v.literal("front-elevation"),
+  v.literal("rear-elevation"),
+  v.literal("aerial")
+);
 
 const renderSettingsValidator = v.object({
   style: v.string(),
@@ -13,7 +24,8 @@ const renderSettingsValidator = v.object({
   colorPalette: v.string(),
   landscaping: v.string(),
   timeOfDay: v.string(),
-  season: v.string()
+  season: v.string(),
+  viewAngle: v.optional(viewAngleValidator)
 });
 
 type FloorPlanDoc = Doc<"floorPlans">;
@@ -305,6 +317,7 @@ function composePrompt(args: {
     landscaping: string;
     timeOfDay: string;
     season: string;
+    viewAngle: RenderViewAngle;
   };
 }) {
   const preset = STYLE_PRESET_MAP[args.styleId];
@@ -318,7 +331,7 @@ function composePrompt(args: {
     `Style direction: ${preset.promptFragment}.`,
     `Material and form direction: ${args.settings.sidingMaterial} siding, ${args.settings.roofStyle} roof form, ${args.settings.colorPalette} color palette, ${args.settings.landscaping} landscaping.`,
     `Lighting and environment: ${args.settings.timeOfDay} light in ${args.settings.season}.`,
-    "Show a believable front three-quarter perspective that clearly communicates the entry sequence, roofline, facade proportions, and overall massing.",
+    RENDER_VIEW_ANGLE_PROMPTS[args.settings.viewAngle],
     "Keep the image grounded in realistic residential architecture with natural materials, clean detailing, and high-end presentation quality.",
     "Do not include text, watermarks, floor plan overlays, exploded views, interior cutaways, cartoon styling, or exaggerated fantasy elements."
   ].join(" ");
@@ -390,7 +403,8 @@ export const generateRender = action({
   args: {
     projectId: v.id("projects"),
     style: v.string(),
-    settings: renderSettingsValidator
+    settings: renderSettingsValidator,
+    viewAngle: viewAngleValidator
   },
   handler: async (ctx, args) => {
     const project = (await ctx.runQuery(api.projects.get, {
@@ -408,7 +422,8 @@ export const generateRender = action({
     const styleId = normalizeStyleId(args.style);
     const settings = {
       ...args.settings,
-      style: styleId
+      style: styleId,
+      viewAngle: args.viewAngle
     };
     const architecturalDescription = describeFloorPlans(project.floorPlans);
     const prompt = composePrompt({

@@ -2,7 +2,7 @@ import type { RenderSettings } from "./types";
 
 export type StylePresetId = "craftsman" | "modern-farmhouse" | "contemporary";
 
-export type StylePresetDefaults = Omit<RenderSettings, "style">;
+export type StylePresetDefaults = Omit<RenderSettings, "style" | "viewAngle">;
 
 export type StylePreset = {
   id: StylePresetId;

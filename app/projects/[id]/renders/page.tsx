@@ -1,15 +1,22 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { ImagePlus } from "lucide-react";
+import { ImagePlus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import RenderCard from "@/components/RenderCard";
 import StyleSelector from "@/components/StyleSelector";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import {
+  DEFAULT_RENDER_VIEW_ANGLE,
+  RENDER_VIEW_ANGLE_LABELS,
+  RENDER_VIEW_ANGLES,
+  type RenderViewAngle
+} from "@/lib/render-angles";
 import {
   RENDER_SETTING_OPTIONS,
   STYLE_PRESET_MAP,
@@ -24,11 +31,19 @@ type SettingKey = keyof StylePresetDefaults;
 
 const INITIAL_STYLE = STYLE_PRESETS[0].id;
 
-function getDefaultSettings(styleId: StylePresetId): RenderSettings {
+function getDefaultSettings(
+  styleId: StylePresetId,
+  viewAngle: RenderViewAngle = DEFAULT_RENDER_VIEW_ANGLE
+): RenderSettings {
   return {
     style: styleId,
-    ...STYLE_PRESET_MAP[styleId].defaultSettings
+    ...STYLE_PRESET_MAP[styleId].defaultSettings,
+    viewAngle
   };
+}
+
+function getStyleLabel(style: string) {
+  return STYLE_PRESET_MAP[style as keyof typeof STYLE_PRESET_MAP]?.name ?? style;
 }
 
 export default function ProjectRendersPage() {
@@ -43,6 +58,8 @@ export default function ProjectRendersPage() {
   const [selectedStyle, setSelectedStyle] = useState<StylePresetId>(INITIAL_STYLE);
   const [settings, setSettings] = useState<RenderSettings>(() => getDefaultSettings(INITIAL_STYLE));
   const [isGenerating, setIsGenerating] = useState(false);
+  const [comparisonMode, setComparisonMode] = useState(false);
+  const [selectedRenderIds, setSelectedRenderIds] = useState<string[]>([]);
   const [pendingRenderAction, setPendingRenderAction] = useState<{
     renderId: string;
     action: PendingRenderAction;
@@ -55,7 +72,10 @@ export default function ProjectRendersPage() {
         id: render._id,
         projectId: render.projectId,
         style: render.style,
-        settings: render.settings,
+        settings: {
+          ...render.settings,
+          viewAngle: render.settings.viewAngle ?? DEFAULT_RENDER_VIEW_ANGLE
+        },
         imageStorageId: render.imageStorageId,
         imageUrl: render.imageUrl,
         prompt: render.prompt,
@@ -65,9 +85,14 @@ export default function ProjectRendersPage() {
     [rendersQuery]
   );
 
+  const comparisonRenders = useMemo(
+    () => selectedRenderIds.map((renderId) => renders.find((render) => render.id === renderId)).filter(Boolean) as StoredRender[],
+    [renders, selectedRenderIds]
+  );
+
   function handleStyleSelect(styleId: StylePresetId) {
     setSelectedStyle(styleId);
-    setSettings(getDefaultSettings(styleId));
+    setSettings((current) => getDefaultSettings(styleId, current.viewAngle));
   }
 
   function updateSetting(key: SettingKey, value: string) {
@@ -75,6 +100,14 @@ export default function ProjectRendersPage() {
       ...current,
       style: selectedStyle,
       [key]: value
+    }));
+  }
+
+  function handleViewAngleSelect(viewAngle: RenderViewAngle) {
+    setSettings((current) => ({
+      ...current,
+      style: selectedStyle,
+      viewAngle
     }));
   }
 
@@ -90,6 +123,7 @@ export default function ProjectRendersPage() {
       await generateRender({
         projectId,
         style: nextStyle,
+        viewAngle: nextSettings.viewAngle,
         settings: {
           ...nextSettings,
           style: nextStyle
@@ -127,6 +161,7 @@ export default function ProjectRendersPage() {
 
     try {
       await removeRender({ renderId: renderId as Id<"renders"> });
+      setSelectedRenderIds((current) => current.filter((id) => id !== renderId));
     } catch (error) {
       console.error("Unable to delete render.", error);
       setErrorMessage("Unable to delete the selected render.");
@@ -143,6 +178,25 @@ export default function ProjectRendersPage() {
     } finally {
       setPendingRenderAction(null);
     }
+  }
+
+  function handleComparisonToggle() {
+    setComparisonMode((current) => !current);
+    setSelectedRenderIds([]);
+  }
+
+  function handleComparisonSelect(renderId: string) {
+    setSelectedRenderIds((current) => {
+      if (current.includes(renderId)) {
+        return current.filter((id) => id !== renderId);
+      }
+
+      if (current.length < 2) {
+        return [...current, renderId];
+      }
+
+      return [current[1], renderId];
+    });
   }
 
   if ((projectId && project === undefined) || (projectId && rendersQuery === undefined)) {
@@ -249,6 +303,23 @@ export default function ProjectRendersPage() {
             </div>
 
             <div style={{ display: "grid", gap: "0.9rem", marginTop: "1rem" }}>
+              <div className="field">
+                <span className="field-label">View angle</span>
+                <div className="pill-row">
+                  {RENDER_VIEW_ANGLES.map((viewAngle) => (
+                    <button
+                      key={viewAngle}
+                      type="button"
+                      className={`pill-button${settings.viewAngle === viewAngle ? " is-active" : ""}`}
+                      onClick={() => handleViewAngleSelect(viewAngle)}
+                      disabled={isGenerating}
+                    >
+                      {RENDER_VIEW_ANGLE_LABELS[viewAngle]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <button type="button" className="button" onClick={handleGenerateRender} disabled={isGenerating}>
                 <ImagePlus size={18} />
                 {isGenerating ? "Generating..." : "Generate Render"}
@@ -268,7 +339,80 @@ export default function ProjectRendersPage() {
                 {renders.length} saved {renders.length === 1 ? "render" : "renders"} for this project
               </div>
             </div>
+            <button
+              type="button"
+              className={`button-ghost${comparisonMode ? " is-active" : ""}`}
+              onClick={handleComparisonToggle}
+              disabled={renders.length < 2}
+            >
+              {comparisonMode ? "Exit compare" : "Compare"}
+            </button>
           </div>
+
+          {comparisonMode ? (
+            <div className="comparison-shell">
+              <div className="comparison-header">
+                <div>
+                  <div className="section-title">Comparison mode</div>
+                  <div className="muted">
+                    {comparisonRenders.length === 2
+                      ? "Two renders selected. Review style, angle, and setting differences side by side."
+                      : "Select two render cards below to compare them side by side."}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={handleComparisonToggle}
+                  aria-label="Close comparison mode"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {comparisonRenders.length === 2 ? (
+                <div className="comparison-grid">
+                  {comparisonRenders.map((render) => (
+                    <article key={render.id} className="comparison-card">
+                      <div className="comparison-media">
+                        {render.imageUrl ? (
+                          <Image
+                            src={render.imageUrl}
+                            alt={`${getStyleLabel(render.style)} comparison render`}
+                            fill
+                            sizes="(max-width: 1024px) 100vw, 50vw"
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="comparison-empty">Render image unavailable</div>
+                        )}
+                      </div>
+                      <div className="comparison-meta">
+                        <div className="render-toolbar-badges">
+                          <span className="badge">{getStyleLabel(render.style)}</span>
+                          <span className="badge">{RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle]}</span>
+                        </div>
+                        <dl className="key-value comparison-labels">
+                          <dt>Siding</dt>
+                          <dd>{render.settings.sidingMaterial}</dd>
+                          <dt>Roof</dt>
+                          <dd>{render.settings.roofStyle}</dd>
+                          <dt>Palette</dt>
+                          <dd>{render.settings.colorPalette}</dd>
+                          <dt>Landscape</dt>
+                          <dd>{render.settings.landscaping}</dd>
+                          <dt>Light</dt>
+                          <dd>{render.settings.timeOfDay}</dd>
+                          <dt>Season</dt>
+                          <dd>{render.settings.season}</dd>
+                        </dl>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {renders.length > 0 ? (
             <div className="render-grid">
@@ -290,6 +434,9 @@ export default function ProjectRendersPage() {
                   onToggleFavorite={handleToggleFavorite}
                   onDelete={handleDeleteRender}
                   onRegenerate={handleRegenerate}
+                  comparisonMode={comparisonMode}
+                  isSelectedForComparison={selectedRenderIds.includes(render.id)}
+                  onSelectForComparison={handleComparisonSelect}
                 />
               ))}
             </div>

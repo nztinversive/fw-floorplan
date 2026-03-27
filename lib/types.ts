@@ -1,3 +1,5 @@
+import type { RenderViewAngle } from "./render-angles";
+
 export type Point = {
   x: number;
   y: number;
@@ -74,6 +76,7 @@ export type RenderSettings = {
   landscaping: string;
   timeOfDay: string;
   season: string;
+  viewAngle: RenderViewAngle;
 };
 
 export type StoredRender = {

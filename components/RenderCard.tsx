@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { Download, RefreshCw, Star, Trash2 } from "lucide-react";
 
+import { RENDER_VIEW_ANGLE_LABELS } from "@/lib/render-angles";
 import { STYLE_PRESET_MAP } from "@/lib/style-presets";
 import { formatRelativeTime } from "@/lib/file-utils";
 import type { StoredRender } from "@/lib/types";
@@ -15,6 +16,9 @@ type RenderCardProps = {
   onToggleFavorite: (renderId: string) => Promise<void> | void;
   onDelete: (renderId: string) => Promise<void> | void;
   onRegenerate: (render: StoredRender) => Promise<void> | void;
+  comparisonMode?: boolean;
+  isSelectedForComparison?: boolean;
+  onSelectForComparison?: (renderId: string) => void;
 };
 
 function getStyleLabel(style: string) {
@@ -28,7 +32,10 @@ export default function RenderCard({
   isRegenerating,
   onToggleFavorite,
   onDelete,
-  onRegenerate
+  onRegenerate,
+  comparisonMode = false,
+  isSelectedForComparison = false,
+  onSelectForComparison
 }: RenderCardProps) {
   async function handleDelete() {
     if (!window.confirm("Delete this render? This also removes the stored image file.")) {
@@ -46,16 +53,46 @@ export default function RenderCard({
     window.open(render.imageUrl, "_blank", "noopener,noreferrer");
   }
 
+  function handleCardClick() {
+    if (!comparisonMode || !onSelectForComparison) {
+      return;
+    }
+
+    onSelectForComparison(render.id);
+  }
+
+  function handleCardKeyDown(event: React.KeyboardEvent<HTMLElement>) {
+    if (!comparisonMode || (event.key !== "Enter" && event.key !== " ")) {
+      return;
+    }
+
+    event.preventDefault();
+    handleCardClick();
+  }
+
   return (
-    <article className="render-card">
+    <article
+      className={`render-card${comparisonMode ? " is-comparison-mode" : ""}${isSelectedForComparison ? " is-selected" : ""}`}
+      onClick={handleCardClick}
+      onKeyDown={handleCardKeyDown}
+      role={comparisonMode ? "button" : undefined}
+      tabIndex={comparisonMode ? 0 : undefined}
+    >
       <div className="render-toolbar">
-        <span className="badge">{getStyleLabel(render.style)}</span>
+        <div className="render-toolbar-badges">
+          <span className="badge">{getStyleLabel(render.style)}</span>
+          <span className="badge">{RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle]}</span>
+          {comparisonMode && isSelectedForComparison ? <span className="badge">Selected</span> : null}
+        </div>
         <div className="render-actions">
           <button
             type="button"
             className="icon-button"
-            onClick={() => onToggleFavorite(render.id)}
-            disabled={isFavoriting || isDeleting || isRegenerating}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleFavorite(render.id);
+            }}
+            disabled={comparisonMode || isFavoriting || isDeleting || isRegenerating}
             aria-label={render.isFavorite ? "Remove favorite" : "Mark favorite"}
             title={render.isFavorite ? "Remove favorite" : "Favorite"}
             style={render.isFavorite ? { color: "#d4a84b" } : undefined}
@@ -65,8 +102,11 @@ export default function RenderCard({
           <button
             type="button"
             className="icon-button"
-            onClick={handleDownload}
-            disabled={!render.imageUrl || isDeleting}
+            onClick={(event) => {
+              event.stopPropagation();
+              handleDownload();
+            }}
+            disabled={comparisonMode || !render.imageUrl || isDeleting}
             aria-label="Download render"
             title="Download render"
           >
@@ -75,8 +115,11 @@ export default function RenderCard({
           <button
             type="button"
             className="icon-button"
-            onClick={handleDelete}
-            disabled={isDeleting || isRegenerating}
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleDelete();
+            }}
+            disabled={comparisonMode || isDeleting || isRegenerating}
             aria-label="Delete render"
             title="Delete render"
           >
@@ -118,8 +161,11 @@ export default function RenderCard({
         <button
           type="button"
           className="button-ghost"
-          onClick={() => onRegenerate(render)}
-          disabled={isDeleting || isRegenerating}
+          onClick={(event) => {
+            event.stopPropagation();
+            onRegenerate(render);
+          }}
+          disabled={comparisonMode || isDeleting || isRegenerating}
         >
           <RefreshCw size={18} />
           {isRegenerating ? "Generating..." : "Regenerate"}
