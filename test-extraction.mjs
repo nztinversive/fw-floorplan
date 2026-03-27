@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const imgPath = "C:\\Users\\Atlas-playground\\.openclaw\\media\\tool-image-generation\\test-floorplan---c47785a7-ff2b-4ade-a752-de73b6c3a68b.png";
+const imgPath = "C:\\Users\\Atlas-playground\\.openclaw\\media\\inbound\\file_242---7014a2ce-2095-4cb0-b561-e6da0eedba7d.jpg";
 const imgBase64 = readFileSync(imgPath).toString("base64");
 const testImageUrl = `data:image/png;base64,${imgBase64}`;
 
@@ -25,11 +25,11 @@ const schema = {
 console.log("Sending floor plan to GPT-5.4-mini with structured outputs...\n");
 
 const response = await client.responses.create({
-  model: "gpt-5.4-mini",
+  model: "gpt-5.4",
   input: [
     {
       role: "system",
-      content: [{ type: "input_text", text: "You analyze residential floor plan images for a modular home design studio. Return structured geometry only. Do not narrate. COORDINATE SYSTEM: Normalized 0-1000 on both axes, (0,0) is top-left. WALLS: Simplified line segments, snap near-axis-aligned to true H/V, unique IDs w1/w2/etc, thickness in pixels (6-12 interior, 8-14 exterior). ROOMS: Each enclosed space gets exactly one entry with a UNIQUE label (never duplicate). Use specific labels: Living Room, Kitchen, Dining Room, Master Bedroom, Bedroom 2, Bathroom 1, Hallway, Entry, etc. Ordered polygons. DOORS: type MUST be one of: standard, sliding, double, garage. Map swing/hinged to standard. Position 0-1 along host wall. Width in feet. WINDOWS: Position 0-1 along host wall, width/height in feet, exterior walls only. DIMENSIONS: wallId references wall or room, lengthFt is primary measurement, widthFt is secondary (or 0 for single-axis). SCALE: pixels-per-foot estimate. CONFIDENCE: 0-1." }]
+      content: [{ type: "input_text", text: "You analyze residential floor plan images. Return structured geometry only. Do not narrate. CRITICAL: READ LABELS FROM THE IMAGE. Use EXACT text labels printed on the floor plan. NEVER invent room types not visible in the image. If no label, use generic 'Room 1', 'Closet 1'. Do NOT assume ground floor — plans may show any level. COORDINATE SYSTEM: Normalized 0-1000 on both axes, (0,0) top-left. WALLS: Include interior partitions for closets/bathrooms/hallways. Snap near-axis to H/V. Unique IDs w1/w2. ROOMS: EVERY enclosed space is a room — including WICs, closets, stairwells, landings. Read labels from image. WIC = Walk-in Closet. Number duplicates: WIC 1, WIC 2, Closet 1. Polygons must NOT overlap. areaSqFt: calculate from printed dimensions (13'-0\" x 17'-4\" = 13 × 17.33 = 225 sqft). Typical sizes: Bedroom 120-250, Bathroom 40-100, Closet 15-50, WIC 30-80, Master 200-400. DOORS: standard/sliding/double/garage only. Width in feet. WINDOWS: exterior walls only, width/height in feet. DIMENSIONS: extract printed measurements, convert feet-inches to decimal. SCALE: px/ft from dimensions. CONFIDENCE: 0-1." }]
     },
     {
       role: "user",
