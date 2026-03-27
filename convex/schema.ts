@@ -108,6 +108,7 @@ export default defineSchema({
     prompt: v.string(),
     isFavorite: v.boolean(),
     createdAt: v.number()
-  }).index("by_projectId", ["projectId"])
+  })
+    .index("by_projectId", ["projectId"])
+    .index("by_projectId_and_createdAt", ["projectId", "createdAt"])
 });
-

@@ -353,6 +353,17 @@ button {
   transform: translateY(-1px);
 }
 
+button:disabled,
+.button[aria-disabled="true"],
+.button-secondary[aria-disabled="true"],
+.button-ghost[aria-disabled="true"],
+.icon-button:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 .icon-button {
   width: 2.7rem;
   height: 2.7rem;
@@ -564,6 +575,186 @@ button {
   padding: 2.4rem 1.5rem;
 }
 
+.render-stack,
+.render-grid,
+.style-grid,
+.render-actions,
+.render-toolbar,
+.render-controls {
+  display: grid;
+  gap: 1rem;
+}
+
+.render-stack {
+  margin-top: 1.5rem;
+}
+
+.style-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.style-card,
+.render-card {
+  border: 1px solid var(--fw-border);
+  border-radius: 1.2rem;
+  background: rgba(255, 255, 255, 0.88);
+  overflow: hidden;
+}
+
+.style-card {
+  padding: 1rem;
+  text-align: left;
+  display: grid;
+  gap: 0.75rem;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.style-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(212, 168, 75, 0.4);
+}
+
+.style-card.is-selected {
+  border-color: rgba(212, 168, 75, 0.8);
+  background:
+    linear-gradient(180deg, rgba(212, 168, 75, 0.14), rgba(255, 255, 255, 0.96)),
+    rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 32px rgba(212, 168, 75, 0.18);
+}
+
+.style-card-preview {
+  height: 120px;
+  border-radius: 0.95rem;
+  background:
+    linear-gradient(135deg, rgba(27, 42, 74, 0.96), rgba(212, 168, 75, 0.52)),
+    var(--fw-navy);
+  position: relative;
+  overflow: hidden;
+}
+
+.style-card-preview::before,
+.style-card-preview::after {
+  content: "";
+  position: absolute;
+  inset: auto;
+  border-radius: 999px;
+  opacity: 0.42;
+}
+
+.style-card-preview::before {
+  width: 9rem;
+  height: 9rem;
+  top: -2.6rem;
+  right: -2rem;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.style-card-preview::after {
+  width: 11rem;
+  height: 11rem;
+  left: -3rem;
+  bottom: -4rem;
+  background: rgba(250, 247, 242, 0.22);
+}
+
+.style-card-name {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.2rem;
+}
+
+.style-card-description {
+  color: var(--fw-slate);
+  font-size: 0.94rem;
+  line-height: 1.45;
+}
+
+.render-controls {
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+  align-items: start;
+}
+
+.loading-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.95rem;
+  border-radius: 999px;
+  background: rgba(27, 42, 74, 0.08);
+  color: var(--fw-navy);
+}
+
+.loading-note::before {
+  content: "";
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: var(--fw-amber);
+  box-shadow: 0 0 0 0 rgba(212, 168, 75, 0.5);
+  animation: renderPulse 1.6s ease-in-out infinite;
+}
+
+.render-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.render-media {
+  aspect-ratio: 3 / 2;
+  background:
+    linear-gradient(135deg, rgba(27, 42, 74, 0.9), rgba(100, 116, 139, 0.7)),
+    var(--fw-navy);
+  position: relative;
+}
+
+.render-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.render-toolbar {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  padding: 0.9rem 1rem 0;
+}
+
+.render-actions {
+  grid-auto-flow: column;
+  justify-content: end;
+  gap: 0.55rem;
+}
+
+.render-card-body {
+  padding: 0.9rem 1rem 1rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.render-meta {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.render-meta-time {
+  color: var(--fw-slate);
+  font-size: 0.88rem;
+}
+
+@keyframes renderPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(212, 168, 75, 0.5);
+  }
+
+  50% {
+    box-shadow: 0 0 0 10px rgba(212, 168, 75, 0);
+  }
+}
+
 .divider {
   width: 100%;
   height: 1px;
@@ -591,7 +782,8 @@ button {
 
 @media (max-width: 1024px) {
   .overview-grid,
-  .editor-grid {
+  .editor-grid,
+  .render-controls {
     grid-template-columns: 1fr;
   }
 
@@ -620,6 +812,11 @@ button {
 
   .toolbar-row {
     grid-template-columns: 1fr;
+  }
+
+  .render-actions {
+    grid-auto-flow: row;
+    justify-content: stretch;
   }
 
   .header-pill {

@@ -76,6 +76,18 @@ export type RenderSettings = {
   season: string;
 };
 
+export type StoredRender = {
+  id: string;
+  projectId: string;
+  style: string;
+  settings: RenderSettings;
+  imageStorageId: string;
+  imageUrl?: string | null;
+  prompt: string;
+  isFavorite: boolean;
+  createdAt: number;
+};
+
 export type ProjectSummary = {
   id: string;
   name: string;
@@ -104,4 +116,3 @@ export type StoredProject = {
   thumbnail?: string;
   floorPlans: StoredFloorPlan[];
 };
-
