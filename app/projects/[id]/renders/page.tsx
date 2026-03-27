@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { ImagePlus, X } from "lucide-react";
+import { Download, ImagePlus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import RenderCard from "@/components/RenderCard";
@@ -24,6 +24,7 @@ import {
   type StylePresetDefaults,
   type StylePresetId
 } from "@/lib/style-presets";
+import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export";
 import type { RenderSettings, StoredRender } from "@/lib/types";
 
 type PendingRenderAction = "favorite" | "delete" | "regenerate";
@@ -60,6 +61,7 @@ export default function ProjectRendersPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [comparisonMode, setComparisonMode] = useState(false);
   const [selectedRenderIds, setSelectedRenderIds] = useState<string[]>([]);
+  const [isExportingPackage, setIsExportingPackage] = useState(false);
   const [pendingRenderAction, setPendingRenderAction] = useState<{
     renderId: string;
     action: PendingRenderAction;
@@ -89,6 +91,11 @@ export default function ProjectRendersPage() {
     () => selectedRenderIds.map((renderId) => renders.find((render) => render.id === renderId)).filter(Boolean) as StoredRender[],
     [renders, selectedRenderIds]
   );
+
+  const exportRenders = useMemo(() => {
+    const favoriteRenders = renders.filter((render) => render.isFavorite && render.imageUrl);
+    return favoriteRenders.length > 0 ? favoriteRenders : renders.filter((render) => render.imageUrl);
+  }, [renders]);
 
   function handleStyleSelect(styleId: StylePresetId) {
     setSelectedStyle(styleId);
@@ -180,6 +187,46 @@ export default function ProjectRendersPage() {
     }
   }
 
+  async function handleExportClientPackage() {
+    if (!project || isExportingPackage) {
+      return;
+    }
+
+    const exportFloor = project.floorPlans[0];
+    if (!exportFloor) {
+      setErrorMessage("Save a floor plan before exporting a client package.");
+      return;
+    }
+
+    setErrorMessage(null);
+    setIsExportingPackage(true);
+
+    try {
+      const floorPlanPreview = generateFloorPlanPreview(exportFloor.data);
+
+      await generateClientPackage({
+        projectName: project.name,
+        address: project.address,
+        clientName: project.clientName,
+        floorPlanImage: floorPlanPreview.dataUrl,
+        floorPlanStats: {
+          roomCount: floorPlanPreview.roomCount,
+          wallCount: floorPlanPreview.wallCount
+        },
+        renders: exportRenders.map((render) => ({
+          imageUrl: render.imageUrl,
+          style: render.style,
+          settings: render.settings
+        }))
+      });
+    } catch (error) {
+      console.error("Unable to export PDF package.", error);
+      setErrorMessage("Unable to export the client package right now.");
+    } finally {
+      setIsExportingPackage(false);
+    }
+  }
+
   function handleComparisonToggle() {
     setComparisonMode((current) => !current);
     setSelectedRenderIds([]);
@@ -257,9 +304,20 @@ export default function ProjectRendersPage() {
             {project.name} • Generate photorealistic exterior concepts from the saved floor plan.
           </div>
         </div>
-        <Link href={`/projects/${projectId}`} className="button-ghost">
-          Back to overview
-        </Link>
+        <div className="button-row" style={{ alignItems: "center" }}>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={handleExportClientPackage}
+            disabled={isExportingPackage || rendersQuery === undefined || project.floorPlans.length === 0}
+          >
+            <Download size={18} />
+            {isExportingPackage ? "Exporting..." : "Export Client Package"}
+          </button>
+          <Link href={`/projects/${projectId}`} className="button-ghost">
+            Back to overview
+          </Link>
+        </div>
       </div>
 
       <div className="render-stack">

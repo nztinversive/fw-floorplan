@@ -4,12 +4,13 @@ import Image from "next/image"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useQuery } from "convex/react"
-import { DraftingCompass, Image as ImageIcon, Link2 } from "lucide-react"
+import { Download, DraftingCompass, Image as ImageIcon, Link2 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import { formatDate } from "@/lib/file-utils"
+import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
 
 function getDisplayImage(src?: string) {
   return src?.startsWith("http") || src?.startsWith("data:") ? src : undefined
@@ -19,8 +20,11 @@ export default function ProjectOverviewPage() {
   const params = useParams<{ id: string }>()
   const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as Id<"projects"> | undefined
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
+  const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip")
   const copyTimerRef = useRef<number | null>(null)
   const [shareFeedback, setShareFeedback] = useState<"idle" | "copied" | "error">("idle")
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
+  const [pdfErrorMessage, setPdfErrorMessage] = useState<string | null>(null)
 
   const primaryFloor = useMemo(
     () => project?.floorPlans.find((entry: { floor: number }) => entry.floor === 1),
@@ -59,6 +63,49 @@ export default function ProjectOverviewPage() {
     }
   }
 
+  async function handleExportPdf() {
+    if (!project || isExportingPdf || rendersQuery === undefined) {
+      return
+    }
+
+    const exportFloor = primaryFloor ?? project.floorPlans[0]
+    if (!exportFloor) {
+      setPdfErrorMessage("Save a floor plan before exporting a client package.")
+      return
+    }
+
+    setPdfErrorMessage(null)
+    setIsExportingPdf(true)
+
+    try {
+      const floorPlanPreview = generateFloorPlanPreview(exportFloor.data)
+
+      await generateClientPackage({
+        projectName: project.name,
+        address: project.address,
+        clientName: project.clientName,
+        floorPlanImage: floorPlanPreview.dataUrl,
+        floorPlanStats: {
+          roomCount: floorPlanPreview.roomCount,
+          wallCount: floorPlanPreview.wallCount
+        },
+        renders: (rendersQuery ?? []).map((render) => ({
+          imageUrl: render.imageUrl,
+          style: render.style,
+          settings: {
+            ...render.settings,
+            viewAngle: render.settings.viewAngle ?? "front-three-quarter"
+          }
+        }))
+      })
+    } catch (error) {
+      console.error("Unable to export PDF package.", error)
+      setPdfErrorMessage("Unable to export the client package right now.")
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
+
   if (projectId && project === undefined) {
     return (
       <main className="page-shell">
@@ -93,10 +140,23 @@ export default function ProjectOverviewPage() {
             {project?.address || "No address yet"} • Updated {project ? formatDate(project.updatedAt) : "now"}
           </div>
         </div>
-        <Link href="/" className="button-ghost">
-          Back to dashboard
-        </Link>
+        <div className="button-row" style={{ alignItems: "center" }}>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={handleExportPdf}
+            disabled={isExportingPdf || rendersQuery === undefined || project.floorPlans.length === 0}
+          >
+            <Download size={18} />
+            {isExportingPdf ? "Exporting..." : "Export PDF"}
+          </button>
+          <Link href="/" className="button-ghost">
+            Back to dashboard
+          </Link>
+        </div>
       </div>
+
+      {pdfErrorMessage ? <div className="muted" style={{ color: "#9a3412", marginBottom: "1rem" }}>{pdfErrorMessage}</div> : null}
 
       <div className="overview-grid">
         <section className="panel">
