@@ -16,6 +16,7 @@ import PropertiesPanel from "@/components/PropertiesPanel"
 import { SkeletonPanel } from "@/components/Skeleton"
 import { useToast } from "@/components/Toast"
 import Toolbar from "@/components/Toolbar"
+import UnsavedChangesGuard from "@/components/UnsavedChangesGuard"
 import { formatFloorLabel, getNextFloorNumber, parseFloorParam, sortFloors } from "@/lib/floor-utils"
 import { createSeedFloorPlan } from "@/lib/geometry"
 import { useEditorStore } from "@/lib/editor-store"
@@ -300,8 +301,11 @@ export default function ProjectEditorPage() {
     )
   }
 
+  const hasUnsavedChanges = saveState === "saving" || saveState === "error"
+
   return (
     <main className="page-shell">
+      <UnsavedChangesGuard hasUnsavedChanges={hasUnsavedChanges} />
       <Breadcrumb items={[
         { label: "Projects", href: "/" },
         { label: project.name, href: `/projects/${projectId}` },
@@ -319,6 +323,7 @@ export default function ProjectEditorPage() {
           <div className="page-title">{project.name}</div>
           <div className="muted">
             {formatFloorLabel(selectedFloor)} • {statusLabel}
+            {hasUnsavedChanges ? <span className="unsaved-dot" title="Unsaved changes" /> : null}
           </div>
         </div>
         <div className="button-row" style={{ alignItems: "center" }}>

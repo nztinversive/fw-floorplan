@@ -1,11 +1,12 @@
 "use client"
 
-import Image from "next/image"
 import { useParams } from "next/navigation"
 import { useQuery } from "convex/react"
-import { Download } from "lucide-react"
+import { Download, Expand } from "lucide-react"
 import { useMemo, useState } from "react"
 
+import Lightbox from "@/components/Lightbox"
+import ProgressiveImage from "@/components/ProgressiveImage"
 import ReadOnlyFloorPlanCanvas from "@/components/ReadOnlyFloorPlanCanvas"
 import { SkeletonPanel } from "@/components/Skeleton"
 import { useToast } from "@/components/Toast"
@@ -29,6 +30,7 @@ export default function ProjectSharePage() {
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
   const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip")
   const [isExporting, setIsExporting] = useState(false)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
   const floorPlans = project?.floorPlans
     ? sortFloors(project.floorPlans as PersistedFloorPlan[])
@@ -42,6 +44,19 @@ export default function ProjectSharePage() {
   }))
   const favoriteRenders = renders.filter((render) => render.isFavorite)
   const visibleRenders = favoriteRenders.length > 0 ? favoriteRenders : renders
+
+  const lightboxImages = useMemo(
+    () =>
+      visibleRenders
+        .filter((r) => r.imageUrl)
+        .map((r) => ({
+          src: r.imageUrl!,
+          alt: `${getStyleLabel(r.style)} render`,
+          caption: `${getStyleLabel(r.style)} — ${RENDER_VIEW_ANGLE_LABELS[r.settings.viewAngle]}`,
+          badge: r.isFavorite ? "★ Favorite" : undefined
+        })),
+    [visibleRenders]
+  )
 
   const exportRenders = useMemo(() => {
     const favs = renders.filter((r) => r.isFavorite && r.imageUrl)
@@ -203,17 +218,28 @@ export default function ProjectSharePage() {
 
           {visibleRenders.length > 0 ? (
             <div className="render-grid">
-              {visibleRenders.map((render) => (
+              {visibleRenders.map((render, idx) => (
                 <article key={render._id} className="render-card share-render-card">
-                  <div className="render-media">
+                  <div
+                    className={`render-media${render.imageUrl ? " render-media-clickable" : ""}`}
+                    onClick={() => {
+                      if (!render.imageUrl) return
+                      const lightboxIdx = visibleRenders.filter((r) => r.imageUrl).findIndex((r) => r._id === render._id)
+                      if (lightboxIdx >= 0) setLightboxIndex(lightboxIdx)
+                    }}
+                  >
                     {render.imageUrl ? (
-                      <Image
-                        src={render.imageUrl}
-                        alt={`${getStyleLabel(render.style)} shared render`}
-                        fill
-                        sizes="(max-width: 760px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                        unoptimized
-                      />
+                      <>
+                        <ProgressiveImage
+                          src={render.imageUrl}
+                          alt={`${getStyleLabel(render.style)} shared render`}
+                          sizes="(max-width: 760px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                        />
+                        <span className="render-media-zoom-hint">
+                          <Expand size={12} />
+                          View full size
+                        </span>
+                      </>
                     ) : (
                       <div className="comparison-empty">Render image unavailable</div>
                     )}
@@ -240,6 +266,13 @@ export default function ProjectSharePage() {
           )}
         </section>
       </div>
+
+      <Lightbox
+        images={lightboxImages}
+        startIndex={lightboxIndex ?? 0}
+        open={lightboxIndex !== null}
+        onClose={() => setLightboxIndex(null)}
+      />
     </main>
   )
 }

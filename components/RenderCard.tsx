@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
-import { Download, RefreshCw, Star, Trash2 } from "lucide-react";
+import { Download, Expand, RefreshCw, Star, Trash2 } from "lucide-react";
 
+import ProgressiveImage from "@/components/ProgressiveImage";
 import { RENDER_VIEW_ANGLE_LABELS } from "@/lib/render-angles";
 import { STYLE_PRESET_MAP } from "@/lib/style-presets";
 import { formatRelativeTime } from "@/lib/file-utils";
@@ -19,6 +19,7 @@ type RenderCardProps = {
   comparisonMode?: boolean;
   isSelectedForComparison?: boolean;
   onSelectForComparison?: (renderId: string) => void;
+  onImageClick?: (renderId: string) => void;
 };
 
 function getStyleLabel(style: string) {
@@ -35,7 +36,8 @@ export default function RenderCard({
   onRegenerate,
   comparisonMode = false,
   isSelectedForComparison = false,
-  onSelectForComparison
+  onSelectForComparison,
+  onImageClick
 }: RenderCardProps) {
   function handleDelete() {
     onDelete(render.id);
@@ -64,6 +66,12 @@ export default function RenderCard({
 
     event.preventDefault();
     handleCardClick();
+  }
+
+  function handleImageClick(event: React.MouseEvent) {
+    event.stopPropagation();
+    if (comparisonMode || !onImageClick || !render.imageUrl) return;
+    onImageClick(render.id);
   }
 
   return (
@@ -124,15 +132,24 @@ export default function RenderCard({
         </div>
       </div>
 
-      <div className="render-media">
+      <div
+        className={`render-media${onImageClick && render.imageUrl && !comparisonMode ? " render-media-clickable" : ""}`}
+        onClick={handleImageClick}
+      >
         {render.imageUrl ? (
-          <Image
-            src={render.imageUrl}
-            alt={`${getStyleLabel(render.style)} render`}
-            fill
-            sizes="(max-width: 760px) 100vw, (max-width: 1280px) 50vw, 33vw"
-            unoptimized
-          />
+          <>
+            <ProgressiveImage
+              src={render.imageUrl}
+              alt={`${getStyleLabel(render.style)} render`}
+              sizes="(max-width: 760px) 100vw, (max-width: 1280px) 50vw, 33vw"
+            />
+            {onImageClick && !comparisonMode ? (
+              <span className="render-media-zoom-hint">
+                <Expand size={12} />
+                View full size
+              </span>
+            ) : null}
+          </>
         ) : (
           <div
             style={{

@@ -5,12 +5,14 @@ import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useMutation, useQuery } from "convex/react"
 import { DraftingCompass, Download, Image as ImageIcon, Link2, Pencil, Trash2 } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import Breadcrumb from "@/components/Breadcrumb"
 import ConfirmDialog from "@/components/ConfirmDialog"
+import ShareLinkCard from "@/components/ShareLinkCard"
 import { SkeletonPanel } from "@/components/Skeleton"
 import { useToast } from "@/components/Toast"
+import UnsavedChangesGuard from "@/components/UnsavedChangesGuard"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import { formatDate } from "@/lib/file-utils"
@@ -31,8 +33,6 @@ export default function ProjectOverviewPage() {
   const saveFloorPlan = useMutation(api.floorPlans.save)
   const updateProject = useMutation(api.projects.update)
   const removeProject = useMutation(api.projects.remove)
-  const copyTimerRef = useRef<number | null>(null)
-  const [shareFeedback, setShareFeedback] = useState<"idle" | "copied" | "error">("idle")
   const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [isCreatingFloor, setIsCreatingFloor] = useState(false)
   const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
@@ -76,14 +76,6 @@ export default function ProjectOverviewPage() {
       setSelectedFloor(primaryFloor.floor)
     }
   }, [orderedFloorPlans, pendingCreatedFloor, selectedFloor])
-
-  useEffect(() => {
-    return () => {
-      if (copyTimerRef.current) {
-        window.clearTimeout(copyTimerRef.current)
-      }
-    }
-  }, [])
 
   const activeFloorPlan = useMemo(
     () => orderedFloorPlans.find((floorPlan) => floorPlan.floor === selectedFloor) ?? null,
@@ -137,29 +129,6 @@ export default function ProjectOverviewPage() {
       toast("Unable to delete project", "error")
       setIsDeleting(false)
       setShowDeleteDialog(false)
-    }
-  }
-
-  async function handleCopyShareLink() {
-    if (!projectId) return
-
-    try {
-      const shareUrl = `${window.location.origin}/projects/${projectId}/share`
-      await navigator.clipboard.writeText(shareUrl)
-      toast("Share link copied to clipboard", "success")
-      setShareFeedback("copied")
-      if (copyTimerRef.current) {
-        window.clearTimeout(copyTimerRef.current)
-      }
-      copyTimerRef.current = window.setTimeout(() => setShareFeedback("idle"), 1800)
-    } catch (error) {
-      console.error("Unable to copy share link.", error)
-      toast("Unable to copy link", "error")
-      setShareFeedback("error")
-      if (copyTimerRef.current) {
-        window.clearTimeout(copyTimerRef.current)
-      }
-      copyTimerRef.current = window.setTimeout(() => setShareFeedback("idle"), 2200)
     }
   }
 
@@ -255,6 +224,7 @@ export default function ProjectOverviewPage() {
 
   return (
     <main className="page-shell">
+      <UnsavedChangesGuard hasUnsavedChanges={isEditing} message="You have unsaved project edits. Are you sure you want to leave?" />
       <Breadcrumb items={[
         { label: "Projects", href: "/" },
         { label: project.name }
@@ -394,10 +364,10 @@ export default function ProjectOverviewPage() {
                   <ImageIcon size={18} />
                   Renders
                 </Link>
-                <button type="button" className="button-ghost" onClick={handleCopyShareLink}>
+                <Link href={`/projects/${projectId}/share`} className="button-ghost">
                   <Link2 size={18} />
-                  Copy share link
-                </button>
+                  Share page
+                </Link>
               </div>
             </>
           ) : (
@@ -450,6 +420,8 @@ export default function ProjectOverviewPage() {
           </div>
         </aside>
       </div>
+
+      <ShareLinkCard url={typeof window !== "undefined" ? `${window.location.origin}/projects/${projectId}/share` : `/projects/${projectId}/share`} />
 
       <ConfirmDialog
         open={showDeleteDialog}

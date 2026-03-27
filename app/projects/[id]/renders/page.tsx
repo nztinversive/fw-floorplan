@@ -9,8 +9,10 @@ import { useMemo, useState } from "react"
 
 import Breadcrumb from "@/components/Breadcrumb"
 import ConfirmDialog from "@/components/ConfirmDialog"
+import Lightbox from "@/components/Lightbox"
 import RenderCard from "@/components/RenderCard"
 import RenderProgress from "@/components/RenderProgress"
+import SettingTooltip, { SETTING_TOOLTIPS } from "@/components/SettingTooltip"
 import { SkeletonPanel } from "@/components/Skeleton"
 import StyleSelector from "@/components/StyleSelector"
 import { useToast } from "@/components/Toast"
@@ -75,6 +77,7 @@ export default function ProjectRendersPage() {
   } | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
   const renders = useMemo<StoredRender[]>(
     () =>
@@ -104,6 +107,24 @@ export default function ProjectRendersPage() {
     const favoriteRenders = renders.filter((render) => render.isFavorite && render.imageUrl)
     return favoriteRenders.length > 0 ? favoriteRenders : renders.filter((render) => render.imageUrl)
   }, [renders])
+
+  const lightboxImages = useMemo(
+    () =>
+      renders
+        .filter((r) => r.imageUrl)
+        .map((r) => ({
+          src: r.imageUrl!,
+          alt: `${getStyleLabel(r.style)} render`,
+          caption: `${getStyleLabel(r.style)} — ${RENDER_VIEW_ANGLE_LABELS[r.settings.viewAngle]}`,
+          badge: r.isFavorite ? "★ Favorite" : undefined
+        })),
+    [renders]
+  )
+
+  function handleOpenLightbox(renderId: string) {
+    const renderIndex = renders.filter((r) => r.imageUrl).findIndex((r) => r.id === renderId)
+    if (renderIndex >= 0) setLightboxIndex(renderIndex)
+  }
 
   function handleStyleSelect(styleId: StylePresetId) {
     setSelectedStyle(styleId)
@@ -368,7 +389,10 @@ export default function ProjectRendersPage() {
             <div className="form-grid">
               {(Object.entries(RENDER_SETTING_OPTIONS) as Array<[SettingKey, string[]]>).map(([key, options]) => (
                 <label key={key} className="field">
-                  <span className="field-label">{key.replace(/([A-Z])/g, " $1")}</span>
+                  <span className="field-label">
+                    {key.replace(/([A-Z])/g, " $1")}
+                    {SETTING_TOOLTIPS[key] ? <SettingTooltip text={SETTING_TOOLTIPS[key]} /> : null}
+                  </span>
                   <select
                     className="field-select"
                     value={settings[key]}
@@ -520,6 +544,7 @@ export default function ProjectRendersPage() {
                   comparisonMode={comparisonMode}
                   isSelectedForComparison={selectedRenderIds.includes(render.id)}
                   onSelectForComparison={handleComparisonSelect}
+                  onImageClick={handleOpenLightbox}
                 />
               ))}
             </div>
@@ -533,6 +558,13 @@ export default function ProjectRendersPage() {
           )}
         </section>
       </div>
+
+      <Lightbox
+        images={lightboxImages}
+        startIndex={lightboxIndex ?? 0}
+        open={lightboxIndex !== null}
+        onClose={() => setLightboxIndex(null)}
+      />
 
       <ConfirmDialog
         open={deleteTarget !== null}
