@@ -2,6 +2,7 @@
 
 import type Konva from "konva"
 import type { ComponentType, RefObject } from "react"
+import { useEffect } from "react"
 import {
   Download,
   DoorOpen,
@@ -28,6 +29,19 @@ const TOOLS: Array<{ id: EditorTool; label: string; icon: ComponentType<{ size?:
   { id: "window", label: "Window", icon: Minus }
 ]
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  return (
+    target.isContentEditable ||
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT"
+  )
+}
+
 export default function Toolbar({ stageRef }: ToolbarProps) {
   const tool = useEditorStore((state) => state.tool)
   const zoom = useEditorStore((state) => state.zoom)
@@ -37,6 +51,41 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
   const deleteElement = useEditorStore((state) => state.deleteElement)
   const undo = useEditorStore((state) => state.undo)
   const redo = useEditorStore((state) => state.redo)
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (isEditableTarget(event.target)) {
+        return
+      }
+
+      const key = event.key.toLowerCase()
+      const hasCommandModifier = event.ctrlKey || event.metaKey
+
+      if (key === "escape") {
+        event.preventDefault()
+        setTool("select")
+        return
+      }
+
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedId) {
+        event.preventDefault()
+        deleteElement(selectedId)
+        return
+      }
+
+      if (hasCommandModifier && key === "z") {
+        event.preventDefault()
+        if (event.shiftKey) {
+          redo()
+        } else {
+          undo()
+        }
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [deleteElement, redo, selectedId, setTool, undo])
 
   function handleExport() {
     const stage = stageRef.current

@@ -1,7 +1,7 @@
 "use client"
 
 import type Konva from "konva"
-import { Arc, Group, Layer, Line, Stage, Text } from "react-konva"
+import { Arc, Circle, Group, Layer, Line, Stage, Text } from "react-konva"
 import type { RefObject } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
@@ -16,6 +16,7 @@ import {
   snapPoint
 } from "@/lib/geometry"
 import { useEditorStore } from "@/lib/editor-store"
+import type { Point } from "@/lib/types"
 
 type FloorPlanCanvasProps = {
   stageRef: RefObject<Konva.Stage | null>
@@ -27,10 +28,37 @@ type CanvasSize = {
 }
 
 const ROOM_COLORS = ["rgba(212, 168, 75, 0.18)", "rgba(100, 116, 139, 0.12)", "rgba(27, 42, 74, 0.08)"]
+const ORTHOGONAL_SNAP_THRESHOLD = 15
+const WALL_PLACEMENT_THRESHOLD = 40
+
+function snapWallEndpoint(start: Point, point: Point, scale: number, gridSize: number): Point {
+  const snapped = snapPoint(point, scale, gridSize)
+  const dx = snapped.x - start.x
+  const dy = snapped.y - start.y
+
+  if (dx === 0 && dy === 0) {
+    return snapped
+  }
+
+  const angle = Math.abs((Math.atan2(dy, dx) * 180) / Math.PI)
+  const horizontalDelta = Math.min(angle, Math.abs(180 - angle))
+  const verticalDelta = Math.abs(90 - angle)
+
+  if (horizontalDelta <= ORTHOGONAL_SNAP_THRESHOLD) {
+    return { x: snapped.x, y: start.y }
+  }
+
+  if (verticalDelta <= ORTHOGONAL_SNAP_THRESHOLD) {
+    return { x: start.x, y: snapped.y }
+  }
+
+  return snapped
+}
 
 export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
   const frameRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState<CanvasSize>({ width: 960, height: 720 })
+  const [mousePosition, setMousePosition] = useState<Point | null>(null)
 
   const floorPlanData = useEditorStore((state) => state.floorPlanData)
   const selectedId = useEditorStore((state) => state.selectedId)
@@ -68,10 +96,37 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
     return () => observer.disconnect()
   }, [])
 
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage) {
+      return
+    }
+
+    stage.container().style.cursor = tool === "select" ? "grab" : "crosshair"
+  }, [stageRef, tool])
+
   const gridSpacing = useMemo(
     () => (floorPlanData.scale * floorPlanData.gridSize) / 12,
     [floorPlanData.gridSize, floorPlanData.scale]
   )
+
+  const pendingWallEnd = useMemo(() => {
+    if (!pendingWallStart || !mousePosition) {
+      return null
+    }
+
+    return snapWallEndpoint(
+      pendingWallStart,
+      mousePosition,
+      floorPlanData.scale,
+      floorPlanData.gridSize
+    )
+  }, [
+    floorPlanData.gridSize,
+    floorPlanData.scale,
+    mousePosition,
+    pendingWallStart
+  ])
 
   function getPointerPosition() {
     const stage = stageRef.current
@@ -86,30 +141,41 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
     }
   }
 
-  function handleStageMouseDown(event: Konva.KonvaEventObject<MouseEvent>) {
-    const clickedOnEmpty = event.target === event.target.getStage()
-    if (!clickedOnEmpty) {
-      return
+  function handleElementSelect(id: string) {
+    if (tool === "select") {
+      setSelectedId(id)
     }
+  }
 
+  function handleStageClick(event: Konva.KonvaEventObject<MouseEvent | TouchEvent>) {
     const pointer = getPointerPosition()
     if (!pointer) {
       return
     }
 
+    const clickedOnEmpty = event.target === event.target.getStage()
+
     if (tool === "select") {
-      setSelectedId(null)
+      if (clickedOnEmpty) {
+        setSelectedId(null)
+      }
       return
     }
 
     if (tool === "wall") {
-      const snapped = snapPoint(pointer, floorPlanData.scale, floorPlanData.gridSize)
       if (!pendingWallStart) {
-        setPendingWallStart(snapped)
+        setPendingWallStart(snapPoint(pointer, floorPlanData.scale, floorPlanData.gridSize))
         return
       }
 
-      if (pointDistance(pendingWallStart, snapped) < 4) {
+      const endpoint = snapWallEndpoint(
+        pendingWallStart,
+        pointer,
+        floorPlanData.scale,
+        floorPlanData.gridSize
+      )
+
+      if (pointDistance(pendingWallStart, endpoint) < 4) {
         setPendingWallStart(null)
         return
       }
@@ -117,15 +183,15 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
       addWall({
         x1: pendingWallStart.x,
         y1: pendingWallStart.y,
-        x2: snapped.x,
-        y2: snapped.y,
+        x2: endpoint.x,
+        y2: endpoint.y,
         thickness: 8
       })
       return
     }
 
     if (tool === "door" || tool === "window") {
-      const hostWall = findNearestWall(floorPlanData.walls, pointer, 48)
+      const hostWall = findNearestWall(floorPlanData.walls, pointer, WALL_PLACEMENT_THRESHOLD)
       if (!hostWall) {
         return
       }
@@ -148,6 +214,10 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
         })
       }
     }
+  }
+
+  function handleStageMouseMove() {
+    setMousePosition(getPointerPosition())
   }
 
   function handleWheel(event: Konva.KonvaEventObject<WheelEvent>) {
@@ -187,7 +257,10 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
           draggable={tool === "select"}
           onDragEnd={(event) => setPan({ x: event.target.x(), y: event.target.y() })}
           onWheel={handleWheel}
-          onMouseDown={handleStageMouseDown}
+          onClick={handleStageClick}
+          onTap={handleStageClick}
+          onMouseMove={handleStageMouseMove}
+          onMouseLeave={() => setMousePosition(null)}
         >
           <Layer listening={false}>
             {Array.from({ length: Math.ceil(size.width / gridSpacing) + 4 }).map((_, index) => {
@@ -222,8 +295,8 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
                 <Group
                   key={room.id}
                   draggable={tool === "select"}
-                  onClick={() => setSelectedId(room.id)}
-                  onTap={() => setSelectedId(room.id)}
+                  onClick={() => handleElementSelect(room.id)}
+                  onTap={() => handleElementSelect(room.id)}
                   onDragEnd={(event) => {
                     moveElement(room.id, { x: event.target.x(), y: event.target.y() })
                     event.target.position({ x: 0, y: 0 })
@@ -260,8 +333,8 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
                 lineCap="round"
                 lineJoin="round"
                 draggable={tool === "select"}
-                onClick={() => setSelectedId(wall.id)}
-                onTap={() => setSelectedId(wall.id)}
+                onClick={() => handleElementSelect(wall.id)}
+                onTap={() => handleElementSelect(wall.id)}
                 onDragEnd={(event) => {
                   moveElement(wall.id, { x: event.target.x(), y: event.target.y() })
                   event.target.position({ x: 0, y: 0 })
@@ -283,8 +356,8 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
                 <Group
                   key={door.id}
                   draggable={tool === "select"}
-                  onClick={() => setSelectedId(door.id)}
-                  onTap={() => setSelectedId(door.id)}
+                  onClick={() => handleElementSelect(door.id)}
+                  onTap={() => handleElementSelect(door.id)}
                   onDragEnd={(event) => {
                     moveElement(door.id, { x: event.target.x(), y: event.target.y() })
                     event.target.position({ x: 0, y: 0 })
@@ -317,8 +390,8 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
                 <Group
                   key={window.id}
                   draggable={tool === "select"}
-                  onClick={() => setSelectedId(window.id)}
-                  onTap={() => setSelectedId(window.id)}
+                  onClick={() => handleElementSelect(window.id)}
+                  onTap={() => handleElementSelect(window.id)}
                   onDragEnd={(event) => {
                     moveElement(window.id, { x: event.target.x(), y: event.target.y() })
                     event.target.position({ x: 0, y: 0 })
@@ -341,11 +414,24 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
             })}
 
             {pendingWallStart ? (
-              <Line
-                points={[pendingWallStart.x - 8, pendingWallStart.y, pendingWallStart.x + 8, pendingWallStart.y]}
-                stroke="#d4a84b"
-                strokeWidth={2}
-              />
+              <>
+                <Circle
+                  x={pendingWallStart.x}
+                  y={pendingWallStart.y}
+                  radius={4 / zoom}
+                  fill="#d4a84b"
+                  listening={false}
+                />
+                {pendingWallEnd ? (
+                  <Line
+                    points={[pendingWallStart.x, pendingWallStart.y, pendingWallEnd.x, pendingWallEnd.y]}
+                    stroke="#d4a84b"
+                    strokeWidth={2 / zoom}
+                    dash={[10 / zoom, 8 / zoom]}
+                    listening={false}
+                  />
+                ) : null}
+              </>
             ) : null}
           </Layer>
         </Stage>
