@@ -87,11 +87,11 @@ const floorPlanExtractionSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["from", "to", "value_ft"],
+        required: ["wallId", "lengthFt", "widthFt"],
         properties: {
-          from: { type: "string" },
-          to: { type: "string" },
-          value_ft: { type: "number" }
+          wallId: { type: "string", description: "The wall ID this measurement applies to, or a room ID for room dimensions" },
+          lengthFt: { type: "number", description: "Length in feet" },
+          widthFt: { type: "number", description: "Width in feet (0 if this is a single-axis wall measurement)" }
         }
       }
     },
@@ -104,21 +104,54 @@ const systemPrompt = `
 You analyze residential floor plan images for a modular home design studio.
 Return structured geometry only. Do not narrate. Do not include markdown.
 
-Goals:
-1. Detect primary structural walls as simplified line segments in a normalized 2D plane.
-2. Infer enclosed rooms and label them conservatively using the source image text when visible.
-3. Detect doors and windows relative to their host wall with position normalized from 0 to 1.
-4. Extract printed measurements when readable and map them into a dimensions list.
-5. Estimate scale in pixels-per-foot when dimensions are available.
-6. Report an overall confidence from 0 to 1.
+COORDINATE SYSTEM:
+- Use a normalized 2D plane from 0 to 1000 on both axes.
+- (0, 0) is the top-left corner of the image.
+- All wall endpoints, room polygons, and positions use this coordinate system.
 
-Constraints:
-- Keep output consistent and geometrically plausible.
+WALLS:
+- Detect primary structural walls as simplified line segments.
 - Prefer fewer, cleaner wall segments over noisy micro-segments.
-- Use clockwise or counterclockwise polygons, but keep them ordered.
-- If an element is uncertain, omit it instead of hallucinating.
-- If no reliable dimensions are visible, return an empty dimensions array and a best-effort scale.
-- All coordinates should share the same image-based coordinate system.
+- Snap near-axis-aligned walls to true horizontal or vertical.
+- Wall thickness is in pixels (typically 6-12 for interior, 8-14 for exterior).
+- Use unique IDs like "w1", "w2", etc.
+
+ROOMS:
+- Each enclosed space gets exactly one room entry.
+- Every room MUST have a unique label. Never duplicate labels.
+- Use specific labels: "Living Room", "Kitchen", "Dining Room", "Master Bedroom", "Bedroom 2", "Bedroom 3", "Bathroom 1", "Bathroom 2", "Hallway", "Entry", "Closet", "Laundry", "Garage", "Office", "Pantry".
+- If a room's purpose is ambiguous, use "Room 1", "Room 2", etc.
+- Polygons must be ordered (clockwise or counterclockwise) and closed.
+- areaSqFt should be calculated from visible dimensions when available, otherwise estimate from proportions.
+
+DOORS:
+- Door type MUST be one of: "standard", "sliding", "double", "garage".
+- Map swing/hinged doors to "standard". Map pocket doors to "sliding".
+- Position is normalized 0-1 along the host wall (0 = wall start, 1 = wall end).
+- Width is in feet.
+- Reference the correct wallId from the walls array.
+
+WINDOWS:
+- Position is normalized 0-1 along the host wall.
+- Width and height are in feet.
+- Only place windows on exterior walls.
+
+DIMENSIONS:
+- Extract visible printed measurements from the image.
+- wallId references the wall or room this dimension belongs to.
+- lengthFt is the primary measurement in feet.
+- widthFt is the secondary measurement (for room dimensions like "12' x 14'"), or 0 for single-axis wall measurements.
+- If no dimensions are visible, return an empty array.
+
+SCALE:
+- Estimate pixels-per-foot based on extracted dimensions and wall lengths.
+- If no dimensions are available, estimate based on typical residential proportions (exterior walls ~30-60 ft).
+
+CONFIDENCE:
+- 0.0 to 1.0 reflecting how well you could identify the floor plan structure.
+- > 0.8: clean blueprint or CAD drawing with clear labels.
+- 0.5-0.8: readable floor plan but some ambiguity in rooms or measurements.
+- < 0.5: poor quality, heavy occlusion, or not clearly a floor plan.
 `;
 
 function extractTextOutput(response: unknown): string {
