@@ -25,7 +25,8 @@ import {
   type StylePresetId
 } from "@/lib/style-presets";
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export";
-import type { RenderSettings, StoredRender } from "@/lib/types";
+import { sortFloors } from "@/lib/floor-utils";
+import type { PersistedFloorPlan, RenderSettings, StoredRender } from "@/lib/types";
 
 type PendingRenderAction = "favorite" | "delete" | "regenerate";
 type SettingKey = keyof StylePresetDefaults;
@@ -192,8 +193,8 @@ export default function ProjectRendersPage() {
       return;
     }
 
-    const exportFloor = project.floorPlans[0];
-    if (!exportFloor) {
+    const exportFloors = sortFloors(project.floorPlans as PersistedFloorPlan[]);
+    if (exportFloors.length === 0) {
       setErrorMessage("Save a floor plan before exporting a client package.");
       return;
     }
@@ -202,17 +203,21 @@ export default function ProjectRendersPage() {
     setIsExportingPackage(true);
 
     try {
-      const floorPlanPreview = generateFloorPlanPreview(exportFloor.data);
-
       await generateClientPackage({
         projectName: project.name,
         address: project.address,
         clientName: project.clientName,
-        floorPlanImage: floorPlanPreview.dataUrl,
-        floorPlanStats: {
-          roomCount: floorPlanPreview.roomCount,
-          wallCount: floorPlanPreview.wallCount
-        },
+        floorPlans: exportFloors.map((floorPlan) => {
+          const preview = generateFloorPlanPreview(floorPlan.data);
+          return {
+            floor: floorPlan.floor,
+            image: preview.dataUrl,
+            stats: {
+              roomCount: preview.roomCount,
+              wallCount: preview.wallCount
+            }
+          };
+        }),
         renders: exportRenders.map((render) => ({
           imageUrl: render.imageUrl,
           style: render.style,

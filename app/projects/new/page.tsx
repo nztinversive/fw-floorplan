@@ -66,9 +66,8 @@ export default function NewProjectPage() {
   const [upload, setUpload] = useState<UploadAsset | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [status, setStatus] = useState("")
-  const createProject = useMutation(api.projects.create)
+  const createProject = useMutation(api.projects.createWithInitialFloorPlan)
   const uploadSource = useMutation(api.floorPlans.uploadSource)
-  const saveFloorPlan = useMutation(api.floorPlans.save)
   const extractFloorPlan = useAction(api.ai.extractFloorPlan)
 
   const isValid = useMemo(() => form.name.trim().length > 0, [form.name])
@@ -93,14 +92,6 @@ export default function NewProjectPage() {
         const uploadUrl = await uploadSource({})
         sourceImage = await uploadAssetToStorage(uploadUrl, upload)
       }
-
-      setStatus("Creating project...")
-      const projectId = await createProject({
-        name: form.name.trim(),
-        address: form.address.trim() || undefined,
-        clientName: form.clientName.trim() || undefined,
-        thumbnail: sourceImage
-      })
 
       let floorPlanData = createSeedFloorPlan(sourceImage).data
 
@@ -132,10 +123,14 @@ export default function NewProjectPage() {
         }
       }
 
-      await saveFloorPlan({
-        projectId,
-        floor: 1,
+      setStatus("Creating project...")
+      const projectId = await createProject({
+        name: form.name.trim(),
+        address: form.address.trim() || undefined,
+        clientName: form.clientName.trim() || undefined,
+        thumbnail: sourceImage,
         sourceImage,
+        floor: 1,
         data: floorPlanData
       })
 

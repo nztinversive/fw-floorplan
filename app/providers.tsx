@@ -10,11 +10,21 @@ type ProvidersProps = {
 
 export default function Providers({ children }: ProvidersProps) {
   const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL
-  if (!convexUrl) {
-    throw new Error("NEXT_PUBLIC_CONVEX_URL is not configured")
-  }
+  const convex = useMemo(
+    () => (convexUrl ? new ConvexReactClient(convexUrl) : null),
+    [convexUrl]
+  )
 
-  const convex = useMemo(() => new ConvexReactClient(convexUrl), [convexUrl])
+  if (!convex) {
+    return (
+      <main className="page-shell">
+        <div className="empty-state">
+          <div className="section-title">Configuration required</div>
+          <div className="muted">Set `NEXT_PUBLIC_CONVEX_URL` to connect the app to Convex.</div>
+        </div>
+      </main>
+    )
+  }
 
   return <ConvexReactProvider client={convex}>{children}</ConvexReactProvider>
 }

@@ -2,6 +2,7 @@
 
 import jsPDF from "jspdf";
 
+import { formatFloorLabel } from "@/lib/floor-utils";
 import {
   DEFAULT_RENDER_VIEW_ANGLE,
   RENDER_VIEW_ANGLE_LABELS,
@@ -22,6 +23,12 @@ type FloorPlanStats = {
   wallCount: number;
 };
 
+type ClientPackageFloorPlan = {
+  floor: number;
+  image: string;
+  stats?: FloorPlanStats;
+};
+
 type ClientPackageRender = {
   imageUrl?: string | null;
   style: string;
@@ -33,8 +40,7 @@ type ClientPackageOptions = {
   projectName: string;
   address?: string;
   clientName?: string;
-  floorPlanImage?: string;
-  floorPlanStats?: FloorPlanStats;
+  floorPlans: ClientPackageFloorPlan[];
   renders: ClientPackageRender[];
 };
 
@@ -91,11 +97,13 @@ function getViewAngleLabel(viewAngle: RenderViewAngle) {
 }
 
 function sanitizeFileName(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "fw-client-package";
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "fw-client-package"
+  );
 }
 
 function getImageFormat(dataUrl: string) {
@@ -245,7 +253,10 @@ export function generateFloorPlanPreview(data: FloorPlanData) {
   const padding = 80;
   const contentWidth = Math.max(bounds.maxX - bounds.minX, 1);
   const contentHeight = Math.max(bounds.maxY - bounds.minY, 1);
-  const scale = Math.min((canvas.width - padding * 2) / contentWidth, (canvas.height - padding * 2) / contentHeight);
+  const scale = Math.min(
+    (canvas.width - padding * 2) / contentWidth,
+    (canvas.height - padding * 2) / contentHeight
+  );
   const offsetX = (canvas.width - contentWidth * scale) / 2 - bounds.minX * scale;
   const offsetY = (canvas.height - contentHeight * scale) / 2 - bounds.minY * scale;
 
@@ -341,13 +352,25 @@ export function generateFloorPlanPreview(data: FloorPlanData) {
     context.lineWidth = 4;
 
     context.beginPath();
-    context.moveTo(mappedCenter.x - offsetXAlong - offsetXPerp, mappedCenter.y - offsetYAlong - offsetYPerp);
-    context.lineTo(mappedCenter.x + offsetXAlong - offsetXPerp, mappedCenter.y + offsetYAlong - offsetYPerp);
+    context.moveTo(
+      mappedCenter.x - offsetXAlong - offsetXPerp,
+      mappedCenter.y - offsetYAlong - offsetYPerp
+    );
+    context.lineTo(
+      mappedCenter.x + offsetXAlong - offsetXPerp,
+      mappedCenter.y + offsetYAlong - offsetYPerp
+    );
     context.stroke();
 
     context.beginPath();
-    context.moveTo(mappedCenter.x - offsetXAlong + offsetXPerp, mappedCenter.y - offsetYAlong + offsetYPerp);
-    context.lineTo(mappedCenter.x + offsetXAlong + offsetXPerp, mappedCenter.y + offsetYAlong + offsetYPerp);
+    context.moveTo(
+      mappedCenter.x - offsetXAlong + offsetXPerp,
+      mappedCenter.y - offsetYAlong + offsetYPerp
+    );
+    context.lineTo(
+      mappedCenter.x + offsetXAlong + offsetXPerp,
+      mappedCenter.y + offsetYAlong + offsetYPerp
+    );
     context.stroke();
   });
 
@@ -362,8 +385,7 @@ export async function generateClientPackage({
   projectName,
   address,
   clientName,
-  floorPlanImage,
-  floorPlanStats,
+  floorPlans,
   renders
 }: ClientPackageOptions) {
   const pdf = new jsPDF({
@@ -411,7 +433,7 @@ export async function generateClientPackage({
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(14);
   pdf.setTextColor(FW_SLATE);
-  pdf.text("Floor Plan Studio — Client Presentation", pageWidth / 2, 176, { align: "center" });
+  pdf.text("Floor Plan Studio - Client Presentation", pageWidth / 2, 176, { align: "center" });
 
   pdf.setTextColor(FW_NAVY);
   pdf.setFont("helvetica", "bold");
@@ -432,49 +454,57 @@ export async function generateClientPackage({
   pdf.setFontSize(12);
   pdf.text(dateLabel, pageWidth / 2, pageHeight - 42, { align: "center" });
 
-  pdf.addPage();
-  pdf.setTextColor(FW_NAVY);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(22);
-  pdf.text("Floor Plan", margin, 52);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(12);
-  pdf.setTextColor(FW_SLATE);
-  pdf.text(projectName, margin, 72);
-  addAccentRule(pdf, margin, 84, 160);
+  let pageNumber = 2;
 
-  const floorPlanFrame = {
-    x: margin,
-    y: 106,
-    width: pageWidth - margin * 2,
-    height: pageHeight - 196
-  };
+  floorPlans.forEach((floorPlan) => {
+    pdf.addPage();
+    pdf.setTextColor(FW_NAVY);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(22);
+    pdf.text(formatFloorLabel(floorPlan.floor), margin, 52);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(12);
+    pdf.setTextColor(FW_SLATE);
+    pdf.text(projectName, margin, 72);
+    addAccentRule(pdf, margin, 84, 160);
 
-  pdf.setDrawColor(FW_BORDER);
-  pdf.roundedRect(floorPlanFrame.x, floorPlanFrame.y, floorPlanFrame.width, floorPlanFrame.height, 12, 12);
+    const floorPlanFrame = {
+      x: margin,
+      y: 106,
+      width: pageWidth - margin * 2,
+      height: pageHeight - 196
+    };
 
-  if (floorPlanImage) {
-    addImageContained(pdf, floorPlanImage, {
+    pdf.setDrawColor(FW_BORDER);
+    pdf.roundedRect(
+      floorPlanFrame.x,
+      floorPlanFrame.y,
+      floorPlanFrame.width,
+      floorPlanFrame.height,
+      12,
+      12
+    );
+
+    addImageContained(pdf, floorPlan.image, {
       x: floorPlanFrame.x + 12,
       y: floorPlanFrame.y + 12,
       width: floorPlanFrame.width - 24,
       height: floorPlanFrame.height - 24
     });
-  } else {
+
     pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(16);
-    pdf.setTextColor(FW_SLATE);
-    pdf.text("Floor plan preview unavailable", pageWidth / 2, pageHeight / 2, { align: "center" });
-  }
-
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(11);
-  pdf.setTextColor(FW_NAVY);
-  const roomCountLabel = floorPlanStats ? `${floorPlanStats.roomCount} room${floorPlanStats.roomCount === 1 ? "" : "s"}` : "Room count unavailable";
-  const wallCountLabel = floorPlanStats ? `${floorPlanStats.wallCount} wall${floorPlanStats.wallCount === 1 ? "" : "s"}` : "Wall count unavailable";
-  pdf.text(`${roomCountLabel}   •   ${wallCountLabel}`, margin, pageHeight - 34);
-
-  let pageNumber = 3;
+    pdf.setFontSize(11);
+    pdf.setTextColor(FW_NAVY);
+    const roomCountLabel = floorPlan.stats
+      ? `${floorPlan.stats.roomCount} room${floorPlan.stats.roomCount === 1 ? "" : "s"}`
+      : "Room count unavailable";
+    const wallCountLabel = floorPlan.stats
+      ? `${floorPlan.stats.wallCount} wall${floorPlan.stats.wallCount === 1 ? "" : "s"}`
+      : "Wall count unavailable";
+    pdf.text(`${roomCountLabel}   |   ${wallCountLabel}`, margin, pageHeight - 34);
+    addPageNumber(pdf, pageWidth, pageHeight, pageNumber);
+    pageNumber += 1;
+  });
 
   renderImages.forEach((render) => {
     pdf.addPage();
@@ -484,7 +514,7 @@ export async function generateClientPackage({
     pdf.setTextColor(FW_NAVY);
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(22);
-    pdf.text(`${getStyleLabel(render.style)} — ${getViewAngleLabel(resolvedViewAngle)}`, margin, 52);
+    pdf.text(`${getStyleLabel(render.style)} - ${getViewAngleLabel(resolvedViewAngle)}`, margin, 52);
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(12);
     pdf.setTextColor(FW_SLATE);
@@ -512,9 +542,12 @@ export async function generateClientPackage({
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(16);
       pdf.setTextColor(FW_SLATE);
-      pdf.text("Render image unavailable for this page", pageWidth / 2, renderFrame.y + renderFrame.height / 2, {
-        align: "center"
-      });
+      pdf.text(
+        "Render image unavailable for this page",
+        pageWidth / 2,
+        renderFrame.y + renderFrame.height / 2,
+        { align: "center" }
+      );
     }
 
     const settingsSummary = formatSettingsSummary(render.settings);
@@ -543,6 +576,7 @@ export async function generateClientPackage({
   pdf.setTextColor(FW_SLATE);
   pdf.text("fw-floorplan.onrender.com", pageWidth / 2, 316, { align: "center" });
   pdf.text(`Date generated: ${dateLabel}`, pageWidth / 2, 342, { align: "center" });
+  addPageNumber(pdf, pageWidth, pageHeight, pageNumber);
 
   const fileName = `${sanitizeFileName(projectName)}-client-package.pdf`;
   pdf.save(fileName);

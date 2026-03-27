@@ -7,8 +7,10 @@ import {
   createId,
   EMPTY_FLOOR_PLAN,
   findNearestWall,
+  moveRoomsWithWall,
   pointOnWall,
   projectPointToWall,
+  roomTouchesWall,
   snapPoint,
   syncDerivedData
 } from "@/lib/geometry";
@@ -19,6 +21,7 @@ type EditorTool = "select" | "wall" | "door" | "window";
 type EditorStore = {
   floorPlanData: FloorPlanData;
   selectedId: string | null;
+  actionError: string | null;
   tool: EditorTool;
   history: FloorPlanData[];
   historyIndex: number;
@@ -27,6 +30,7 @@ type EditorStore = {
   pendingWallStart: Point | null;
   setFloorPlanData: (data: FloorPlanData, resetHistory?: boolean) => void;
   setSelectedId: (id: string | null) => void;
+  clearActionError: () => void;
   setTool: (tool: EditorTool) => void;
   setZoom: (zoom: number) => void;
   setPan: (pan: Point) => void;
@@ -67,6 +71,7 @@ function updateState(
 export const useEditorStore = create<EditorStore>((set, get) => ({
   floorPlanData: cloneFloorPlanData(EMPTY_FLOOR_PLAN),
   selectedId: null,
+  actionError: null,
   tool: "select",
   history: [cloneFloorPlanData(EMPTY_FLOOR_PLAN)],
   historyIndex: 0,
@@ -82,15 +87,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             history: [cloneFloorPlanData(synced)],
             historyIndex: 0,
             selectedId: null,
+            actionError: null,
             pendingWallStart: null
           }
         : {
             floorPlanData: synced,
+            actionError: null,
             ...pushHistory(get().history, get().historyIndex, synced)
           };
     }),
-  setSelectedId: (id) => set({ selectedId: id }),
-  setTool: (tool) => set({ tool, pendingWallStart: null }),
+  setSelectedId: (id) => set({ selectedId: id, actionError: null }),
+  clearActionError: () => set({ actionError: null }),
+  setTool: (tool) => set({ tool, pendingWallStart: null, actionError: null }),
   setZoom: (zoom) => set({ zoom }),
   setPan: (pan) => set({ pan }),
   setPendingWallStart: (point) => set({ pendingWallStart: point }),
@@ -102,6 +110,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       });
       return {
         floorPlanData: next,
+        actionError: null,
         selectedId: next.walls.at(-1)?.id ?? null,
         pendingWallStart: null,
         tool: "select",
@@ -116,6 +125,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       });
       return {
         floorPlanData: next,
+        actionError: null,
         selectedId: next.doors.at(-1)?.id ?? null,
         tool: "select",
         ...pushHistory(state.history, state.historyIndex, next)
@@ -129,6 +139,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       });
       return {
         floorPlanData: next,
+        actionError: null,
         selectedId: next.windows.at(-1)?.id ?? null,
         tool: "select",
         ...pushHistory(state.history, state.historyIndex, next)
@@ -139,10 +150,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const next = updateState(state.floorPlanData, (draft) => {
         const wall = draft.walls.find((entry) => entry.id === id);
         if (wall) {
+          const previousWall = { ...wall };
           wall.x1 += delta.x;
           wall.y1 += delta.y;
           wall.x2 += delta.x;
           wall.y2 += delta.y;
+          draft.rooms = moveRoomsWithWall(draft.rooms, previousWall, wall);
           return draft;
         }
 
@@ -189,6 +202,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
       return {
         floorPlanData: next,
+        actionError: null,
         ...pushHistory(state.history, state.historyIndex, next)
       };
     }),
@@ -199,6 +213,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         for (const collection of collections) {
           const item = collection.find((entry) => entry.id === id);
           if (item) {
+            if (draft.walls.includes(item as Wall)) {
+              const wall = item as Wall;
+              const previousWall = { ...wall };
+              Object.assign(wall, patch as Partial<Wall>);
+              draft.rooms = moveRoomsWithWall(draft.rooms, previousWall, wall);
+              break;
+            }
+
             Object.assign(item, patch);
             break;
           }
@@ -208,13 +230,23 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
       return {
         floorPlanData: next,
+        actionError: null,
         ...pushHistory(state.history, state.historyIndex, next)
       };
     }),
   deleteElement: (id) =>
     set((state) => {
+      const removedWall = state.floorPlanData.walls.find((entry) => entry.id === id) ?? null;
+      if (removedWall && state.floorPlanData.rooms.some((entry) => roomTouchesWall(entry, removedWall))) {
+        return {
+          actionError:
+            "Delete or redraw the affected rooms before removing that wall."
+        };
+      }
+
       const next = updateState(state.floorPlanData, (draft) => {
-        const isWall = draft.walls.some((entry) => entry.id === id);
+        const removedWall = draft.walls.find((entry) => entry.id === id) ?? null;
+        const isWall = removedWall !== null;
         draft.walls = draft.walls.filter((entry) => entry.id !== id);
         draft.rooms = draft.rooms.filter((entry) => entry.id !== id);
         draft.doors = draft.doors.filter(
@@ -229,6 +261,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
       return {
         floorPlanData: next,
+        actionError: null,
         selectedId: null,
         ...pushHistory(state.history, state.historyIndex, next)
       };
@@ -239,6 +272,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return {
         floorPlanData: cloneFloorPlanData(state.history[nextIndex]),
         historyIndex: nextIndex,
+        actionError: null,
         selectedId: null,
         pendingWallStart: null
       };
@@ -249,6 +283,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return {
         floorPlanData: cloneFloorPlanData(state.history[nextIndex]),
         historyIndex: nextIndex,
+        actionError: null,
         selectedId: null,
         pendingWallStart: null
       };

@@ -50,7 +50,7 @@ export function pointOnWall(wall: Wall, position: number): Point {
   };
 }
 
-export function projectPointToWall(
+function projectPointToWallSegment(
   wall: Wall,
   point: Point
 ): { ratio: number; point: Point } {
@@ -58,7 +58,19 @@ export function projectPointToWall(
   const dy = wall.y2 - wall.y1;
   const lengthSquared = dx * dx + dy * dy || 1;
   const rawRatio = ((point.x - wall.x1) * dx + (point.y - wall.y1) * dy) / lengthSquared;
-  const ratio = clamp(rawRatio, 0.02, 0.98);
+  const ratio = clamp(rawRatio, 0, 1);
+  return {
+    ratio,
+    point: pointOnWall(wall, ratio)
+  };
+}
+
+export function projectPointToWall(
+  wall: Wall,
+  point: Point
+): { ratio: number; point: Point } {
+  const projected = projectPointToWallSegment(wall, point);
+  const ratio = clamp(projected.ratio, 0.02, 0.98);
   return {
     ratio,
     point: pointOnWall(wall, ratio)
@@ -179,6 +191,79 @@ export function deriveDimensions(walls: Wall[], scale: number): Dimension[] {
     to: { x: wall.x2, y: wall.y2 },
     valueFt: Number((getWallLength(wall) / (scale || 1)).toFixed(1))
   }));
+}
+
+function moveRoomPointWithWall(point: Point, previousWall: Wall, nextWall: Wall, tolerance: number): Point {
+  const projected = projectPointToWallSegment(previousWall, point);
+  if (pointDistance(projected.point, point) > tolerance) {
+    return point;
+  }
+
+  const previousStart = { x: previousWall.x1, y: previousWall.y1 };
+  const previousEnd = { x: previousWall.x2, y: previousWall.y2 };
+  const ratio =
+    pointDistance(point, previousStart) <= tolerance
+      ? 0
+      : pointDistance(point, previousEnd) <= tolerance
+        ? 1
+        : projected.ratio;
+  const nextProjected = pointOnWall(nextWall, ratio);
+
+  return {
+    x: nextProjected.x + (point.x - projected.point.x),
+    y: nextProjected.y + (point.y - projected.point.y)
+  };
+}
+
+export function moveRoomsWithWall(
+  rooms: Room[],
+  previousWall: Wall,
+  nextWall: Wall,
+  tolerance = 10
+): Room[] {
+  return rooms.map((room) => ({
+    ...room,
+    polygon: room.polygon.map((point) =>
+      moveRoomPointWithWall(point, previousWall, nextWall, tolerance)
+    )
+  }));
+}
+
+function pointTouchesWall(point: Point, wall: Wall, tolerance: number): boolean {
+  const projected = projectPointToWallSegment(wall, point);
+  return pointDistance(projected.point, point) <= tolerance;
+}
+
+export function roomTouchesWall(room: Room, wall: Wall, tolerance = 10): boolean {
+  let touchingVertices = 0;
+
+  for (const point of room.polygon) {
+    if (pointTouchesWall(point, wall, tolerance)) {
+      touchingVertices += 1;
+      if (touchingVertices >= 2) {
+        return true;
+      }
+    }
+  }
+
+  for (let index = 0; index < room.polygon.length; index += 1) {
+    const start = room.polygon[index];
+    const end = room.polygon[(index + 1) % room.polygon.length];
+    const midpoint = {
+      x: (start.x + end.x) / 2,
+      y: (start.y + end.y) / 2
+    };
+
+    if (
+      pointTouchesWall(start, wall, tolerance) &&
+      pointTouchesWall(end, wall, tolerance) &&
+      pointTouchesWall(midpoint, wall, tolerance)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function syncDerivedData(data: FloorPlanData): FloorPlanData {

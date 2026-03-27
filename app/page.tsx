@@ -12,6 +12,7 @@ import type { ProjectSummary } from "@/lib/types"
 type ProjectListItemWithThumbnailUrl = {
   thumbnail?: string
   thumbnailUrl?: string | null
+  floorCount?: number
 }
 
 function getDisplayImage(src?: string) {
@@ -36,7 +37,7 @@ export default function DashboardPage() {
           thumbnail: getDisplayImage(
             projectWithThumbnail.thumbnailUrl ?? projectWithThumbnail.thumbnail
           ),
-          floorCount: 1
+          floorCount: projectWithThumbnail.floorCount ?? 0
         }
       }),
     [projectsQuery]

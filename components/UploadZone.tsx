@@ -18,37 +18,89 @@ type UploadZoneProps = {
   onChange: (asset: UploadAsset | null) => void
 }
 
+const PDF_WORKER_SRC = "/pdf.worker.min.mjs"
+
+function buildUploadAsset(fileName: string, dataUrl: string, mimeType: string, previewUrl: string | null) {
+  return {
+    fileName,
+    dataUrl,
+    previewUrl,
+    mimeType
+  } satisfies UploadAsset
+}
+
+async function convertHeicToJpeg(file: File): Promise<UploadAsset> {
+  const heic2any = (await import("heic2any")).default
+  const converted = await heic2any({
+    blob: file,
+    toType: "image/jpeg",
+    quality: 0.92
+  })
+  const blob = Array.isArray(converted) ? converted[0] : converted
+  const previewFile = new File([blob], file.name.replace(/\.hei[cf]$/i, ".jpg"), {
+    type: "image/jpeg"
+  })
+  const dataUrl = await readFileAsDataUrl(previewFile)
+  return buildUploadAsset(previewFile.name, dataUrl, "image/jpeg", dataUrl)
+}
+
+async function renderPdfFirstPage(file: File): Promise<UploadAsset> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs")
+  pdfjs.GlobalWorkerOptions.workerSrc = PDF_WORKER_SRC
+
+  const pdfDocument = await pdfjs.getDocument({
+    data: await file.arrayBuffer()
+  }).promise
+
+  try {
+    const page = await pdfDocument.getPage(1)
+    const baseViewport = page.getViewport({ scale: 1 })
+    const scale = Math.min(2, Math.max(1, 1800 / Math.max(baseViewport.width, 1)))
+    const viewport = page.getViewport({ scale })
+    const canvas = document.createElement("canvas")
+
+    canvas.width = Math.ceil(viewport.width)
+    canvas.height = Math.ceil(viewport.height)
+
+    const context = canvas.getContext("2d")
+    if (!context) {
+      throw new Error("Canvas context unavailable")
+    }
+
+    await page.render({
+      canvas,
+      canvasContext: context,
+      viewport
+    }).promise
+
+    const dataUrl = canvas.toDataURL("image/png")
+    page.cleanup()
+
+    return buildUploadAsset(file.name.replace(/\.pdf$/i, ".png"), dataUrl, "image/png", dataUrl)
+  } finally {
+    await pdfDocument.destroy()
+  }
+}
+
 async function normalizeFile(file: File): Promise<UploadAsset> {
   const isHeic = file.type === "image/heic" || /\.heic$/i.test(file.name)
+  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name)
 
   if (isHeic) {
-    const heic2any = (await import("heic2any")).default
-    const converted = await heic2any({
-      blob: file,
-      toType: "image/jpeg",
-      quality: 0.92
-    })
-    const blob = Array.isArray(converted) ? converted[0] : converted
-    const previewFile = new File([blob], file.name.replace(/\.heic$/i, ".jpg"), {
-      type: "image/jpeg"
-    })
-    const previewUrl = await readFileAsDataUrl(previewFile)
-    const dataUrl = await readFileAsDataUrl(file)
-    return {
-      fileName: file.name,
-      dataUrl,
-      previewUrl,
-      mimeType: file.type || "image/heic"
-    }
+    return convertHeicToJpeg(file)
+  }
+
+  if (isPdf) {
+    return renderPdfFirstPage(file)
   }
 
   const dataUrl = await readFileAsDataUrl(file)
-  return {
-    fileName: file.name,
+  return buildUploadAsset(
+    file.name,
     dataUrl,
-    previewUrl: file.type.startsWith("image/") ? dataUrl : null,
-    mimeType: file.type || "application/octet-stream"
-  }
+    file.type || "application/octet-stream",
+    file.type.startsWith("image/") ? dataUrl : null
+  )
 }
 
 export default function UploadZone({ value, onChange }: UploadZoneProps) {
@@ -107,7 +159,9 @@ export default function UploadZone({ value, onChange }: UploadZoneProps) {
         <input {...getInputProps()} />
         <div className="section-title">{isDragActive ? "Drop to upload" : "Upload floor plan source"}</div>
         <div className="muted">{statusCopy}</div>
-        <div className="field-hint">Maximum size 25MB. HEIC files are previewed as JPEG.</div>
+        <div className="field-hint">
+          Maximum size 25MB. PDFs convert to a PNG preview of page 1, and HEIC files convert to JPEG.
+        </div>
         {isReading ? (
           <div className="progress-bar">
             <span style={{ width: "72%" }} />

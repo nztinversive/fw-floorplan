@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import type Konva from "konva"
-import { useParams } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useMutation, useQuery } from "convex/react"
 import { useDebouncedCallback } from "use-debounce"
@@ -12,30 +12,92 @@ import type { Id } from "@/convex/_generated/dataModel"
 import FloorPlanCanvas from "@/components/FloorPlanCanvas"
 import PropertiesPanel from "@/components/PropertiesPanel"
 import Toolbar from "@/components/Toolbar"
+import { formatFloorLabel, getNextFloorNumber, parseFloorParam, sortFloors } from "@/lib/floor-utils"
+import { createSeedFloorPlan } from "@/lib/geometry"
 import { useEditorStore } from "@/lib/editor-store"
-import type { FloorPlanData } from "@/lib/types"
+import type { FloorPlanData, PersistedFloorPlan } from "@/lib/types"
 
 export default function ProjectEditorPage() {
   const params = useParams<{ id: string }>()
-  const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as Id<"projects"> | undefined
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as
+    | Id<"projects">
+    | undefined
   const stageRef = useRef<Konva.Stage>(null)
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle")
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null)
+  const [isCreatingFloor, setIsCreatingFloor] = useState(false)
+  const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
   const hydratedFloorPlanIdRef = useRef<string | null>(null)
-  const lastSavedSnapshotRef = useRef<string | null>(null)
+  const lastSavedSnapshotsRef = useRef<Record<number, string>>({})
+  const currentFloorRef = useRef<number>(1)
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
-  const activeFloorPlan = useQuery(
-    api.floorPlans.get,
-    projectId
-      ? {
-          projectId,
-          floor: 1
-        }
-      : "skip"
-  )
   const saveFloorPlan = useMutation(api.floorPlans.save)
+  const actionError = useEditorStore((state) => state.actionError)
+
+  const orderedFloorPlans = useMemo(
+    () =>
+      project?.floorPlans
+        ? sortFloors(project.floorPlans as PersistedFloorPlan[])
+        : [],
+    [project?.floorPlans]
+  )
+  const rawFloorParam = searchParams.get("floor")
+  const selectedFloor = useMemo(
+    () => {
+      const requestedFloor = Number(rawFloorParam)
+      if (
+        Number.isInteger(requestedFloor) &&
+        requestedFloor > 0 &&
+        (orderedFloorPlans.some((floorPlan) => floorPlan.floor === requestedFloor) ||
+          pendingCreatedFloor === requestedFloor)
+      ) {
+        return requestedFloor
+      }
+
+      return parseFloorParam(rawFloorParam, orderedFloorPlans)
+    },
+    [orderedFloorPlans, pendingCreatedFloor, rawFloorParam]
+  )
+  const activeFloorPlan = useMemo(
+    () => orderedFloorPlans.find((floorPlan) => floorPlan.floor === selectedFloor) ?? null,
+    [orderedFloorPlans, selectedFloor]
+  )
 
   const floorPlanData = useEditorStore((state) => state.floorPlanData)
   const setFloorPlanData = useEditorStore((state) => state.setFloorPlanData)
+
+  useEffect(() => {
+    currentFloorRef.current = selectedFloor
+  }, [selectedFloor])
+
+  useEffect(() => {
+    if (
+      pendingCreatedFloor !== null &&
+      orderedFloorPlans.some((floorPlan) => floorPlan.floor === pendingCreatedFloor)
+    ) {
+      setPendingCreatedFloor(null)
+    }
+  }, [orderedFloorPlans, pendingCreatedFloor])
+
+  useEffect(() => {
+    if (!projectId || orderedFloorPlans.length === 0) {
+      return
+    }
+
+    const requestedFloor = Number(rawFloorParam)
+    if (
+      Number.isInteger(requestedFloor) &&
+      requestedFloor > 0 &&
+      !orderedFloorPlans.some((floorPlan) => floorPlan.floor === requestedFloor) &&
+      pendingCreatedFloor !== requestedFloor
+    ) {
+      router.replace(`/projects/${projectId}/edit?floor=${orderedFloorPlans[0].floor}`, {
+        scroll: false
+      })
+    }
+  }, [orderedFloorPlans, pendingCreatedFloor, projectId, rawFloorParam, router])
 
   useEffect(() => {
     if (!activeFloorPlan) {
@@ -48,24 +110,44 @@ export default function ProjectEditorPage() {
 
     setFloorPlanData(activeFloorPlan.data, true)
     hydratedFloorPlanIdRef.current = activeFloorPlan._id
-    lastSavedSnapshotRef.current = JSON.stringify(activeFloorPlan.data)
+    lastSavedSnapshotsRef.current[activeFloorPlan.floor] = JSON.stringify(activeFloorPlan.data)
     setSaveState("idle")
+    setSaveErrorMessage(null)
   }, [activeFloorPlan, setFloorPlanData])
 
-  const debouncedSave = useDebouncedCallback(async (nextData: FloorPlanData, sourceImage?: Id<"_storage">) => {
-    if (!projectId) {
-      return
-    }
+  const debouncedSave = useDebouncedCallback(
+    async (
+      floor: number,
+      nextData: FloorPlanData,
+      snapshot: string,
+      sourceImage?: Id<"_storage">
+    ) => {
+      if (!projectId) {
+        return
+      }
 
-    await saveFloorPlan({
-      projectId,
-      floor: 1,
-      sourceImage,
-      data: nextData
-    })
-    lastSavedSnapshotRef.current = JSON.stringify(nextData)
-    setSaveState("saved")
-  }, 700)
+      try {
+        await saveFloorPlan({
+          projectId,
+          floor,
+          sourceImage,
+          data: nextData
+        })
+        lastSavedSnapshotsRef.current[floor] = snapshot
+        if (currentFloorRef.current === floor) {
+          setSaveState("saved")
+          setSaveErrorMessage(null)
+        }
+      } catch (error) {
+        console.error("Unable to autosave floor plan.", error)
+        if (currentFloorRef.current === floor) {
+          setSaveState("error")
+          setSaveErrorMessage("Autosave failed. Your edits are still in the browser.")
+        }
+      }
+    },
+    700
+  )
 
   useEffect(() => {
     if (!projectId || !activeFloorPlan || hydratedFloorPlanIdRef.current !== activeFloorPlan._id) {
@@ -73,52 +155,134 @@ export default function ProjectEditorPage() {
     }
 
     const nextSnapshot = JSON.stringify(floorPlanData)
-    if (nextSnapshot === lastSavedSnapshotRef.current) {
+    if (nextSnapshot === lastSavedSnapshotsRef.current[activeFloorPlan.floor]) {
       return
     }
 
     setSaveState("saving")
-    debouncedSave(floorPlanData, activeFloorPlan.sourceImage)
+    setSaveErrorMessage(null)
+    debouncedSave(
+      activeFloorPlan.floor,
+      floorPlanData,
+      nextSnapshot,
+      activeFloorPlan.sourceImage as Id<"_storage"> | undefined
+    )
   }, [activeFloorPlan, debouncedSave, floorPlanData, projectId])
 
   useEffect(() => () => debouncedSave.cancel(), [debouncedSave])
 
   const statusLabel = useMemo(() => {
-    if (projectId && (project === undefined || activeFloorPlan === undefined)) {
+    if (projectId && project === undefined) {
       return "Loading floor plan..."
     }
 
     if (saveState === "saving") {
-      return "Saving to Convex..."
+      return `Saving ${formatFloorLabel(selectedFloor).toLowerCase()} to Convex...`
     }
 
     if (saveState === "saved") {
-      return "Saved to Convex"
+      return `${formatFloorLabel(selectedFloor)} saved to Convex`
+    }
+
+    if (saveState === "error") {
+      return `Save failed for ${formatFloorLabel(selectedFloor).toLowerCase()}`
     }
 
     return "Convex autosave ready"
-  }, [activeFloorPlan, project, projectId, saveState])
+  }, [project, projectId, saveState, selectedFloor])
 
-  if ((projectId && project === undefined) || (projectId && activeFloorPlan === undefined)) {
+  function navigateToFloor(floor: number) {
+    if (!projectId) {
+      return
+    }
+
+    router.replace(`/projects/${projectId}/edit?floor=${floor}`, { scroll: false })
+  }
+
+  async function handleCreateFloor() {
+    if (!projectId || !project || isCreatingFloor) {
+      return
+    }
+
+    const nextFloor =
+      orderedFloorPlans.length > 0 ? getNextFloorNumber(orderedFloorPlans) : 1
+
+    setIsCreatingFloor(true)
+    setSaveErrorMessage(null)
+
+    try {
+      await saveFloorPlan({
+        projectId,
+        floor: nextFloor,
+        data: createSeedFloorPlan().data
+      })
+      setPendingCreatedFloor(nextFloor)
+      navigateToFloor(nextFloor)
+    } catch (error) {
+      console.error("Unable to create a new floor.", error)
+      setSaveErrorMessage("Unable to create a new floor right now.")
+    } finally {
+      setIsCreatingFloor(false)
+    }
+  }
+
+  if (projectId && project === undefined) {
     return (
       <main className="page-shell">
         <div className="empty-state">
           <div className="section-title">Loading editor</div>
-          <div className="muted">Fetching the latest floor plan from Convex.</div>
+          <div className="muted">Fetching the latest floor plans from Convex.</div>
         </div>
       </main>
     )
   }
 
-  if (!projectId || project === null || activeFloorPlan === null) {
+  if (!projectId || project === null) {
     return (
       <main className="page-shell">
         <div className="empty-state">
           <div className="section-title">Project not found</div>
-          <div className="muted">This editor session requires a saved Convex floor plan.</div>
+          <div className="muted">This editor session requires a saved Convex project.</div>
           <Link href="/" className="button-secondary">
             Return to dashboard
           </Link>
+        </div>
+      </main>
+    )
+  }
+
+  if (orderedFloorPlans.length === 0) {
+    return (
+      <main className="page-shell">
+        <div className="page-heading">
+          <div>
+            <div className="page-title">{project.name}</div>
+            <div className="muted">This project does not have any saved floors yet.</div>
+          </div>
+          <Link href={`/projects/${projectId}`} className="button-ghost">
+            Back to overview
+          </Link>
+        </div>
+
+        <div className="empty-state">
+          <div className="section-title">Create the first floor</div>
+          <div className="muted">A starter floor plan will be created so the editor has a working canvas.</div>
+          <button type="button" className="button" onClick={handleCreateFloor} disabled={isCreatingFloor}>
+            {isCreatingFloor ? "Creating..." : "Create floor 1"}
+          </button>
+        </div>
+      </main>
+    )
+  }
+
+  if (!activeFloorPlan) {
+    return (
+      <main className="page-shell">
+        <div className="empty-state">
+          <div className="section-title">Loading requested floor</div>
+          <div className="muted">
+            Waiting for {formatFloorLabel(selectedFloor).toLowerCase()} to become available.
+          </div>
         </div>
       </main>
     )
@@ -134,13 +298,56 @@ export default function ProjectEditorPage() {
 
       <div className="page-heading">
         <div>
-          <div className="page-title">{project?.name ?? "Loading editor"}</div>
-          <div className="muted">{statusLabel}</div>
+          <div className="page-title">{project.name}</div>
+          <div className="muted">
+            {formatFloorLabel(selectedFloor)} • {statusLabel}
+          </div>
         </div>
-        <Link href={`/projects/${projectId}`} className="button-ghost">
-          Back to overview
-        </Link>
+        <div className="button-row" style={{ alignItems: "center" }}>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={handleCreateFloor}
+            disabled={isCreatingFloor}
+          >
+            {isCreatingFloor ? "Creating..." : "Add floor"}
+          </button>
+          <Link href={`/projects/${projectId}`} className="button-ghost">
+            Back to overview
+          </Link>
+        </div>
       </div>
+
+      <div className="panel" style={{ marginBottom: "1rem" }}>
+        <div className="panel-header" style={{ marginBottom: "0.75rem" }}>
+          <div className="section-title">Floors</div>
+          <div className="muted">{orderedFloorPlans.length} saved floors</div>
+        </div>
+        <div className="pill-row">
+          {orderedFloorPlans.map((floorPlan) => (
+            <button
+              key={floorPlan._id}
+              type="button"
+              className={`pill-button${floorPlan.floor === selectedFloor ? " is-active" : ""}`}
+              onClick={() => navigateToFloor(floorPlan.floor)}
+            >
+              {formatFloorLabel(floorPlan.floor)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {saveErrorMessage ? (
+        <div className="muted" style={{ color: "#9a3412", marginBottom: "1rem" }}>
+          {saveErrorMessage}
+        </div>
+      ) : null}
+
+      {actionError ? (
+        <div className="muted" style={{ color: "#9a3412", marginBottom: "1rem" }}>
+          {actionError}
+        </div>
+      ) : null}
 
       <div className="editor-shell">
         <Toolbar stageRef={stageRef} />

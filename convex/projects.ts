@@ -1,6 +1,7 @@
 import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import { floorPlanDataValidator } from "./validators";
 
 export const list = queryGeneric({
   args: {},
@@ -9,10 +10,18 @@ export const list = queryGeneric({
     return await Promise.all(
       projects
         .sort((a, b) => b.updatedAt - a.updatedAt)
-        .map(async (project) => ({
-          ...project,
-          thumbnailUrl: project.thumbnail ? await ctx.storage.getUrl(project.thumbnail) : null
-        }))
+        .map(async (project) => {
+          const floorPlans = await ctx.db
+            .query("floorPlans")
+            .withIndex("by_projectId", (query) => query.eq("projectId", project._id))
+            .collect();
+
+          return {
+            ...project,
+            thumbnailUrl: project.thumbnail ? await ctx.storage.getUrl(project.thumbnail) : null,
+            floorCount: floorPlans.length
+          };
+        })
     );
   }
 });
@@ -57,6 +66,39 @@ export const create = mutationGeneric({
       updatedAt: now,
       thumbnail: args.thumbnail
     });
+  }
+});
+
+export const createWithInitialFloorPlan = mutationGeneric({
+  args: {
+    name: v.string(),
+    address: v.optional(v.string()),
+    clientName: v.optional(v.string()),
+    thumbnail: v.optional(v.id("_storage")),
+    sourceImage: v.optional(v.id("_storage")),
+    floor: v.number(),
+    data: floorPlanDataValidator
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const projectId = await ctx.db.insert("projects", {
+      name: args.name,
+      address: args.address,
+      clientName: args.clientName,
+      createdAt: now,
+      updatedAt: now,
+      thumbnail: args.thumbnail
+    });
+
+    await ctx.db.insert("floorPlans", {
+      projectId,
+      floor: args.floor,
+      sourceImage: args.sourceImage,
+      data: args.data,
+      version: 1
+    });
+
+    return projectId;
   }
 });
 

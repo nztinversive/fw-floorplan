@@ -109,6 +109,10 @@ export type StoredFloorPlan = {
   version: number;
 };
 
+export type PersistedFloorPlan = StoredFloorPlan & {
+  _id: string;
+};
+
 export type StoredProject = {
   id: string;
   name: string;

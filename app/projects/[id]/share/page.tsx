@@ -7,9 +7,11 @@ import { useQuery } from "convex/react";
 import ReadOnlyFloorPlanCanvas from "@/components/ReadOnlyFloorPlanCanvas";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { formatFloorLabel, sortFloors } from "@/lib/floor-utils";
 import { DEFAULT_RENDER_VIEW_ANGLE, RENDER_VIEW_ANGLE_LABELS } from "@/lib/render-angles";
 import { formatRelativeTime } from "@/lib/file-utils";
 import { STYLE_PRESET_MAP } from "@/lib/style-presets";
+import type { PersistedFloorPlan } from "@/lib/types";
 
 function getStyleLabel(style: string) {
   return STYLE_PRESET_MAP[style as keyof typeof STYLE_PRESET_MAP]?.name ?? style;
@@ -19,17 +21,11 @@ export default function ProjectSharePage() {
   const params = useParams<{ id: string }>();
   const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as Id<"projects"> | undefined;
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip");
-  const floorPlan = useQuery(
-    api.floorPlans.get,
-    projectId
-      ? {
-          projectId,
-          floor: 1
-        }
-      : "skip"
-  );
   const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip");
 
+  const floorPlans = project?.floorPlans
+    ? sortFloors(project.floorPlans as PersistedFloorPlan[])
+    : [];
   const renders = (rendersQuery ?? []).map((render) => ({
     ...render,
     settings: {
@@ -40,12 +36,12 @@ export default function ProjectSharePage() {
   const favoriteRenders = renders.filter((render) => render.isFavorite);
   const visibleRenders = favoriteRenders.length > 0 ? favoriteRenders : renders;
 
-  if ((projectId && project === undefined) || (projectId && floorPlan === undefined) || (projectId && rendersQuery === undefined)) {
+  if ((projectId && project === undefined) || (projectId && rendersQuery === undefined)) {
     return (
       <main className="page-shell">
         <div className="empty-state">
           <div className="section-title">Loading shared project</div>
-          <div className="muted">Fetching the floor plan and render gallery.</div>
+          <div className="muted">Fetching the floor plans and render gallery.</div>
         </div>
       </main>
     );
@@ -79,7 +75,7 @@ export default function ProjectSharePage() {
         <div className="share-hero-copy">
           <div className="hero-title">{project.name}</div>
           <div className="hero-copy">
-            Review the floor plan and exterior render concepts in a clean, read-only presentation.
+            Review every saved floor plan and the exterior render concepts in a clean, read-only presentation.
           </div>
         </div>
 
@@ -93,6 +89,10 @@ export default function ProjectSharePage() {
             <div className="stat-value share-stat">{project.clientName || "Not provided"}</div>
           </div>
           <div className="stat-card">
+            <div className="stat-label">Floors shown</div>
+            <div className="stat-value share-stat">{floorPlans.length}</div>
+          </div>
+          <div className="stat-card">
             <div className="stat-label">Renders shown</div>
             <div className="stat-value share-stat">{visibleRenders.length}</div>
           </div>
@@ -103,17 +103,27 @@ export default function ProjectSharePage() {
         <section className="panel">
           <div className="panel-header">
             <div>
-              <div className="section-title">Floor plan</div>
-              <div className="muted">Read-only plan view with zoom and pan enabled.</div>
+              <div className="section-title">Floor plans</div>
+              <div className="muted">Read-only plan views with zoom and pan enabled for each saved floor.</div>
             </div>
           </div>
 
-          {floorPlan ? (
-            <ReadOnlyFloorPlanCanvas data={floorPlan.data} />
+          {floorPlans.length > 0 ? (
+            <div className="property-list">
+              {floorPlans.map((floorPlan) => (
+                <article key={floorPlan._id} className="property-card">
+                  <div className="panel-header">
+                    <div className="section-title">{formatFloorLabel(floorPlan.floor)}</div>
+                    <span className="badge">Version {floorPlan.version}</span>
+                  </div>
+                  <ReadOnlyFloorPlanCanvas data={floorPlan.data} />
+                </article>
+              ))}
+            </div>
           ) : (
             <div className="empty-state">
-              <div className="section-title">No floor plan available</div>
-              <div className="muted">The project does not have a saved first-floor plan yet.</div>
+              <div className="section-title">No floor plans available</div>
+              <div className="muted">The project does not have any saved floor plans yet.</div>
             </div>
           )}
         </section>
