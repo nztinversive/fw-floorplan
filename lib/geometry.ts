@@ -97,7 +97,22 @@ export function polygonCentroid(points: Point[]): Point {
     return { x: 0, y: 0 };
   }
 
-  const area = polygonArea(points) || 1;
+  if (points.length < 3) {
+    const total = points.reduce(
+      (accumulator, point) => ({
+        x: accumulator.x + point.x,
+        y: accumulator.y + point.y
+      }),
+      { x: 0, y: 0 }
+    );
+
+    return {
+      x: total.x / points.length,
+      y: total.y / points.length
+    };
+  }
+
+  let signedDoubleArea = 0;
   let cx = 0;
   let cy = 0;
 
@@ -105,13 +120,29 @@ export function polygonCentroid(points: Point[]): Point {
     const current = points[i];
     const next = points[(i + 1) % points.length];
     const factor = current.x * next.y - next.x * current.y;
+    signedDoubleArea += factor;
     cx += (current.x + next.x) * factor;
     cy += (current.y + next.y) * factor;
   }
 
+  if (Math.abs(signedDoubleArea) < 1e-6) {
+    const total = points.reduce(
+      (accumulator, point) => ({
+        x: accumulator.x + point.x,
+        y: accumulator.y + point.y
+      }),
+      { x: 0, y: 0 }
+    );
+
+    return {
+      x: total.x / points.length,
+      y: total.y / points.length
+    };
+  }
+
   return {
-    x: cx / (6 * area),
-    y: cy / (6 * area)
+    x: cx / (3 * signedDoubleArea),
+    y: cy / (3 * signedDoubleArea)
   };
 }
 

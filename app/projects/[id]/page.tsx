@@ -12,6 +12,11 @@ import type { Id } from "@/convex/_generated/dataModel"
 import { formatDate } from "@/lib/file-utils"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
 
+type ProjectWithThumbnailUrl = {
+  thumbnail?: string
+  thumbnailUrl?: string | null
+}
+
 function getDisplayImage(src?: string) {
   return src?.startsWith("http") || src?.startsWith("data:") ? src : undefined
 }
@@ -30,7 +35,8 @@ export default function ProjectOverviewPage() {
     () => project?.floorPlans.find((entry: { floor: number }) => entry.floor === 1),
     [project]
   )
-  const thumbnail = getDisplayImage(project?.thumbnail)
+  const projectWithThumbnail = project as (typeof project & ProjectWithThumbnailUrl) | null | undefined
+  const thumbnail = getDisplayImage(projectWithThumbnail?.thumbnailUrl ?? projectWithThumbnail?.thumbnail)
 
   useEffect(() => {
     return () => {

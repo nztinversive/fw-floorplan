@@ -214,10 +214,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   deleteElement: (id) =>
     set((state) => {
       const next = updateState(state.floorPlanData, (draft) => {
+        const isWall = draft.walls.some((entry) => entry.id === id);
         draft.walls = draft.walls.filter((entry) => entry.id !== id);
         draft.rooms = draft.rooms.filter((entry) => entry.id !== id);
-        draft.doors = draft.doors.filter((entry) => entry.id !== id);
-        draft.windows = draft.windows.filter((entry) => entry.id !== id);
+        draft.doors = draft.doors.filter(
+          (entry) => entry.id !== id && (!isWall || entry.wallId !== id)
+        );
+        draft.windows = draft.windows.filter(
+          (entry) => entry.id !== id && (!isWall || entry.wallId !== id)
+        );
         draft.furniture = draft.furniture.filter((entry) => entry.id !== id);
         return draft;
       });

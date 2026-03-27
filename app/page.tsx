@@ -9,6 +9,11 @@ import ProjectCard from "@/components/ProjectCard"
 import { api } from "@/convex/_generated/api"
 import type { ProjectSummary } from "@/lib/types"
 
+type ProjectListItemWithThumbnailUrl = {
+  thumbnail?: string
+  thumbnailUrl?: string | null
+}
+
 function getDisplayImage(src?: string) {
   return src?.startsWith("http") || src?.startsWith("data:") ? src : undefined
 }
@@ -18,16 +23,22 @@ export default function DashboardPage() {
   const hasLoaded = projectsQuery !== undefined
   const projects = useMemo<ProjectSummary[]>(
     () =>
-      (projectsQuery ?? []).map((project) => ({
-        id: project._id,
-        name: project.name,
-        address: project.address,
-        clientName: project.clientName,
-        createdAt: project.createdAt,
-        updatedAt: project.updatedAt,
-        thumbnail: getDisplayImage(project.thumbnail),
-        floorCount: 1
-      })),
+      (projectsQuery ?? []).map((project) => {
+        const projectWithThumbnail = project as typeof project & ProjectListItemWithThumbnailUrl
+
+        return {
+          id: project._id,
+          name: project.name,
+          address: project.address,
+          clientName: project.clientName,
+          createdAt: project.createdAt,
+          updatedAt: project.updatedAt,
+          thumbnail: getDisplayImage(
+            projectWithThumbnail.thumbnailUrl ?? projectWithThumbnail.thumbnail
+          ),
+          floorCount: 1
+        }
+      }),
     [projectsQuery]
   )
 

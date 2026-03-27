@@ -147,12 +147,12 @@ DOORS:
 - Door type MUST be one of: "standard", "sliding", "double", "garage".
 - Map swing/hinged doors to "standard". Map pocket doors to "sliding".
 - Position is normalized 0-1 along the host wall (0 = wall start, 1 = wall end).
-- Width is in feet (typical interior door: 2.67 ft / 32 inches, closet: 2 ft / 24 inches).
+- Width is in feet, not inches (typical interior door: 2.67 ft / 32 inches, closet: 2 ft / 24 inches).
 - Reference the correct wallId from the walls array.
 
 WINDOWS:
 - Position is normalized 0-1 along the host wall.
-- Width and height are in feet.
+- Width and height are in feet, not inches.
 - Only place windows on exterior walls.
 
 DIMENSIONS:

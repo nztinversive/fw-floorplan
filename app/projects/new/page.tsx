@@ -38,6 +38,10 @@ type ExtractedFloorPlan = {
   confidence: number
 }
 
+function feetToInches(value: number) {
+  return Number.isFinite(value) ? Number((value * 12).toFixed(2)) : value
+}
+
 async function uploadAssetToStorage(uploadUrl: string, asset: UploadAsset): Promise<Id<"_storage">> {
   const blob = await fetch(asset.dataUrl).then((response) => response.blob())
   const response = await fetch(uploadUrl, {
@@ -107,8 +111,15 @@ export default function NewProjectPage() {
           floorPlanData = syncDerivedData({
             walls: extracted.walls,
             rooms: extracted.rooms,
-            doors: extracted.doors,
-            windows: extracted.windows,
+            doors: extracted.doors.map((door) => ({
+              ...door,
+              width: feetToInches(door.width)
+            })),
+            windows: extracted.windows.map((window) => ({
+              ...window,
+              width: feetToInches(window.width),
+              height: feetToInches(window.height)
+            })),
             dimensions: [],
             furniture: [],
             scale: extracted.scale > 0 ? extracted.scale : 24,

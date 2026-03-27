@@ -1,11 +1,19 @@
 import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 
 export const list = queryGeneric({
   args: {},
   handler: async (ctx) => {
     const projects = await ctx.db.query("projects").collect();
-    return projects.sort((a, b) => b.updatedAt - a.updatedAt);
+    return await Promise.all(
+      projects
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .map(async (project) => ({
+          ...project,
+          thumbnailUrl: project.thumbnail ? await ctx.storage.getUrl(project.thumbnail) : null
+        }))
+    );
   }
 });
 
@@ -26,6 +34,7 @@ export const get = queryGeneric({
 
     return {
       ...project,
+      thumbnailUrl: project.thumbnail ? await ctx.storage.getUrl(project.thumbnail) : null,
       floorPlans: floorPlans.sort((a, b) => a.floor - b.floor)
     };
   }
@@ -82,6 +91,11 @@ export const remove = mutationGeneric({
     id: v.id("projects")
   },
   handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.id);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
     const floorPlans = await ctx.db
       .query("floorPlans")
       .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
@@ -91,12 +105,31 @@ export const remove = mutationGeneric({
       .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
       .collect();
 
+    const storageIds = new Set<Id<"_storage">>();
+    if (project.thumbnail) {
+      storageIds.add(project.thumbnail);
+    }
+
+    for (const floorPlan of floorPlans) {
+      if (floorPlan.sourceImage) {
+        storageIds.add(floorPlan.sourceImage);
+      }
+    }
+
+    for (const render of renders) {
+      storageIds.add(render.imageUrl);
+    }
+
     for (const floorPlan of floorPlans) {
       await ctx.db.delete(floorPlan._id);
     }
 
     for (const render of renders) {
       await ctx.db.delete(render._id);
+    }
+
+    for (const storageId of storageIds) {
+      await ctx.storage.delete(storageId);
     }
 
     await ctx.db.delete(args.id);
