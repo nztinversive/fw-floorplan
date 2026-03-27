@@ -83,7 +83,7 @@ async function renderPdfFirstPage(file: File): Promise<UploadAsset> {
 }
 
 async function normalizeFile(file: File): Promise<UploadAsset> {
-  const isHeic = file.type === "image/heic" || /\.heic$/i.test(file.name)
+  const isHeic = file.type === "image/heic" || /\.hei[cf]$/i.test(file.name)
   const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name)
 
   if (isHeic) {
@@ -163,8 +163,8 @@ export default function UploadZone({ value, onChange }: UploadZoneProps) {
           Maximum size 25MB. PDFs convert to a PNG preview of page 1, and HEIC files convert to JPEG.
         </div>
         {isReading ? (
-          <div className="progress-bar">
-            <span style={{ width: "72%" }} />
+          <div className="progress-bar is-indeterminate">
+            <span />
           </div>
         ) : null}
       </div>

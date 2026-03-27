@@ -1,37 +1,41 @@
-"use client";
+"use client"
 
-import Image from "next/image";
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useAction, useMutation, useQuery } from "convex/react";
-import { Download, ImagePlus, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import Image from "next/image"
+import Link from "next/link"
+import { useParams } from "next/navigation"
+import { useAction, useMutation, useQuery } from "convex/react"
+import { Download, ImagePlus, X } from "lucide-react"
+import { useMemo, useState } from "react"
 
-import RenderCard from "@/components/RenderCard";
-import StyleSelector from "@/components/StyleSelector";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
+import Breadcrumb from "@/components/Breadcrumb"
+import ConfirmDialog from "@/components/ConfirmDialog"
+import RenderCard from "@/components/RenderCard"
+import { SkeletonPanel } from "@/components/Skeleton"
+import StyleSelector from "@/components/StyleSelector"
+import { useToast } from "@/components/Toast"
+import { api } from "@/convex/_generated/api"
+import type { Id } from "@/convex/_generated/dataModel"
 import {
   DEFAULT_RENDER_VIEW_ANGLE,
   RENDER_VIEW_ANGLE_LABELS,
   RENDER_VIEW_ANGLES,
   type RenderViewAngle
-} from "@/lib/render-angles";
+} from "@/lib/render-angles"
 import {
   RENDER_SETTING_OPTIONS,
   STYLE_PRESET_MAP,
   STYLE_PRESETS,
   type StylePresetDefaults,
   type StylePresetId
-} from "@/lib/style-presets";
-import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export";
-import { sortFloors } from "@/lib/floor-utils";
-import type { PersistedFloorPlan, RenderSettings, StoredRender } from "@/lib/types";
+} from "@/lib/style-presets"
+import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
+import { sortFloors } from "@/lib/floor-utils"
+import type { PersistedFloorPlan, RenderSettings, StoredRender } from "@/lib/types"
 
-type PendingRenderAction = "favorite" | "delete" | "regenerate";
-type SettingKey = keyof StylePresetDefaults;
+type PendingRenderAction = "favorite" | "delete" | "regenerate"
+type SettingKey = keyof StylePresetDefaults
 
-const INITIAL_STYLE = STYLE_PRESETS[0].id;
+const INITIAL_STYLE = STYLE_PRESETS[0].id
 
 function getDefaultSettings(
   styleId: StylePresetId,
@@ -41,33 +45,35 @@ function getDefaultSettings(
     style: styleId,
     ...STYLE_PRESET_MAP[styleId].defaultSettings,
     viewAngle
-  };
+  }
 }
 
 function getStyleLabel(style: string) {
-  return STYLE_PRESET_MAP[style as keyof typeof STYLE_PRESET_MAP]?.name ?? style;
+  return STYLE_PRESET_MAP[style as keyof typeof STYLE_PRESET_MAP]?.name ?? style
 }
 
 export default function ProjectRendersPage() {
-  const params = useParams<{ id: string }>();
-  const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as Id<"projects"> | undefined;
-  const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip");
-  const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip");
-  const generateRender = useAction(api.renders.generateRender);
-  const toggleFavorite = useMutation(api.renders.toggleFavorite);
-  const removeRender = useMutation(api.renders.remove);
+  const params = useParams<{ id: string }>()
+  const { toast } = useToast()
+  const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as Id<"projects"> | undefined
+  const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
+  const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip")
+  const generateRender = useAction(api.renders.generateRender)
+  const toggleFavorite = useMutation(api.renders.toggleFavorite)
+  const removeRender = useMutation(api.renders.remove)
 
-  const [selectedStyle, setSelectedStyle] = useState<StylePresetId>(INITIAL_STYLE);
-  const [settings, setSettings] = useState<RenderSettings>(() => getDefaultSettings(INITIAL_STYLE));
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [comparisonMode, setComparisonMode] = useState(false);
-  const [selectedRenderIds, setSelectedRenderIds] = useState<string[]>([]);
-  const [isExportingPackage, setIsExportingPackage] = useState(false);
+  const [selectedStyle, setSelectedStyle] = useState<StylePresetId>(INITIAL_STYLE)
+  const [settings, setSettings] = useState<RenderSettings>(() => getDefaultSettings(INITIAL_STYLE))
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [comparisonMode, setComparisonMode] = useState(false)
+  const [selectedRenderIds, setSelectedRenderIds] = useState<string[]>([])
+  const [isExportingPackage, setIsExportingPackage] = useState(false)
   const [pendingRenderAction, setPendingRenderAction] = useState<{
-    renderId: string;
-    action: PendingRenderAction;
-  } | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    renderId: string
+    action: PendingRenderAction
+  } | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
 
   const renders = useMemo<StoredRender[]>(
     () =>
@@ -86,21 +92,21 @@ export default function ProjectRendersPage() {
         createdAt: render.createdAt
       })),
     [rendersQuery]
-  );
+  )
 
   const comparisonRenders = useMemo(
     () => selectedRenderIds.map((renderId) => renders.find((render) => render.id === renderId)).filter(Boolean) as StoredRender[],
     [renders, selectedRenderIds]
-  );
+  )
 
   const exportRenders = useMemo(() => {
-    const favoriteRenders = renders.filter((render) => render.isFavorite && render.imageUrl);
-    return favoriteRenders.length > 0 ? favoriteRenders : renders.filter((render) => render.imageUrl);
-  }, [renders]);
+    const favoriteRenders = renders.filter((render) => render.isFavorite && render.imageUrl)
+    return favoriteRenders.length > 0 ? favoriteRenders : renders.filter((render) => render.imageUrl)
+  }, [renders])
 
   function handleStyleSelect(styleId: StylePresetId) {
-    setSelectedStyle(styleId);
-    setSettings((current) => getDefaultSettings(styleId, current.viewAngle));
+    setSelectedStyle(styleId)
+    setSettings((current) => getDefaultSettings(styleId, current.viewAngle))
   }
 
   function updateSetting(key: SettingKey, value: string) {
@@ -108,7 +114,7 @@ export default function ProjectRendersPage() {
       ...current,
       style: selectedStyle,
       [key]: value
-    }));
+    }))
   }
 
   function handleViewAngleSelect(viewAngle: RenderViewAngle) {
@@ -116,16 +122,14 @@ export default function ProjectRendersPage() {
       ...current,
       style: selectedStyle,
       viewAngle
-    }));
+    }))
   }
 
   async function triggerGeneration(nextStyle: string, nextSettings: RenderSettings) {
-    if (!projectId || isGenerating) {
-      return;
-    }
+    if (!projectId || isGenerating) return
 
-    setErrorMessage(null);
-    setIsGenerating(true);
+    setErrorMessage(null)
+    setIsGenerating(true)
 
     try {
       await generateRender({
@@ -136,71 +140,79 @@ export default function ProjectRendersPage() {
           ...nextSettings,
           style: nextStyle
         }
-      });
+      })
+      toast("Render generated successfully", "success")
     } catch (error) {
-      console.error("Unable to generate render.", error);
-      setErrorMessage("Unable to generate a render right now. Check the floor plan and API configuration, then try again.");
+      console.error("Unable to generate render.", error)
+      setErrorMessage("Unable to generate a render right now. Check the floor plan and API configuration, then try again.")
+      toast("Render generation failed", "error")
     } finally {
-      setIsGenerating(false);
+      setIsGenerating(false)
     }
   }
 
   async function handleGenerateRender() {
-    await triggerGeneration(selectedStyle, settings);
+    await triggerGeneration(selectedStyle, settings)
   }
 
   async function handleToggleFavorite(renderId: string) {
-    setErrorMessage(null);
-    setPendingRenderAction({ renderId, action: "favorite" });
+    setErrorMessage(null)
+    setPendingRenderAction({ renderId, action: "favorite" })
 
     try {
-      await toggleFavorite({ renderId: renderId as Id<"renders"> });
+      await toggleFavorite({ renderId: renderId as Id<"renders"> })
     } catch (error) {
-      console.error("Unable to toggle favorite.", error);
-      setErrorMessage("Unable to update favorites right now.");
+      console.error("Unable to toggle favorite.", error)
+      toast("Unable to update favorites", "error")
     } finally {
-      setPendingRenderAction(null);
+      setPendingRenderAction(null)
     }
   }
 
   async function handleDeleteRender(renderId: string) {
-    setErrorMessage(null);
-    setPendingRenderAction({ renderId, action: "delete" });
+    setDeleteTarget(renderId)
+  }
+
+  async function confirmDeleteRender() {
+    if (!deleteTarget) return
+
+    setErrorMessage(null)
+    setPendingRenderAction({ renderId: deleteTarget, action: "delete" })
 
     try {
-      await removeRender({ renderId: renderId as Id<"renders"> });
-      setSelectedRenderIds((current) => current.filter((id) => id !== renderId));
+      await removeRender({ renderId: deleteTarget as Id<"renders"> })
+      setSelectedRenderIds((current) => current.filter((id) => id !== deleteTarget))
+      toast("Render deleted", "success")
     } catch (error) {
-      console.error("Unable to delete render.", error);
-      setErrorMessage("Unable to delete the selected render.");
+      console.error("Unable to delete render.", error)
+      toast("Unable to delete the render", "error")
     } finally {
-      setPendingRenderAction(null);
+      setPendingRenderAction(null)
+      setDeleteTarget(null)
     }
   }
 
   async function handleRegenerate(render: StoredRender) {
-    setPendingRenderAction({ renderId: render.id, action: "regenerate" });
+    setPendingRenderAction({ renderId: render.id, action: "regenerate" })
 
     try {
-      await triggerGeneration(render.style, render.settings);
+      await triggerGeneration(render.style, render.settings)
     } finally {
-      setPendingRenderAction(null);
+      setPendingRenderAction(null)
     }
   }
 
   async function handleExportClientPackage() {
-    if (!project || isExportingPackage) {
-      return;
-    }
+    if (!project || isExportingPackage) return
 
-    const exportFloors = sortFloors(project.floorPlans as PersistedFloorPlan[]);
+    const exportFloors = sortFloors(project.floorPlans as PersistedFloorPlan[])
     if (exportFloors.length === 0) {
-      setErrorMessage("Save a floor plan before exporting a client package.");
-      return;
+      toast("Save a floor plan before exporting", "warning")
+      return
     }
 
-    setErrorMessage(null);
-    setIsExportingPackage(true);
+    setErrorMessage(null)
+    setIsExportingPackage(true)
 
     try {
       await generateClientPackage({
@@ -208,7 +220,7 @@ export default function ProjectRendersPage() {
         address: project.address,
         clientName: project.clientName,
         floorPlans: exportFloors.map((floorPlan) => {
-          const preview = generateFloorPlanPreview(floorPlan.data);
+          const preview = generateFloorPlanPreview(floorPlan.data)
           return {
             floor: floorPlan.floor,
             image: preview.dataUrl,
@@ -216,50 +228,49 @@ export default function ProjectRendersPage() {
               roomCount: preview.roomCount,
               wallCount: preview.wallCount
             }
-          };
+          }
         }),
         renders: exportRenders.map((render) => ({
           imageUrl: render.imageUrl,
           style: render.style,
           settings: render.settings
         }))
-      });
+      })
+      toast("Client package exported", "success")
     } catch (error) {
-      console.error("Unable to export PDF package.", error);
-      setErrorMessage("Unable to export the client package right now.");
+      console.error("Unable to export PDF package.", error)
+      toast("Unable to export the client package right now", "error")
     } finally {
-      setIsExportingPackage(false);
+      setIsExportingPackage(false)
     }
   }
 
   function handleComparisonToggle() {
-    setComparisonMode((current) => !current);
-    setSelectedRenderIds([]);
+    setComparisonMode((current) => !current)
+    setSelectedRenderIds([])
   }
 
   function handleComparisonSelect(renderId: string) {
     setSelectedRenderIds((current) => {
       if (current.includes(renderId)) {
-        return current.filter((id) => id !== renderId);
+        return current.filter((id) => id !== renderId)
       }
 
       if (current.length < 2) {
-        return [...current, renderId];
+        return [...current, renderId]
       }
 
-      return [current[1], renderId];
-    });
+      return [current[1], renderId]
+    })
   }
 
   if ((projectId && project === undefined) || (projectId && rendersQuery === undefined)) {
     return (
       <main className="page-shell">
-        <div className="empty-state">
-          <div className="section-title">Loading renders</div>
-          <div className="muted">Fetching project details and saved render history from Convex.</div>
-        </div>
+        <Breadcrumb items={[{ label: "Projects", href: "/" }, { label: "Loading..." }, { label: "Renders" }]} />
+        <SkeletonPanel height="300px" />
       </main>
-    );
+    )
   }
 
   if (!projectId || project === null) {
@@ -273,20 +284,22 @@ export default function ProjectRendersPage() {
           </Link>
         </div>
       </main>
-    );
+    )
   }
 
   if (project.floorPlans.length === 0) {
     return (
       <main className="page-shell">
+        <Breadcrumb items={[
+          { label: "Projects", href: "/" },
+          { label: project.name, href: `/projects/${projectId}` },
+          { label: "Renders" }
+        ]} />
         <div className="page-heading">
           <div>
             <div className="page-title">AI House Renders</div>
             <div className="muted">A saved floor plan is required before render generation can start.</div>
           </div>
-          <Link href={`/projects/${projectId}`} className="button-ghost">
-            Back to overview
-          </Link>
         </div>
 
         <div className="empty-state">
@@ -297,11 +310,17 @@ export default function ProjectRendersPage() {
           </Link>
         </div>
       </main>
-    );
+    )
   }
 
   return (
     <main className="page-shell">
+      <Breadcrumb items={[
+        { label: "Projects", href: "/" },
+        { label: project.name, href: `/projects/${projectId}` },
+        { label: "Renders" }
+      ]} />
+
       <div className="page-heading">
         <div>
           <div className="page-title">AI House Renders</div>
@@ -513,6 +532,16 @@ export default function ProjectRendersPage() {
           )}
         </section>
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete this render?"
+        message="This will permanently remove the render and its stored image file. This action cannot be undone."
+        confirmLabel="Delete render"
+        variant="danger"
+        onConfirm={confirmDeleteRender}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </main>
-  );
+  )
 }

@@ -9,6 +9,7 @@ import {
   Eraser,
   Minus,
   MousePointer2,
+  PanelTop,
   Plus,
   Redo2,
   SquareStack,
@@ -22,11 +23,16 @@ type ToolbarProps = {
   stageRef: RefObject<Konva.Stage | null>
 }
 
-const TOOLS: Array<{ id: EditorTool; label: string; icon: ComponentType<{ size?: number }> }> = [
-  { id: "select", label: "Select", icon: MousePointer2 },
-  { id: "wall", label: "Wall", icon: SquareStack },
-  { id: "door", label: "Door", icon: DoorOpen },
-  { id: "window", label: "Window", icon: Minus }
+const TOOLS: Array<{
+  id: EditorTool
+  label: string
+  shortcut: string
+  icon: ComponentType<{ size?: number }>
+}> = [
+  { id: "select", label: "Select", shortcut: "Esc", icon: MousePointer2 },
+  { id: "wall", label: "Wall", shortcut: "W", icon: SquareStack },
+  { id: "door", label: "Door", shortcut: "D", icon: DoorOpen },
+  { id: "window", label: "Window", shortcut: "N", icon: PanelTop }
 ]
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -80,6 +86,21 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
         } else {
           undo()
         }
+        return
+      }
+
+      // Tool shortcuts
+      if (!hasCommandModifier && !event.shiftKey) {
+        if (key === "w") {
+          event.preventDefault()
+          setTool("wall")
+        } else if (key === "d") {
+          event.preventDefault()
+          setTool("door")
+        } else if (key === "n") {
+          event.preventDefault()
+          setTool("window")
+        }
       }
     }
 
@@ -104,22 +125,24 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
     <div className="toolbar-shell">
       <div className="toolbar-row">
         <div className="toolbar-group">
-          {TOOLS.map(({ id, label, icon: Icon }) => (
+          {TOOLS.map(({ id, label, shortcut, icon: Icon }) => (
             <button
               key={id}
               type="button"
-              className={`icon-button${tool === id ? " is-active" : ""}`}
-              title={label}
+              className={`toolbar-btn-labeled${tool === id ? " is-active" : ""}`}
+              title={`${label} (${shortcut})`}
               aria-label={label}
               onClick={() => setTool(id)}
             >
               <Icon size={16} />
+              <span>{label}</span>
+              <span className="toolbar-shortcut">{shortcut}</span>
             </button>
           ))}
           <button
             type="button"
-            className="icon-button"
-            title="Delete"
+            className="toolbar-btn-labeled"
+            title="Delete selected (Del)"
             aria-label="Delete selected element"
             onClick={() => {
               if (selectedId) {
@@ -128,14 +151,16 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
             }}
           >
             <Eraser size={16} />
+            <span>Delete</span>
+            <span className="toolbar-shortcut">Del</span>
           </button>
         </div>
 
         <div className="toolbar-group">
-          <button type="button" className="icon-button" title="Undo" aria-label="Undo" onClick={undo}>
+          <button type="button" className="icon-button" title="Undo (Ctrl+Z)" aria-label="Undo" onClick={undo}>
             <Undo2 size={16} />
           </button>
-          <button type="button" className="icon-button" title="Redo" aria-label="Redo" onClick={redo}>
+          <button type="button" className="icon-button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" onClick={redo}>
             <Redo2 size={16} />
           </button>
           <button

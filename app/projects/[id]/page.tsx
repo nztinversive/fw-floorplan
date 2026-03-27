@@ -2,11 +2,15 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useMutation, useQuery } from "convex/react"
-import { Download, DraftingCompass, Image as ImageIcon, Link2 } from "lucide-react"
+import { DraftingCompass, Download, Image as ImageIcon, Link2, Pencil, Trash2 } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
+import Breadcrumb from "@/components/Breadcrumb"
+import ConfirmDialog from "@/components/ConfirmDialog"
+import { SkeletonPanel } from "@/components/Skeleton"
+import { useToast } from "@/components/Toast"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import { formatDate } from "@/lib/file-utils"
@@ -17,18 +21,30 @@ import type { PersistedFloorPlan } from "@/lib/types"
 
 export default function ProjectOverviewPage() {
   const params = useParams<{ id: string }>()
+  const router = useRouter()
+  const { toast } = useToast()
   const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as
     | Id<"projects">
     | undefined
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
   const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip")
   const saveFloorPlan = useMutation(api.floorPlans.save)
+  const updateProject = useMutation(api.projects.update)
+  const removeProject = useMutation(api.projects.remove)
   const copyTimerRef = useRef<number | null>(null)
   const [shareFeedback, setShareFeedback] = useState<"idle" | "copied" | "error">("idle")
   const [isExportingPdf, setIsExportingPdf] = useState(false)
-  const [pdfErrorMessage, setPdfErrorMessage] = useState<string | null>(null)
   const [isCreatingFloor, setIsCreatingFloor] = useState(false)
   const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  // Inline editing state
+  const [isEditing, setIsEditing] = useState(false)
+  const [editName, setEditName] = useState("")
+  const [editAddress, setEditAddress] = useState("")
+  const [editClient, setEditClient] = useState("")
+
   const orderedFloorPlans = useMemo(
     () =>
       project?.floorPlans
@@ -78,14 +94,59 @@ export default function ProjectOverviewPage() {
     [activeFloorPlan]
   )
 
-  async function handleCopyShareLink() {
-    if (!projectId) {
-      return
+  function startEditing() {
+    if (!project) return
+    setEditName(project.name)
+    setEditAddress(project.address ?? "")
+    setEditClient(project.clientName ?? "")
+    setIsEditing(true)
+  }
+
+  async function saveEdits() {
+    if (!projectId || !editName.trim()) return
+
+    try {
+      await updateProject({
+        id: projectId,
+        name: editName.trim(),
+        address: editAddress.trim() || undefined,
+        clientName: editClient.trim() || undefined
+      })
+      setIsEditing(false)
+      toast("Project details updated", "success")
+    } catch (error) {
+      console.error("Unable to update project.", error)
+      toast("Unable to update project details", "error")
     }
+  }
+
+  function cancelEditing() {
+    setIsEditing(false)
+  }
+
+  async function handleDeleteProject() {
+    if (!projectId || isDeleting) return
+
+    setIsDeleting(true)
+    try {
+      await removeProject({ id: projectId })
+      toast("Project deleted", "success")
+      router.push("/")
+    } catch (error) {
+      console.error("Unable to delete project.", error)
+      toast("Unable to delete project", "error")
+      setIsDeleting(false)
+      setShowDeleteDialog(false)
+    }
+  }
+
+  async function handleCopyShareLink() {
+    if (!projectId) return
 
     try {
       const shareUrl = `${window.location.origin}/projects/${projectId}/share`
       await navigator.clipboard.writeText(shareUrl)
+      toast("Share link copied to clipboard", "success")
       setShareFeedback("copied")
       if (copyTimerRef.current) {
         window.clearTimeout(copyTimerRef.current)
@@ -93,6 +154,7 @@ export default function ProjectOverviewPage() {
       copyTimerRef.current = window.setTimeout(() => setShareFeedback("idle"), 1800)
     } catch (error) {
       console.error("Unable to copy share link.", error)
+      toast("Unable to copy link", "error")
       setShareFeedback("error")
       if (copyTimerRef.current) {
         window.clearTimeout(copyTimerRef.current)
@@ -102,13 +164,10 @@ export default function ProjectOverviewPage() {
   }
 
   async function handleAddFloor() {
-    if (!projectId || !project || isCreatingFloor) {
-      return
-    }
+    if (!projectId || !project || isCreatingFloor) return
 
     const nextFloor = getNextFloorNumber(orderedFloorPlans)
     setIsCreatingFloor(true)
-    setPdfErrorMessage(null)
 
     try {
       await saveFloorPlan({
@@ -118,25 +177,23 @@ export default function ProjectOverviewPage() {
       })
       setPendingCreatedFloor(nextFloor)
       setSelectedFloor(nextFloor)
+      toast(`${formatFloorLabel(nextFloor)} created`, "success")
     } catch (error) {
       console.error("Unable to create floor.", error)
-      setPdfErrorMessage("Unable to create another floor right now.")
+      toast("Unable to create another floor right now", "error")
     } finally {
       setIsCreatingFloor(false)
     }
   }
 
   async function handleExportPdf() {
-    if (!project || isExportingPdf || rendersQuery === undefined) {
-      return
-    }
+    if (!project || isExportingPdf || rendersQuery === undefined) return
 
     if (orderedFloorPlans.length === 0) {
-      setPdfErrorMessage("Save a floor plan before exporting a client package.")
+      toast("Save a floor plan before exporting", "warning")
       return
     }
 
-    setPdfErrorMessage(null)
     setIsExportingPdf(true)
 
     try {
@@ -164,9 +221,10 @@ export default function ProjectOverviewPage() {
           }
         }))
       })
+      toast("Client package exported", "success")
     } catch (error) {
       console.error("Unable to export PDF package.", error)
-      setPdfErrorMessage("Unable to export the client package right now.")
+      toast("Unable to export the client package right now", "error")
     } finally {
       setIsExportingPdf(false)
     }
@@ -175,10 +233,8 @@ export default function ProjectOverviewPage() {
   if (projectId && project === undefined) {
     return (
       <main className="page-shell">
-        <div className="empty-state">
-          <div className="section-title">Loading project</div>
-          <div className="muted">Fetching project details from Convex.</div>
-        </div>
+        <Breadcrumb items={[{ label: "Projects", href: "/" }, { label: "Loading..." }]} />
+        <SkeletonPanel height="400px" />
       </main>
     )
   }
@@ -199,42 +255,85 @@ export default function ProjectOverviewPage() {
 
   return (
     <main className="page-shell">
+      <Breadcrumb items={[
+        { label: "Projects", href: "/" },
+        { label: project.name }
+      ]} />
+
       <div className="page-heading">
         <div>
-          <div className="page-title">{project.name}</div>
-          <div className="muted">
-            {project.address || "No address yet"} | Updated {formatDate(project.updatedAt)}
+          {isEditing ? (
+            <div style={{ display: "grid", gap: "0.5rem" }}>
+              <input
+                className="inline-edit-input"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Project name"
+                autoFocus
+              />
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <input
+                  className="inline-edit-small"
+                  value={editAddress}
+                  onChange={(e) => setEditAddress(e.target.value)}
+                  placeholder="Address"
+                />
+                <input
+                  className="inline-edit-small"
+                  value={editClient}
+                  onChange={(e) => setEditClient(e.target.value)}
+                  placeholder="Client name"
+                />
+              </div>
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
+                <button type="button" className="button" onClick={saveEdits} disabled={!editName.trim()}>Save</button>
+                <button type="button" className="button-ghost" onClick={cancelEditing}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="page-title">{project.name}</div>
+              <div className="muted">
+                {project.address || "No address yet"} | Updated {formatDate(project.updatedAt)}
+              </div>
+            </>
+          )}
+        </div>
+        {!isEditing && (
+          <div className="button-row" style={{ alignItems: "center" }}>
+            <button type="button" className="button-ghost" onClick={startEditing} title="Edit project details">
+              <Pencil size={16} />
+              Edit
+            </button>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={handleAddFloor}
+              disabled={isCreatingFloor}
+            >
+              {isCreatingFloor ? "Creating..." : "Add floor"}
+            </button>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={handleExportPdf}
+              disabled={isExportingPdf || rendersQuery === undefined || orderedFloorPlans.length === 0}
+            >
+              <Download size={18} />
+              {isExportingPdf ? "Exporting..." : "Export PDF"}
+            </button>
+            <button
+              type="button"
+              className="button-ghost"
+              onClick={() => setShowDeleteDialog(true)}
+              style={{ color: "#b42318" }}
+              title="Delete project"
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
-        </div>
-        <div className="button-row" style={{ alignItems: "center" }}>
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={handleAddFloor}
-            disabled={isCreatingFloor}
-          >
-            {isCreatingFloor ? "Creating..." : "Add floor"}
-          </button>
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={handleExportPdf}
-            disabled={isExportingPdf || rendersQuery === undefined || orderedFloorPlans.length === 0}
-          >
-            <Download size={18} />
-            {isExportingPdf ? "Exporting..." : "Export PDF"}
-          </button>
-          <Link href="/" className="button-ghost">
-            Back to dashboard
-          </Link>
-        </div>
+        )}
       </div>
-
-      {pdfErrorMessage ? (
-        <div className="muted" style={{ color: "#9a3412", marginBottom: "1rem" }}>
-          {pdfErrorMessage}
-        </div>
-      ) : null}
 
       <div className="overview-grid">
         <section className="panel">
@@ -307,12 +406,6 @@ export default function ProjectOverviewPage() {
               <div className="muted">Create the first floor to start drafting and exporting.</div>
             </div>
           )}
-
-          {shareFeedback !== "idle" ? (
-            <div className={`copy-feedback ${shareFeedback === "error" ? "is-error" : ""}`}>
-              {shareFeedback === "copied" ? "Copied!" : "Unable to copy link"}
-            </div>
-          ) : null}
         </section>
 
         <aside className="editor-sidebar">
@@ -357,6 +450,16 @@ export default function ProjectOverviewPage() {
           </div>
         </aside>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteDialog}
+        title="Delete project?"
+        message={`This will permanently delete "${project.name}" including all floor plans, renders, and uploaded files. This action cannot be undone.`}
+        confirmLabel={isDeleting ? "Deleting..." : "Delete project"}
+        variant="danger"
+        onConfirm={handleDeleteProject}
+        onCancel={() => setShowDeleteDialog(false)}
+      />
     </main>
   )
 }

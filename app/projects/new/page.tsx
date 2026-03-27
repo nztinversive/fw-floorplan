@@ -6,6 +6,8 @@ import type { FormEvent } from "react"
 import { useMemo, useState } from "react"
 import { useAction, useMutation } from "convex/react"
 
+import Breadcrumb from "@/components/Breadcrumb"
+import { useToast } from "@/components/Toast"
 import UploadZone, { type UploadAsset } from "@/components/UploadZone"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
@@ -62,6 +64,7 @@ async function uploadAssetToStorage(uploadUrl: string, asset: UploadAsset): Prom
 
 export default function NewProjectPage() {
   const router = useRouter()
+  const { toast } = useToast()
   const [form, setForm] = useState<FormState>(INITIAL_FORM)
   const [upload, setUpload] = useState<UploadAsset | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -97,7 +100,7 @@ export default function NewProjectPage() {
 
       if (sourceImage) {
         try {
-          setStatus("Analyzing floor plan with AI... (15-30 seconds)")
+          setStatus("Analyzing floor plan with AI...")
           const extracted = (await extractFloorPlan({ storageId: sourceImage })) as ExtractedFloorPlan
           floorPlanData = syncDerivedData({
             walls: extracted.walls,
@@ -120,6 +123,7 @@ export default function NewProjectPage() {
         } catch (error) {
           console.error("AI extraction failed, using seed floor plan instead.", error)
           setStatus("AI extraction failed — using default layout")
+          toast("AI extraction failed — using default layout", "warning")
         }
       }
 
@@ -134,23 +138,27 @@ export default function NewProjectPage() {
         data: floorPlanData
       })
 
+      toast("Project created successfully", "success")
       router.push(`/projects/${projectId}`)
     } catch (error) {
       console.error("Unable to create project.", error)
+      toast("Unable to create project", "error")
       setIsSaving(false)
     }
   }
 
   return (
     <main className="page-shell">
+      <Breadcrumb items={[
+        { label: "Projects", href: "/" },
+        { label: "New project" }
+      ]} />
+
       <div className="page-heading">
         <div>
           <div className="page-title">Create Project</div>
           <div className="muted">Capture client details and attach the floor plan source.</div>
         </div>
-        <Link href="/" className="button-ghost">
-          Back to dashboard
-        </Link>
       </div>
 
       <form className="panel" onSubmit={handleSubmit}>

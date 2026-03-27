@@ -9,8 +9,11 @@ import { useDebouncedCallback } from "use-debounce"
 
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
+import Breadcrumb from "@/components/Breadcrumb"
 import FloorPlanCanvas from "@/components/FloorPlanCanvas"
 import PropertiesPanel from "@/components/PropertiesPanel"
+import { SkeletonPanel } from "@/components/Skeleton"
+import { useToast } from "@/components/Toast"
 import Toolbar from "@/components/Toolbar"
 import { formatFloorLabel, getNextFloorNumber, parseFloorParam, sortFloors } from "@/lib/floor-utils"
 import { createSeedFloorPlan } from "@/lib/geometry"
@@ -21,6 +24,7 @@ export default function ProjectEditorPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { toast } = useToast()
   const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as
     | Id<"projects">
     | undefined
@@ -143,6 +147,7 @@ export default function ProjectEditorPage() {
         if (currentFloorRef.current === floor) {
           setSaveState("error")
           setSaveErrorMessage("Autosave failed. Your edits are still in the browser.")
+          toast("Autosave failed — edits preserved locally", "warning")
         }
       }
     },
@@ -177,18 +182,18 @@ export default function ProjectEditorPage() {
     }
 
     if (saveState === "saving") {
-      return `Saving ${formatFloorLabel(selectedFloor).toLowerCase()} to Convex...`
+      return `Saving ${formatFloorLabel(selectedFloor).toLowerCase()}...`
     }
 
     if (saveState === "saved") {
-      return `${formatFloorLabel(selectedFloor)} saved to Convex`
+      return `${formatFloorLabel(selectedFloor)} saved`
     }
 
     if (saveState === "error") {
       return `Save failed for ${formatFloorLabel(selectedFloor).toLowerCase()}`
     }
 
-    return "Convex autosave ready"
+    return "Autosave ready"
   }, [project, projectId, saveState, selectedFloor])
 
   function navigateToFloor(floor: number) {
@@ -218,9 +223,10 @@ export default function ProjectEditorPage() {
       })
       setPendingCreatedFloor(nextFloor)
       navigateToFloor(nextFloor)
+      toast(`${formatFloorLabel(nextFloor)} created`, "success")
     } catch (error) {
       console.error("Unable to create a new floor.", error)
-      setSaveErrorMessage("Unable to create a new floor right now.")
+      toast("Unable to create a new floor right now", "error")
     } finally {
       setIsCreatingFloor(false)
     }
@@ -229,10 +235,8 @@ export default function ProjectEditorPage() {
   if (projectId && project === undefined) {
     return (
       <main className="page-shell">
-        <div className="empty-state">
-          <div className="section-title">Loading editor</div>
-          <div className="muted">Fetching the latest floor plans from Convex.</div>
-        </div>
+        <Breadcrumb items={[{ label: "Projects", href: "/" }, { label: "Loading..." }, { label: "Editor" }]} />
+        <SkeletonPanel height="620px" />
       </main>
     )
   }
@@ -242,7 +246,7 @@ export default function ProjectEditorPage() {
       <main className="page-shell">
         <div className="empty-state">
           <div className="section-title">Project not found</div>
-          <div className="muted">This editor session requires a saved Convex project.</div>
+          <div className="muted">This editor session requires a saved project.</div>
           <Link href="/" className="button-secondary">
             Return to dashboard
           </Link>
@@ -254,14 +258,16 @@ export default function ProjectEditorPage() {
   if (orderedFloorPlans.length === 0) {
     return (
       <main className="page-shell">
+        <Breadcrumb items={[
+          { label: "Projects", href: "/" },
+          { label: project.name, href: `/projects/${projectId}` },
+          { label: "Editor" }
+        ]} />
         <div className="page-heading">
           <div>
             <div className="page-title">{project.name}</div>
             <div className="muted">This project does not have any saved floors yet.</div>
           </div>
-          <Link href={`/projects/${projectId}`} className="button-ghost">
-            Back to overview
-          </Link>
         </div>
 
         <div className="empty-state">
@@ -278,6 +284,11 @@ export default function ProjectEditorPage() {
   if (!activeFloorPlan) {
     return (
       <main className="page-shell">
+        <Breadcrumb items={[
+          { label: "Projects", href: "/" },
+          { label: project.name, href: `/projects/${projectId}` },
+          { label: "Editor" }
+        ]} />
         <div className="empty-state">
           <div className="section-title">Loading requested floor</div>
           <div className="muted">
@@ -290,6 +301,12 @@ export default function ProjectEditorPage() {
 
   return (
     <main className="page-shell">
+      <Breadcrumb items={[
+        { label: "Projects", href: "/" },
+        { label: project.name, href: `/projects/${projectId}` },
+        { label: `Editor — ${formatFloorLabel(selectedFloor)}` }
+      ]} />
+
       <div className="mobile-note">
         <div className="muted">
           The editor is optimized for larger screens. Tablet and desktop provide the best drafting space.
@@ -349,7 +366,7 @@ export default function ProjectEditorPage() {
         </div>
       ) : null}
 
-      <div className="editor-shell">
+      <div className="editor-shell editor-dark">
         <Toolbar stageRef={stageRef} />
         <div className="editor-grid">
           <FloorPlanCanvas stageRef={stageRef} />

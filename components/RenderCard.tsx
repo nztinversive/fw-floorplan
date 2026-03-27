@@ -37,12 +37,8 @@ export default function RenderCard({
   isSelectedForComparison = false,
   onSelectForComparison
 }: RenderCardProps) {
-  async function handleDelete() {
-    if (!window.confirm("Delete this render? This also removes the stored image file.")) {
-      return;
-    }
-
-    await onDelete(render.id);
+  function handleDelete() {
+    onDelete(render.id);
   }
 
   function handleDownload() {

@@ -1,50 +1,100 @@
-"use client";
+"use client"
 
-import Image from "next/image";
-import { useParams } from "next/navigation";
-import { useQuery } from "convex/react";
+import Image from "next/image"
+import { useParams } from "next/navigation"
+import { useQuery } from "convex/react"
+import { Download } from "lucide-react"
+import { useMemo, useState } from "react"
 
-import ReadOnlyFloorPlanCanvas from "@/components/ReadOnlyFloorPlanCanvas";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
-import { formatFloorLabel, sortFloors } from "@/lib/floor-utils";
-import { DEFAULT_RENDER_VIEW_ANGLE, RENDER_VIEW_ANGLE_LABELS } from "@/lib/render-angles";
-import { formatRelativeTime } from "@/lib/file-utils";
-import { STYLE_PRESET_MAP } from "@/lib/style-presets";
-import type { PersistedFloorPlan } from "@/lib/types";
+import ReadOnlyFloorPlanCanvas from "@/components/ReadOnlyFloorPlanCanvas"
+import { SkeletonPanel } from "@/components/Skeleton"
+import { useToast } from "@/components/Toast"
+import { api } from "@/convex/_generated/api"
+import type { Id } from "@/convex/_generated/dataModel"
+import { formatFloorLabel, sortFloors } from "@/lib/floor-utils"
+import { DEFAULT_RENDER_VIEW_ANGLE, RENDER_VIEW_ANGLE_LABELS } from "@/lib/render-angles"
+import { formatRelativeTime } from "@/lib/file-utils"
+import { STYLE_PRESET_MAP } from "@/lib/style-presets"
+import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
+import type { PersistedFloorPlan } from "@/lib/types"
 
 function getStyleLabel(style: string) {
-  return STYLE_PRESET_MAP[style as keyof typeof STYLE_PRESET_MAP]?.name ?? style;
+  return STYLE_PRESET_MAP[style as keyof typeof STYLE_PRESET_MAP]?.name ?? style
 }
 
 export default function ProjectSharePage() {
-  const params = useParams<{ id: string }>();
-  const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as Id<"projects"> | undefined;
-  const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip");
-  const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip");
+  const params = useParams<{ id: string }>()
+  const { toast } = useToast()
+  const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as Id<"projects"> | undefined
+  const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
+  const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip")
+  const [isExporting, setIsExporting] = useState(false)
 
   const floorPlans = project?.floorPlans
     ? sortFloors(project.floorPlans as PersistedFloorPlan[])
-    : [];
+    : []
   const renders = (rendersQuery ?? []).map((render) => ({
     ...render,
     settings: {
       ...render.settings,
       viewAngle: render.settings.viewAngle ?? DEFAULT_RENDER_VIEW_ANGLE
     }
-  }));
-  const favoriteRenders = renders.filter((render) => render.isFavorite);
-  const visibleRenders = favoriteRenders.length > 0 ? favoriteRenders : renders;
+  }))
+  const favoriteRenders = renders.filter((render) => render.isFavorite)
+  const visibleRenders = favoriteRenders.length > 0 ? favoriteRenders : renders
+
+  const exportRenders = useMemo(() => {
+    const favs = renders.filter((r) => r.isFavorite && r.imageUrl)
+    return favs.length > 0 ? favs : renders.filter((r) => r.imageUrl)
+  }, [renders])
+
+  async function handleExportPdf() {
+    if (!project || isExporting) return
+
+    if (floorPlans.length === 0) {
+      toast("No floor plans available to export", "warning")
+      return
+    }
+
+    setIsExporting(true)
+
+    try {
+      await generateClientPackage({
+        projectName: project.name,
+        address: project.address,
+        clientName: project.clientName,
+        floorPlans: floorPlans.map((floorPlan) => {
+          const preview = generateFloorPlanPreview(floorPlan.data)
+          return {
+            floor: floorPlan.floor,
+            image: preview.dataUrl,
+            stats: {
+              roomCount: preview.roomCount,
+              wallCount: preview.wallCount
+            }
+          }
+        }),
+        renders: exportRenders.map((render) => ({
+          imageUrl: render.imageUrl,
+          style: render.style,
+          settings: render.settings
+        }))
+      })
+      toast("PDF package downloaded", "success")
+    } catch (error) {
+      console.error("Unable to export PDF.", error)
+      toast("Unable to export the package right now", "error")
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   if ((projectId && project === undefined) || (projectId && rendersQuery === undefined)) {
     return (
       <main className="page-shell">
-        <div className="empty-state">
-          <div className="section-title">Loading shared project</div>
-          <div className="muted">Fetching the floor plans and render gallery.</div>
-        </div>
+        <SkeletonPanel height="300px" />
       </main>
-    );
+    )
   }
 
   if (!projectId || project === null) {
@@ -55,7 +105,7 @@ export default function ProjectSharePage() {
           <div className="muted">This shared presentation link is no longer available.</div>
         </div>
       </main>
-    );
+    )
   }
 
   return (
@@ -65,11 +115,22 @@ export default function ProjectSharePage() {
           <div className="brand-lockup">
             <div className="brand-mark">FW</div>
             <div>
-              <div className="brand-title">FW Floor Plan Studio</div>
-              <div className="brand-subtitle">Shared read-only presentation</div>
+              <div className="brand-title">Floor Plan Studio</div>
+              <div className="brand-subtitle">Fading West • Shared presentation</div>
             </div>
           </div>
-          <div className="badge">Public link</div>
+          <div style={{ display: "flex", gap: "0.65rem", alignItems: "center" }}>
+            <button
+              type="button"
+              className="button"
+              onClick={handleExportPdf}
+              disabled={isExporting || floorPlans.length === 0}
+            >
+              <Download size={16} />
+              {isExporting ? "Exporting..." : "Download PDF"}
+            </button>
+            <div className="badge">Public link</div>
+          </div>
         </div>
 
         <div className="share-hero-copy">
@@ -180,5 +241,5 @@ export default function ProjectSharePage() {
         </section>
       </div>
     </main>
-  );
+  )
 }
