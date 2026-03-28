@@ -2,7 +2,7 @@
 
 import { useMemo } from "react"
 
-import { getWallAngle, getWallLength } from "@/lib/geometry"
+import { formatFeetInches, getWallAngle, getWallLength } from "@/lib/geometry"
 import { useEditorStore } from "@/lib/editor-store"
 
 function NumericField({
@@ -28,6 +28,14 @@ function NumericField({
       />
     </label>
   )
+}
+
+function pxToFeet(px: number, scale: number): number {
+  return Number((px / (scale || 1)).toFixed(2))
+}
+
+function feetToPx(feet: number, scale: number): number {
+  return feet * (scale || 1)
 }
 
 export default function PropertiesPanel() {
@@ -109,10 +117,14 @@ export default function PropertiesPanel() {
                 <strong>Wall</strong>
                 <span className="badge">#{selection.item.id.slice(-4)}</span>
               </div>
+              <div className="muted" style={{ fontSize: "0.8rem", marginBottom: "0.5rem" }}>
+                {formatFeetInches(getWallLength(selection.item), floorPlanData.scale)}
+              </div>
               <NumericField
-                label="Length"
-                value={Number(getWallLength(selection.item).toFixed(1))}
-                onChange={updateWallLength}
+                label="Length (ft)"
+                value={Number(pxToFeet(getWallLength(selection.item), floorPlanData.scale).toFixed(2))}
+                onChange={(ft) => updateWallLength(feetToPx(ft, floorPlanData.scale))}
+                step={0.5}
               />
               <NumericField
                 label="Thickness"
@@ -120,11 +132,17 @@ export default function PropertiesPanel() {
                 onChange={(value) => updateElement(selection.item.id, { thickness: value })}
               />
               <NumericField
-                label="Angle"
+                label="Angle (°)"
                 value={Number(getWallAngle(selection.item).toFixed(1))}
                 onChange={updateWallAngle}
                 step={0.5}
               />
+              <dl className="key-value">
+                <dt>Start</dt>
+                <dd>{pxToFeet(selection.item.x1, floorPlanData.scale)} ft, {pxToFeet(selection.item.y1, floorPlanData.scale)} ft</dd>
+                <dt>End</dt>
+                <dd>{pxToFeet(selection.item.x2, floorPlanData.scale)} ft, {pxToFeet(selection.item.y2, floorPlanData.scale)} ft</dd>
+              </dl>
             </div>
           </div>
         ) : null}

@@ -390,7 +390,7 @@ export default function ProjectRendersPage() {
               {(Object.entries(RENDER_SETTING_OPTIONS) as Array<[SettingKey, string[]]>).map(([key, options]) => (
                 <label key={key} className="field">
                   <span className="field-label">
-                    {key.replace(/([A-Z])/g, " $1")}
+                    {key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase())}
                     {SETTING_TOOLTIPS[key] ? <SettingTooltip text={SETTING_TOOLTIPS[key]} /> : null}
                   </span>
                   <select

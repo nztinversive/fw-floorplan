@@ -8,12 +8,15 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import {
   clamp,
   findNearestWall,
+  formatFeetInches,
   getWallAngle,
+  getWallLength,
   pointDistance,
   pointOnWall,
   polygonCentroid,
   projectPointToWall,
-  snapPoint
+  snapPoint,
+  snapToNearestEndpoint
 } from "@/lib/geometry"
 import { useEditorStore } from "@/lib/editor-store"
 import type { Point } from "@/lib/types"
@@ -164,11 +167,14 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
 
     if (tool === "wall") {
       if (!pendingWallStart) {
-        setPendingWallStart(snapPoint(pointer, floorPlanData.scale, floorPlanData.gridSize))
+        const snappedToEndpoint = snapToNearestEndpoint(pointer, floorPlanData.walls, 15)
+        const startPoint = snappedToEndpoint ?? snapPoint(pointer, floorPlanData.scale, floorPlanData.gridSize)
+        setPendingWallStart(startPoint)
         return
       }
 
-      const endpoint = snapWallEndpoint(
+      const snappedToEndpoint = snapToNearestEndpoint(pointer, floorPlanData.walls, 15)
+      const endpoint = snappedToEndpoint ?? snapWallEndpoint(
         pendingWallStart,
         pointer,
         floorPlanData.scale,
@@ -413,6 +419,34 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
               )
             })}
 
+            {/* Dimension labels on placed walls */}
+            {floorPlanData.walls.map((wall) => {
+              const length = getWallLength(wall)
+              if (length < 10) return null
+              const midX = (wall.x1 + wall.x2) / 2
+              const midY = (wall.y1 + wall.y2) / 2
+              const angle = getWallAngle(wall)
+              const perpAngle = ((angle + 90) * Math.PI) / 180
+              const offsetDist = 14
+              const labelX = midX + Math.cos(perpAngle) * offsetDist
+              const labelY = midY + Math.sin(perpAngle) * offsetDist
+              const displayAngle = angle > 90 || angle < -90 ? angle + 180 : angle
+              return (
+                <Text
+                  key={`dim-${wall.id}`}
+                  x={labelX}
+                  y={labelY}
+                  text={formatFeetInches(length, floorPlanData.scale)}
+                  fontSize={11 / zoom}
+                  fill="#64748b"
+                  rotation={displayAngle}
+                  offsetX={0}
+                  offsetY={6 / zoom}
+                  listening={false}
+                />
+              )
+            })}
+
             {pendingWallStart ? (
               <>
                 <Circle
@@ -423,13 +457,24 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
                   listening={false}
                 />
                 {pendingWallEnd ? (
-                  <Line
-                    points={[pendingWallStart.x, pendingWallStart.y, pendingWallEnd.x, pendingWallEnd.y]}
-                    stroke="#d4a84b"
-                    strokeWidth={2 / zoom}
-                    dash={[10 / zoom, 8 / zoom]}
-                    listening={false}
-                  />
+                  <>
+                    <Line
+                      points={[pendingWallStart.x, pendingWallStart.y, pendingWallEnd.x, pendingWallEnd.y]}
+                      stroke="#d4a84b"
+                      strokeWidth={2 / zoom}
+                      dash={[10 / zoom, 8 / zoom]}
+                      listening={false}
+                    />
+                    <Text
+                      x={(pendingWallStart.x + pendingWallEnd.x) / 2}
+                      y={(pendingWallStart.y + pendingWallEnd.y) / 2 - 16 / zoom}
+                      text={formatFeetInches(pointDistance(pendingWallStart, pendingWallEnd), floorPlanData.scale)}
+                      fontSize={13 / zoom}
+                      fill="#d4a84b"
+                      fontStyle="bold"
+                      listening={false}
+                    />
+                  </>
                 ) : null}
               </>
             ) : null}

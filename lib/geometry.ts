@@ -77,6 +77,47 @@ export function projectPointToWall(
   };
 }
 
+export function formatFeetInches(pixels: number, scale: number): string {
+  const totalFeet = pixels / (scale || 1)
+  const feet = Math.floor(totalFeet)
+  const inches = Math.round((totalFeet - feet) * 12)
+  if (inches === 12) {
+    return `${feet + 1} ft`
+  }
+  if (feet === 0) {
+    return `${inches} in`
+  }
+  if (inches === 0) {
+    return `${feet} ft`
+  }
+  return `${feet} ft ${inches} in`
+}
+
+export function snapToNearestEndpoint(
+  point: Point,
+  walls: Wall[],
+  threshold = 15
+): Point | null {
+  let nearest: Point | null = null
+  let bestDist = threshold
+
+  for (const wall of walls) {
+    const endpoints = [
+      { x: wall.x1, y: wall.y1 },
+      { x: wall.x2, y: wall.y2 }
+    ]
+    for (const ep of endpoints) {
+      const dist = pointDistance(point, ep)
+      if (dist < bestDist) {
+        bestDist = dist
+        nearest = ep
+      }
+    }
+  }
+
+  return nearest
+}
+
 export function snapPoint(point: Point, scale: number, gridSizeInches: number): Point {
   const grid = (scale * gridSizeInches) / 12;
   if (grid <= 0) {
