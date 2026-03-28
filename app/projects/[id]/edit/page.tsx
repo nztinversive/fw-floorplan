@@ -35,6 +35,8 @@ export default function ProjectEditorPage() {
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null)
   const [isCreatingFloor, setIsCreatingFloor] = useState(false)
   const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
+  const [isSourceImageVisible, setIsSourceImageVisible] = useState(true)
+  const [sourceImageOpacity, setSourceImageOpacity] = useState(0.3)
   const hydratedFloorPlanIdRef = useRef<string | null>(null)
   const lastSavedSnapshotsRef = useRef<Record<number, string>>({})
   const currentFloorRef = useRef<number>(1)
@@ -70,6 +72,7 @@ export default function ProjectEditorPage() {
     () => orderedFloorPlans.find((floorPlan) => floorPlan.floor === selectedFloor) ?? null,
     [orderedFloorPlans, selectedFloor]
   )
+  const activeSourceImageUrl = activeFloorPlan?.sourceImageUrl ?? null
 
   const floorPlanData = useEditorStore((state) => state.floorPlanData)
   const setFloorPlanData = useEditorStore((state) => state.setFloorPlanData)
@@ -120,6 +123,10 @@ export default function ProjectEditorPage() {
     setSaveState("idle")
     setSaveErrorMessage(null)
   }, [activeFloorPlan, setFloorPlanData])
+
+  useEffect(() => {
+    setIsSourceImageVisible(Boolean(activeSourceImageUrl))
+  }, [activeSourceImageUrl])
 
   const debouncedSave = useDebouncedCallback(
     async (
@@ -373,10 +380,22 @@ export default function ProjectEditorPage() {
       ) : null}
 
       <div className="editor-shell editor-dark">
-        <Toolbar stageRef={stageRef} />
+        <Toolbar
+          stageRef={stageRef}
+          sourceImageUrl={activeSourceImageUrl}
+          overlayVisible={isSourceImageVisible}
+          overlayOpacity={sourceImageOpacity}
+          onToggleOverlay={() => setIsSourceImageVisible((visible) => !visible)}
+          onOverlayOpacityChange={setSourceImageOpacity}
+        />
         <div className="editor-grid">
           <div style={{ position: "relative" }}>
-            <FloorPlanCanvas stageRef={stageRef} />
+            <FloorPlanCanvas
+              stageRef={stageRef}
+              sourceImageUrl={activeSourceImageUrl}
+              overlayVisible={isSourceImageVisible}
+              overlayOpacity={sourceImageOpacity}
+            />
             <CanvasGuidance />
           </div>
           <PropertiesPanel />

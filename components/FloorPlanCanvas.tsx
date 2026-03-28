@@ -1,7 +1,7 @@
 "use client"
 
 import type Konva from "konva"
-import { Arc, Circle, Group, Layer, Line, Stage, Text } from "react-konva"
+import { Arc, Circle, Group, Image as KonvaImage, Layer, Line, Stage, Text } from "react-konva"
 import type { RefObject } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
@@ -24,6 +24,9 @@ import type { Point } from "@/lib/types"
 
 type FloorPlanCanvasProps = {
   stageRef: RefObject<Konva.Stage | null>
+  sourceImageUrl?: string | null
+  overlayVisible?: boolean
+  overlayOpacity?: number
 }
 
 type CanvasSize = {
@@ -60,10 +63,16 @@ function snapWallEndpoint(start: Point, point: Point, scale: number, gridSize: n
   return snapped
 }
 
-export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
+export default function FloorPlanCanvas({
+  stageRef,
+  sourceImageUrl,
+  overlayVisible = true,
+  overlayOpacity = 0.3
+}: FloorPlanCanvasProps) {
   const frameRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState<CanvasSize>({ width: 960, height: 720 })
   const [mousePosition, setMousePosition] = useState<Point | null>(null)
+  const [sourceImageElement, setSourceImageElement] = useState<HTMLImageElement | null>(null)
 
   const floorPlanData = useEditorStore((state) => state.floorPlanData)
   const selectedIds = useEditorStore((state) => state.selectedIds)
@@ -115,6 +124,34 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
 
     stage.container().style.cursor = tool === "select" ? "grab" : "crosshair"
   }, [stageRef, tool])
+
+  useEffect(() => {
+    if (!sourceImageUrl) {
+      setSourceImageElement(null)
+      return
+    }
+
+    let isActive = true
+    const image = new window.Image()
+    image.crossOrigin = "anonymous"
+    image.onload = () => {
+      if (isActive) {
+        setSourceImageElement(image)
+      }
+    }
+    image.onerror = () => {
+      if (isActive) {
+        setSourceImageElement(null)
+      }
+    }
+    image.src = sourceImageUrl
+
+    return () => {
+      isActive = false
+      image.onload = null
+      image.onerror = null
+    }
+  }, [sourceImageUrl])
 
   const gridSpacing = useMemo(
     () => (floorPlanData.scale * floorPlanData.gridSize) / 12,
@@ -357,6 +394,19 @@ export default function FloorPlanCanvas({ stageRef }: FloorPlanCanvasProps) {
           onMouseMove={handleStageMouseMove}
           onMouseLeave={() => setMousePosition(null)}
         >
+          {overlayVisible && sourceImageElement ? (
+            <Layer listening={false}>
+              <KonvaImage
+                image={sourceImageElement}
+                x={0}
+                y={0}
+                width={sourceImageElement.naturalWidth || sourceImageElement.width}
+                height={sourceImageElement.naturalHeight || sourceImageElement.height}
+                opacity={overlayOpacity}
+              />
+            </Layer>
+          ) : null}
+
           <Layer listening={false}>
             {Array.from({ length: Math.ceil(size.width / gridSpacing) + 4 }).map((_, index) => {
               const position = index * gridSpacing

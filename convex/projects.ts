@@ -41,10 +41,17 @@ export const get = queryGeneric({
       .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
       .collect();
 
+    const floorPlansWithSourceImageUrls = await Promise.all(
+      floorPlans.map(async (floorPlan) => ({
+        ...floorPlan,
+        sourceImageUrl: floorPlan.sourceImage ? await ctx.storage.getUrl(floorPlan.sourceImage) : null
+      }))
+    );
+
     return {
       ...project,
       thumbnailUrl: project.thumbnail ? await ctx.storage.getUrl(project.thumbnail) : null,
-      floorPlans: floorPlans.sort((a, b) => a.floor - b.floor)
+      floorPlans: floorPlansWithSourceImageUrls.sort((a, b) => a.floor - b.floor)
     };
   }
 });

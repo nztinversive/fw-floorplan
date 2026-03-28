@@ -18,6 +18,19 @@ export const get = queryGeneric({
   }
 });
 
+export const getSourceImageUrl = queryGeneric({
+  args: {
+    sourceImageId: v.optional(v.id("_storage"))
+  },
+  handler: async (ctx, args) => {
+    if (!args.sourceImageId) {
+      return null;
+    }
+
+    return await ctx.storage.getUrl(args.sourceImageId);
+  }
+});
+
 export const save = mutationGeneric({
   args: {
     projectId: v.id("projects"),

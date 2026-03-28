@@ -105,6 +105,7 @@ export type ProjectSummary = {
 export type StoredFloorPlan = {
   floor: number;
   sourceImage?: string;
+  sourceImageUrl?: string | null;
   data: FloorPlanData;
   version: number;
 };

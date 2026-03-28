@@ -17,7 +17,7 @@ import {
 } from "@/lib/geometry";
 import type { Door, FloorPlanData, Point, Room, Wall, Window } from "@/lib/types";
 
-type EditorTool = "select" | "wall" | "room" | "door" | "window";
+export type EditorTool = "select" | "wall" | "room" | "door" | "window";
 
 const DUPLICATE_OFFSET = { x: 20, y: 20 };
 
@@ -130,16 +130,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setPendingRoomPoints: (points) => set({ pendingRoomPoints: points }),
   addWall: (wall) =>
     set((state) => {
+      const wallId = createId("wall");
       const next = updateState(state.floorPlanData, (draft) => {
-        draft.walls.push({ id: createId("wall"), ...wall });
+        draft.walls.push({ id: wallId, ...wall });
         return draft;
       });
       return {
         floorPlanData: next,
         actionError: null,
-        selectedIds: next.walls.at(-1)?.id ? [next.walls.at(-1)!.id] : [],
-        pendingWallStart: null,
-        tool: "select",
+        selectedIds: [wallId],
+        pendingWallStart: { x: wall.x2, y: wall.y2 },
+        tool: state.tool,
         ...pushHistory(state.history, state.historyIndex, next)
       };
     }),
@@ -464,6 +465,4 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       };
     })
 }));
-
-export type { EditorTool };
 

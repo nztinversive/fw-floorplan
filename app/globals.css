@@ -1497,6 +1497,34 @@ button:disabled,
   letter-spacing: 0.04em;
 }
 
+.toolbar-slider-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.7rem;
+  padding: 0 0.8rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--fw-border);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--fw-navy);
+}
+
+.toolbar-slider-label,
+.toolbar-slider-value {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.toolbar-slider {
+  width: 7.5rem;
+}
+
+.editor-dark .toolbar-slider-group {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.78);
+}
+
 /* ── Inline Edit ── */
 .inline-edit-group {
   display: flex;

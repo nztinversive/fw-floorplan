@@ -7,6 +7,7 @@ import {
   Download,
   DoorOpen,
   Eraser,
+  Image as ImageIcon,
   Maximize,
   Minus,
   MousePointer2,
@@ -24,6 +25,11 @@ import ShortcutsPanel from "@/components/ShortcutsPanel"
 
 type ToolbarProps = {
   stageRef: RefObject<Konva.Stage | null>
+  sourceImageUrl?: string | null
+  overlayVisible: boolean
+  overlayOpacity: number
+  onToggleOverlay: () => void
+  onOverlayOpacityChange: (opacity: number) => void
 }
 
 const TOOLS: Array<{
@@ -52,7 +58,14 @@ function isEditableTarget(target: EventTarget | null): boolean {
   )
 }
 
-export default function Toolbar({ stageRef }: ToolbarProps) {
+export default function Toolbar({
+  stageRef,
+  sourceImageUrl,
+  overlayVisible,
+  overlayOpacity,
+  onToggleOverlay,
+  onOverlayOpacityChange
+}: ToolbarProps) {
   const tool = useEditorStore((state) => state.tool)
   const zoom = useEditorStore((state) => state.zoom)
   const floorPlanData = useEditorStore((state) => state.floorPlanData)
@@ -254,6 +267,35 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
         </div>
 
         <div className="toolbar-group">
+          {sourceImageUrl ? (
+            <>
+              <button
+                type="button"
+                className={`toolbar-btn-labeled${overlayVisible ? " is-active" : ""}`}
+                title={overlayVisible ? "Hide source image overlay" : "Show source image overlay"}
+                aria-label={overlayVisible ? "Hide source image overlay" : "Show source image overlay"}
+                onClick={onToggleOverlay}
+              >
+                <ImageIcon size={16} />
+                <span>{overlayVisible ? "Hide overlay" : "Show overlay"}</span>
+              </button>
+              <label className="toolbar-slider-group">
+                <span className="toolbar-slider-label">Opacity</span>
+                <input
+                  className="toolbar-slider"
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={Math.round(overlayOpacity * 100)}
+                  aria-label="Source image overlay opacity"
+                  onChange={(event) => onOverlayOpacityChange(Number(event.target.value) / 100)}
+                />
+                <span className="toolbar-slider-value">{Math.round(overlayOpacity * 100)}%</span>
+              </label>
+            </>
+          ) : null}
+
           <button
             type="button"
             className="icon-button"
