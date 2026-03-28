@@ -4,6 +4,7 @@ import type Konva from "konva"
 import type { ComponentType, RefObject } from "react"
 import { useCallback, useEffect, useState } from "react"
 import {
+  Armchair,
   Download,
   DoorOpen,
   Eraser,
@@ -42,7 +43,8 @@ const TOOLS: Array<{
   { id: "wall", label: "Wall", shortcut: "W", icon: SquareStack },
   { id: "room", label: "Room", shortcut: "R", icon: SquareDashedBottom },
   { id: "door", label: "Door", shortcut: "D", icon: DoorOpen },
-  { id: "window", label: "Window", shortcut: "N", icon: PanelTop }
+  { id: "window", label: "Window", shortcut: "N", icon: PanelTop },
+  { id: "furniture", label: "Furniture", shortcut: "T", icon: Armchair }
 ]
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -179,6 +181,9 @@ export default function Toolbar({
         } else if (key === "n") {
           event.preventDefault()
           setTool("window")
+        } else if (key === "t") {
+          event.preventDefault()
+          setTool("furniture")
         } else if (key === "f") {
           event.preventDefault()
           handleZoomToFit()

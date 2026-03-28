@@ -70,8 +70,20 @@ export default function PropertiesPanel() {
       return { type: "window" as const, item: window }
     }
 
+    const furniture = floorPlanData.furniture.find((entry) => entry.id === selectedId)
+    if (furniture) {
+      return { type: "furniture" as const, item: furniture }
+    }
+
     return null
-  }, [floorPlanData.doors, floorPlanData.rooms, floorPlanData.walls, floorPlanData.windows, selectedId])
+  }, [
+    floorPlanData.doors,
+    floorPlanData.furniture,
+    floorPlanData.rooms,
+    floorPlanData.walls,
+    floorPlanData.windows,
+    selectedId
+  ])
 
   const selectionLabel =
     selectedIds.length > 1
@@ -130,7 +142,7 @@ export default function PropertiesPanel() {
         {selectedIds.length > 1 ? (
           <div className="empty-state" style={{ padding: "1.5rem" }}>
             <div className="muted">
-              Multi-selection supports bulk delete. Select a single wall, room, door, or window to edit details.
+              Multi-selection supports bulk delete. Select a single wall, room, door, window, or furniture item to edit details.
             </div>
           </div>
         ) : null}
@@ -138,7 +150,7 @@ export default function PropertiesPanel() {
         {!selection && selectedIds.length === 0 ? (
           <div className="empty-state" style={{ padding: "1.5rem" }}>
             <div className="muted">
-              Select a wall, room, door, or window to inspect and edit its details.
+              Select a wall, room, door, window, or furniture item to inspect and edit its details.
             </div>
           </div>
         ) : null}
@@ -248,6 +260,32 @@ export default function PropertiesPanel() {
                 label="Height"
                 value={selection.item.height}
                 onChange={(value) => updateElement(selection.item.id, { height: value })}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {selection?.type === "furniture" ? (
+          <div className="property-list">
+            <div className="property-card">
+              <div className="property-title">
+                <strong>Furniture</strong>
+                <span className="badge">{selection.item.type}</span>
+              </div>
+              <NumericField
+                label="Width"
+                value={selection.item.width}
+                onChange={(value) => updateElement(selection.item.id, { width: value })}
+              />
+              <NumericField
+                label="Depth"
+                value={selection.item.depth}
+                onChange={(value) => updateElement(selection.item.id, { depth: value })}
+              />
+              <NumericField
+                label="Rotation"
+                value={selection.item.rotation}
+                onChange={(value) => updateElement(selection.item.id, { rotation: value })}
               />
             </div>
           </div>

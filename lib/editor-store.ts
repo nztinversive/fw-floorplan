@@ -6,6 +6,7 @@ import {
   calculateRoomAreaSqFt,
   cloneFloorPlanData,
   createId,
+  detectClosedRooms,
   EMPTY_FLOOR_PLAN,
   findNearestWall,
   moveRoomsWithWall,
@@ -15,9 +16,24 @@ import {
   snapPoint,
   syncDerivedData
 } from "@/lib/geometry";
-import type { Door, FloorPlanData, Point, Room, Wall, Window } from "@/lib/types";
+import type {
+  Door,
+  FloorPlanData,
+  Furniture,
+  PendingFurniture,
+  Point,
+  Room,
+  Wall,
+  Window
+} from "@/lib/types";
 
-export type EditorTool = "select" | "wall" | "room" | "door" | "window";
+export type EditorTool =
+  | "select"
+  | "wall"
+  | "room"
+  | "door"
+  | "window"
+  | "furniture";
 
 const DUPLICATE_OFFSET = { x: 20, y: 20 };
 
@@ -32,6 +48,7 @@ type EditorStore = {
   pan: Point;
   pendingWallStart: Point | null;
   pendingRoomPoints: Point[];
+  pendingFurniture: PendingFurniture | null;
   setFloorPlanData: (data: FloorPlanData, resetHistory?: boolean) => void;
   setSelectedIds: (ids: string[]) => void;
   toggleSelectedId: (id: string) => void;
@@ -42,10 +59,12 @@ type EditorStore = {
   setPan: (pan: Point) => void;
   setPendingWallStart: (point: Point | null) => void;
   setPendingRoomPoints: (points: Point[]) => void;
+  setPendingFurniture: (furniture: PendingFurniture | null) => void;
   addWall: (wall: Omit<Wall, "id">) => void;
   addRoom: (room: Omit<Room, "id" | "areaSqFt">) => void;
   addDoor: (door: Omit<Door, "id">) => void;
   addWindow: (window: Omit<Window, "id">) => void;
+  addFurniture: (furniture: Omit<Furniture, "id">) => void;
   moveElement: (id: string, delta: Point) => void;
   updateElement: (id: string, patch: Record<string, number | string>) => void;
   deleteElement: (id: string | string[]) => void;
@@ -88,6 +107,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   pan: { x: 0, y: 0 },
   pendingWallStart: null,
   pendingRoomPoints: [],
+  pendingFurniture: null,
   setFloorPlanData: (data, resetHistory = false) =>
     set(() => {
       const synced = syncDerivedData(data);
@@ -99,7 +119,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             selectedIds: [],
             actionError: null,
             pendingWallStart: null,
-            pendingRoomPoints: []
+            pendingRoomPoints: [],
+            pendingFurniture: null
           }
         : {
             floorPlanData: synced,
@@ -118,21 +139,37 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   clearSelection: () => set({ selectedIds: [], actionError: null }),
   clearActionError: () => set({ actionError: null }),
   setTool: (tool) =>
-    set({
+    set((state) => ({
       tool,
       pendingWallStart: null,
       pendingRoomPoints: [],
+      pendingFurniture: tool === "furniture" ? state.pendingFurniture : null,
       actionError: null
-    }),
+    })),
   setZoom: (zoom) => set({ zoom }),
   setPan: (pan) => set({ pan }),
   setPendingWallStart: (point) => set({ pendingWallStart: point }),
   setPendingRoomPoints: (points) => set({ pendingRoomPoints: points }),
+  setPendingFurniture: (pendingFurniture) =>
+    set((state) => ({
+      pendingFurniture,
+      tool:
+        pendingFurniture
+          ? "furniture"
+          : state.tool === "furniture"
+            ? "select"
+            : state.tool,
+      actionError: null
+    })),
   addWall: (wall) =>
     set((state) => {
       const wallId = createId("wall");
       const next = updateState(state.floorPlanData, (draft) => {
         draft.walls.push({ id: wallId, ...wall });
+        const detectedRooms = detectClosedRooms(draft.walls, draft.rooms, draft.scale);
+        if (detectedRooms.length > 0) {
+          draft.rooms.push(...detectedRooms);
+        }
         return draft;
       });
       return {
@@ -194,6 +231,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         ...pushHistory(state.history, state.historyIndex, next)
       };
     }),
+  addFurniture: (furniture) =>
+    set((state) => {
+      const next = updateState(state.floorPlanData, (draft) => {
+        draft.furniture.push({ id: createId("furniture"), ...furniture });
+        return draft;
+      });
+      return {
+        floorPlanData: next,
+        actionError: null,
+        selectedIds: next.furniture.at(-1)?.id ? [next.furniture.at(-1)!.id] : [],
+        tool: state.pendingFurniture ? "furniture" : "select",
+        ...pushHistory(state.history, state.historyIndex, next)
+      };
+    }),
   moveElement: (id, delta) =>
     set((state) => {
       const next = updateState(state.floorPlanData, (draft) => {
@@ -243,6 +294,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             });
             window.position = projected.ratio;
           }
+          return draft;
+        }
+
+        const furniture = draft.furniture.find((entry) => entry.id === id);
+        if (furniture) {
+          furniture.x += delta.x;
+          furniture.y += delta.y;
           return draft;
         }
 
@@ -449,7 +507,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         actionError: null,
         selectedIds: [],
         pendingWallStart: null,
-        pendingRoomPoints: []
+        pendingRoomPoints: [],
+        pendingFurniture: null
       };
     }),
   redo: () =>
@@ -461,7 +520,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         actionError: null,
         selectedIds: [],
         pendingWallStart: null,
-        pendingRoomPoints: []
+        pendingRoomPoints: [],
+        pendingFurniture: null
       };
     })
 }));

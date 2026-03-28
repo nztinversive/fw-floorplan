@@ -7,11 +7,13 @@ import { useMemo, useState } from "react"
 import { useAction, useMutation } from "convex/react"
 
 import Breadcrumb from "@/components/Breadcrumb"
+import TemplateSelector from "@/components/TemplateSelector"
 import { useToast } from "@/components/Toast"
 import UploadZone, { type UploadAsset } from "@/components/UploadZone"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
-import { createSeedFloorPlan, syncDerivedData } from "@/lib/geometry"
+import { FLOOR_PLAN_TEMPLATES } from "@/lib/floor-plan-templates"
+import { createSeedFloorPlan, cloneFloorPlanData, syncDerivedData } from "@/lib/geometry"
 import type { FloorPlanData } from "@/lib/types"
 
 type FormState = {
@@ -67,6 +69,7 @@ export default function NewProjectPage() {
   const { toast } = useToast()
   const [form, setForm] = useState<FormState>(INITIAL_FORM)
   const [upload, setUpload] = useState<UploadAsset | null>(null)
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [status, setStatus] = useState("")
   const createProject = useMutation(api.projects.createWithInitialFloorPlan)
@@ -96,7 +99,12 @@ export default function NewProjectPage() {
         sourceImage = await uploadAssetToStorage(uploadUrl, upload)
       }
 
-      let floorPlanData = createSeedFloorPlan(sourceImage).data
+      const templateMatch = selectedTemplate
+        ? FLOOR_PLAN_TEMPLATES.find((t) => t.id === selectedTemplate)
+        : null
+      let floorPlanData = templateMatch
+        ? cloneFloorPlanData(templateMatch.data)
+        : createSeedFloorPlan(sourceImage).data
 
       if (sourceImage) {
         try {
@@ -205,6 +213,10 @@ export default function NewProjectPage() {
             <span className="field-label">Floor plan upload</span>
             <UploadZone value={upload} onChange={setUpload} />
           </div>
+        </div>
+
+        <div style={{ marginTop: "1.25rem" }}>
+          <TemplateSelector selected={selectedTemplate} onSelect={setSelectedTemplate} />
         </div>
 
         <div className="button-row" style={{ marginTop: "1.25rem" }}>

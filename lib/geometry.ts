@@ -19,6 +19,9 @@ export const EMPTY_FLOOR_PLAN: FloorPlanData = {
   gridSize: 6
 };
 
+const ROOM_DETECTION_TOLERANCE = 5;
+const MIN_ROOM_AREA_PIXELS = 100;
+
 export function createId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -145,6 +148,21 @@ export function polygonArea(points: Point[]): number {
   return Math.abs(total / 2);
 }
 
+function signedPolygonArea(points: Point[]): number {
+  if (points.length < 3) {
+    return 0;
+  }
+
+  let total = 0;
+  for (let i = 0; i < points.length; i += 1) {
+    const current = points[i];
+    const next = points[(i + 1) % points.length];
+    total += current.x * next.y - next.x * current.y;
+  }
+
+  return total / 2;
+}
+
 export function polygonCentroid(points: Point[]): Point {
   if (points.length === 0) {
     return { x: 0, y: 0 };
@@ -203,6 +221,219 @@ export function calculateRoomAreaSqFt(room: Room, scale: number): number {
   const squarePixels = polygonArea(room.polygon);
   const squareFeet = squarePixels / (scale * scale || 1);
   return Number(squareFeet.toFixed(1));
+}
+
+function createNormalizedPolygonKey(points: Point[], tolerance = ROOM_DETECTION_TOLERANCE): string {
+  if (points.length < 3) {
+    return "";
+  }
+
+  const tokens = points.map(
+    (point) => `${Math.round(point.x / tolerance)}:${Math.round(point.y / tolerance)}`
+  );
+
+  const rotateToSmallest = (values: string[]): string[] => {
+    let best = values;
+    for (let index = 1; index < values.length; index += 1) {
+      const rotated = [...values.slice(index), ...values.slice(0, index)];
+      if (rotated.join("|") < best.join("|")) {
+        best = rotated;
+      }
+    }
+    return best;
+  };
+
+  const forward = rotateToSmallest(tokens);
+  const reversed = rotateToSmallest([...tokens].reverse());
+  const forwardKey = forward.join("|");
+  const reversedKey = reversed.join("|");
+  return forwardKey < reversedKey ? forwardKey : reversedKey;
+}
+
+function getNextAutoRoomNumber(rooms: Room[]): number {
+  let nextNumber = 1;
+
+  for (const room of rooms) {
+    const match = /^Room (\d+)$/i.exec(room.label.trim());
+    if (!match) {
+      continue;
+    }
+
+    nextNumber = Math.max(nextNumber, Number(match[1]) + 1);
+  }
+
+  return nextNumber;
+}
+
+function getNodeIdForPoint(
+  point: Point,
+  nodes: Array<{ point: Point; count: number }>,
+  tolerance: number
+): number {
+  for (let index = 0; index < nodes.length; index += 1) {
+    const node = nodes[index];
+    if (pointDistance(point, node.point) > tolerance) {
+      continue;
+    }
+
+    node.point = {
+      x: (node.point.x * node.count + point.x) / (node.count + 1),
+      y: (node.point.y * node.count + point.y) / (node.count + 1)
+    };
+    node.count += 1;
+    return index;
+  }
+
+  nodes.push({
+    point: { ...point },
+    count: 1
+  });
+  return nodes.length - 1;
+}
+
+function detectGraphFaces(walls: Wall[], tolerance: number): Point[][] {
+  const nodes: Array<{ point: Point; count: number }> = [];
+  const adjacency = new Map<number, Set<number>>();
+  const edgeKeys = new Set<string>();
+
+  for (const wall of walls) {
+    const startId = getNodeIdForPoint({ x: wall.x1, y: wall.y1 }, nodes, tolerance);
+    const endId = getNodeIdForPoint({ x: wall.x2, y: wall.y2 }, nodes, tolerance);
+    if (startId === endId) {
+      continue;
+    }
+
+    const edgeKey = startId < endId ? `${startId}:${endId}` : `${endId}:${startId}`;
+    if (edgeKeys.has(edgeKey)) {
+      continue;
+    }
+
+    edgeKeys.add(edgeKey);
+    if (!adjacency.has(startId)) {
+      adjacency.set(startId, new Set<number>());
+    }
+    if (!adjacency.has(endId)) {
+      adjacency.set(endId, new Set<number>());
+    }
+    adjacency.get(startId)!.add(endId);
+    adjacency.get(endId)!.add(startId);
+  }
+
+  const orderedNeighbors = new Map<number, number[]>();
+  for (const [nodeId, neighbors] of adjacency.entries()) {
+    const origin = nodes[nodeId].point;
+    orderedNeighbors.set(
+      nodeId,
+      [...neighbors].sort((leftId, rightId) => {
+        const left = nodes[leftId].point;
+        const right = nodes[rightId].point;
+        const leftAngle = Math.atan2(left.y - origin.y, left.x - origin.x);
+        const rightAngle = Math.atan2(right.y - origin.y, right.x - origin.x);
+        return leftAngle - rightAngle;
+      })
+    );
+  }
+
+  const visitedHalfEdges = new Set<string>();
+  const faces: Point[][] = [];
+  const maxSteps = Math.max(edgeKeys.size * 2, 1);
+
+  for (const [startId, neighbors] of orderedNeighbors.entries()) {
+    for (const neighborId of neighbors) {
+      const startHalfEdgeKey = `${startId}->${neighborId}`;
+      if (visitedHalfEdges.has(startHalfEdgeKey)) {
+        continue;
+      }
+
+      const faceNodeIds: number[] = [];
+      let currentId = startId;
+      let nextId = neighborId;
+      let isClosedFace = false;
+
+      for (let step = 0; step < maxSteps; step += 1) {
+        const halfEdgeKey = `${currentId}->${nextId}`;
+        if (visitedHalfEdges.has(halfEdgeKey)) {
+          break;
+        }
+
+        visitedHalfEdges.add(halfEdgeKey);
+        faceNodeIds.push(currentId);
+
+        const nextNeighbors = orderedNeighbors.get(nextId);
+        if (!nextNeighbors || nextNeighbors.length === 0) {
+          break;
+        }
+
+        const incomingIndex = nextNeighbors.indexOf(currentId);
+        if (incomingIndex === -1) {
+          break;
+        }
+
+        const turnIndex =
+          (incomingIndex - 1 + nextNeighbors.length) % nextNeighbors.length;
+        const turnId = nextNeighbors[turnIndex];
+        currentId = nextId;
+        nextId = turnId;
+
+        if (currentId === startId && nextId === neighborId) {
+          isClosedFace = true;
+          break;
+        }
+      }
+
+      if (!isClosedFace) {
+        continue;
+      }
+
+      const uniqueNodeIds = [...new Set(faceNodeIds)];
+      if (uniqueNodeIds.length < 3 || uniqueNodeIds.length !== faceNodeIds.length) {
+        continue;
+      }
+
+      const polygon = faceNodeIds.map((nodeId) => nodes[nodeId].point);
+      const polygonSignedArea = signedPolygonArea(polygon);
+      if (polygonSignedArea <= MIN_ROOM_AREA_PIXELS) {
+        continue;
+      }
+
+      faces.push(polygon);
+    }
+  }
+
+  return faces;
+}
+
+export function detectClosedRooms(
+  walls: Wall[],
+  existingRooms: Room[],
+  scale: number
+): Room[] {
+  const existingKeys = new Set(
+    existingRooms.map((room) => createNormalizedPolygonKey(room.polygon))
+  );
+  const detectedKeys = new Set<string>();
+  const nextRooms: Room[] = [];
+  let nextRoomNumber = getNextAutoRoomNumber(existingRooms);
+
+  for (const polygon of detectGraphFaces(walls, ROOM_DETECTION_TOLERANCE)) {
+    const polygonKey = createNormalizedPolygonKey(polygon);
+    if (!polygonKey || existingKeys.has(polygonKey) || detectedKeys.has(polygonKey)) {
+      continue;
+    }
+
+    const nextRoom: Room = {
+      id: createId("room"),
+      label: `Room ${nextRoomNumber}`,
+      polygon,
+      areaSqFt: 0
+    };
+    nextRoom.areaSqFt = calculateRoomAreaSqFt(nextRoom, scale);
+    nextRooms.push(nextRoom);
+    detectedKeys.add(polygonKey);
+    nextRoomNumber += 1;
+  }
+
+  return nextRooms;
 }
 
 export function findNearestWall(

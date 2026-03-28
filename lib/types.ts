@@ -50,6 +50,13 @@ export type Furniture = {
   rotation: number;
 };
 
+export type PendingFurniture = {
+  type: string;
+  width: number;
+  depth: number;
+  rotation: number;
+};
+
 export type Dimension = {
   id: string;
   from: Point;

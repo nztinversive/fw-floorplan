@@ -1,10 +1,11 @@
 "use client"
 
 import type Konva from "konva"
-import { Arc, Circle, Group, Image as KonvaImage, Layer, Line, Stage, Text } from "react-konva"
+import { Arc, Circle, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text } from "react-konva"
 import type { RefObject } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
+import { FURNITURE_BY_ID } from "@/lib/furniture-library"
 import {
   calculateRoomAreaSqFt,
   clamp,
@@ -81,6 +82,7 @@ export default function FloorPlanCanvas({
   const pan = useEditorStore((state) => state.pan)
   const pendingWallStart = useEditorStore((state) => state.pendingWallStart)
   const pendingRoomPoints = useEditorStore((state) => state.pendingRoomPoints)
+  const pendingFurniture = useEditorStore((state) => state.pendingFurniture)
   const setSelectedIds = useEditorStore((state) => state.setSelectedIds)
   const toggleSelectedId = useEditorStore((state) => state.toggleSelectedId)
   const clearSelection = useEditorStore((state) => state.clearSelection)
@@ -92,6 +94,7 @@ export default function FloorPlanCanvas({
   const addRoom = useEditorStore((state) => state.addRoom)
   const addDoor = useEditorStore((state) => state.addDoor)
   const addWindow = useEditorStore((state) => state.addWindow)
+  const addFurniture = useEditorStore((state) => state.addFurniture)
   const moveElement = useEditorStore((state) => state.moveElement)
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds])
 
@@ -345,6 +348,19 @@ export default function FloorPlanCanvas({
           height: 42
         })
       }
+      return
+    }
+
+    if (tool === "furniture" && pendingFurniture) {
+      const snappedPoint = snapPoint(pointer, floorPlanData.scale, floorPlanData.gridSize)
+      addFurniture({
+        type: pendingFurniture.type,
+        x: snappedPoint.x,
+        y: snappedPoint.y,
+        width: pendingFurniture.width,
+        depth: pendingFurniture.depth,
+        rotation: pendingFurniture.rotation
+      })
     }
   }
 
@@ -558,6 +574,50 @@ export default function FloorPlanCanvas({
               )
             })}
 
+            {floorPlanData.furniture.map((item) => {
+              const widthPx = (item.width / 12) * floorPlanData.scale
+              const depthPx = (item.depth / 12) * floorPlanData.scale
+              const furnitureLabel = FURNITURE_BY_ID[item.type]?.label ?? item.type
+              const isSelected = selectedIdSet.has(item.id)
+
+              return (
+                <Group
+                  key={item.id}
+                  x={item.x}
+                  y={item.y}
+                  rotation={item.rotation}
+                  draggable={tool === "select"}
+                  onClick={(event) => handleElementSelect(item.id, event)}
+                  onTap={(event) => handleElementSelect(item.id, event)}
+                  onDragEnd={(event) => {
+                    moveElement(item.id, { x: event.target.x(), y: event.target.y() })
+                    event.target.position({ x: 0, y: 0 })
+                  }}
+                >
+                  <Rect
+                    x={-widthPx / 2}
+                    y={-depthPx / 2}
+                    width={widthPx}
+                    height={depthPx}
+                    cornerRadius={Math.min(widthPx, depthPx) * 0.12}
+                    fill={isSelected ? "rgba(212, 168, 75, 0.42)" : "rgba(148, 163, 184, 0.26)"}
+                    stroke={isSelected ? "#d4a84b" : "#475569"}
+                    strokeWidth={isSelected ? 3 : 1.5}
+                  />
+                  <Text
+                    x={-widthPx / 2}
+                    y={-8}
+                    width={widthPx}
+                    align="center"
+                    fontSize={12}
+                    fill="#1B2A4A"
+                    text={furnitureLabel}
+                    listening={false}
+                  />
+                </Group>
+              )
+            })}
+
             {/* Dimension labels on placed walls */}
             {floorPlanData.walls.map((wall) => {
               const length = getWallLength(wall)
@@ -649,7 +709,7 @@ export default function FloorPlanCanvas({
           Wheel to zoom. Drag the canvas to pan. Active tool: {tool}.
         </span>
         <span>
-          {floorPlanData.walls.length} walls • {floorPlanData.rooms.length} rooms • {floorPlanData.doors.length} doors • {floorPlanData.windows.length} windows
+          {floorPlanData.walls.length} walls • {floorPlanData.rooms.length} rooms • {floorPlanData.doors.length} doors • {floorPlanData.windows.length} windows • {floorPlanData.furniture.length} furniture
         </span>
       </div>
     </section>
