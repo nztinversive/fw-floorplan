@@ -13,6 +13,7 @@ import {
   PanelTop,
   Plus,
   Redo2,
+  SquareDashedBottom,
   SquareStack,
   Undo2
 } from "lucide-react"
@@ -33,6 +34,7 @@ const TOOLS: Array<{
 }> = [
   { id: "select", label: "Select", shortcut: "Esc", icon: MousePointer2 },
   { id: "wall", label: "Wall", shortcut: "W", icon: SquareStack },
+  { id: "room", label: "Room", shortcut: "R", icon: SquareDashedBottom },
   { id: "door", label: "Door", shortcut: "D", icon: DoorOpen },
   { id: "window", label: "Window", shortcut: "N", icon: PanelTop }
 ]
@@ -53,13 +55,13 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export default function Toolbar({ stageRef }: ToolbarProps) {
   const tool = useEditorStore((state) => state.tool)
   const zoom = useEditorStore((state) => state.zoom)
-  const pan = useEditorStore((state) => state.pan)
   const floorPlanData = useEditorStore((state) => state.floorPlanData)
-  const selectedId = useEditorStore((state) => state.selectedId)
+  const selectedIds = useEditorStore((state) => state.selectedIds)
   const setTool = useEditorStore((state) => state.setTool)
   const setZoom = useEditorStore((state) => state.setZoom)
   const setPan = useEditorStore((state) => state.setPan)
   const deleteElement = useEditorStore((state) => state.deleteElement)
+  const duplicateSelected = useEditorStore((state) => state.duplicateSelected)
   const undo = useEditorStore((state) => state.undo)
   const redo = useEditorStore((state) => state.redo)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -128,9 +130,15 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
         return
       }
 
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedId) {
+      if ((event.key === "Delete" || event.key === "Backspace") && selectedIds.length > 0) {
         event.preventDefault()
-        deleteElement(selectedId)
+        deleteElement(selectedIds)
+        return
+      }
+
+      if (hasCommandModifier && key === "d") {
+        event.preventDefault()
+        duplicateSelected()
         return
       }
 
@@ -149,6 +157,9 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
         if (key === "w") {
           event.preventDefault()
           setTool("wall")
+        } else if (key === "r") {
+          event.preventDefault()
+          setTool("room")
         } else if (key === "d") {
           event.preventDefault()
           setTool("door")
@@ -164,7 +175,7 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
 
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [deleteElement, handleZoomToFit, redo, selectedId, setTool, undo])
+  }, [deleteElement, duplicateSelected, handleZoomToFit, redo, selectedIds, setTool, undo])
 
   function handleExport() {
     const stage = stageRef.current
@@ -201,10 +212,10 @@ export default function Toolbar({ stageRef }: ToolbarProps) {
             type="button"
             className="toolbar-btn-labeled"
             title="Delete selected (Del)"
-            aria-label="Delete selected element"
+            aria-label="Delete selected items"
             onClick={() => {
-              if (selectedId) {
-                deleteElement(selectedId)
+              if (selectedIds.length > 0) {
+                deleteElement(selectedIds)
               }
             }}
           >

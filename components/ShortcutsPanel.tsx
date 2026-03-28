@@ -14,6 +14,7 @@ const SHORTCUT_GROUPS = [
     shortcuts: [
       { keys: ["Esc"], label: "Select tool" },
       { keys: ["W"], label: "Wall tool" },
+      { keys: ["R"], label: "Room tool" },
       { keys: ["D"], label: "Door tool" },
       { keys: ["N"], label: "Window tool" },
     ],
@@ -21,7 +22,9 @@ const SHORTCUT_GROUPS = [
   {
     title: "Editing",
     shortcuts: [
-      { keys: ["Del"], label: "Delete selected element" },
+      { keys: ["Shift", "Click"], label: "Add or remove from selection" },
+      { keys: ["Del"], label: "Delete selected items" },
+      { keys: ["Ctrl", "D"], label: "Duplicate selection" },
       { keys: ["Ctrl", "Z"], label: "Undo" },
       { keys: ["Ctrl", "Shift", "Z"], label: "Redo" },
     ],

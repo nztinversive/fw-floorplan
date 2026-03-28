@@ -40,10 +40,16 @@ function feetToPx(feet: number, scale: number): number {
 
 export default function PropertiesPanel() {
   const floorPlanData = useEditorStore((state) => state.floorPlanData)
-  const selectedId = useEditorStore((state) => state.selectedId)
+  const selectedIds = useEditorStore((state) => state.selectedIds)
   const updateElement = useEditorStore((state) => state.updateElement)
+  const deleteElement = useEditorStore((state) => state.deleteElement)
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
 
   const selection = useMemo(() => {
+    if (!selectedId) {
+      return null
+    }
+
     const wall = floorPlanData.walls.find((entry) => entry.id === selectedId)
     if (wall) {
       return { type: "wall" as const, item: wall }
@@ -66,6 +72,13 @@ export default function PropertiesPanel() {
 
     return null
   }, [floorPlanData.doors, floorPlanData.rooms, floorPlanData.walls, floorPlanData.windows, selectedId])
+
+  const selectionLabel =
+    selectedIds.length > 1
+      ? `${selectedIds.length} items selected`
+      : selection
+        ? selection.type
+        : "No selection"
 
   function updateWallLength(nextLength: number) {
     if (!selection || selection.type !== "wall") {
@@ -99,10 +112,30 @@ export default function PropertiesPanel() {
       <div className="sidebar-card">
         <div className="panel-header">
           <div className="section-title">Properties</div>
-          <div className="muted">{selection ? selection.type : "No selection"}</div>
+          <div className="muted">{selectionLabel}</div>
         </div>
 
-        {!selection ? (
+        {selectedIds.length > 0 ? (
+          <div style={{ marginBottom: "1rem" }}>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={() => deleteElement(selectedIds)}
+            >
+              Delete selected
+            </button>
+          </div>
+        ) : null}
+
+        {selectedIds.length > 1 ? (
+          <div className="empty-state" style={{ padding: "1.5rem" }}>
+            <div className="muted">
+              Multi-selection supports bulk delete. Select a single wall, room, door, or window to edit details.
+            </div>
+          </div>
+        ) : null}
+
+        {!selection && selectedIds.length === 0 ? (
           <div className="empty-state" style={{ padding: "1.5rem" }}>
             <div className="muted">
               Select a wall, room, door, or window to inspect and edit its details.
