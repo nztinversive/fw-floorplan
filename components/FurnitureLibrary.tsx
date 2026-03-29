@@ -118,7 +118,7 @@ export default function FurnitureLibrary({ isOpen, onClose }: FurnitureLibraryPr
                         </span>
                         <span className="furniture-item-meta">
                           <strong>{item.label}</strong>
-                          <span>{item.width}" x {item.depth}"</span>
+                          <span>{item.width}&quot; x {item.depth}&quot;</span>
                         </span>
                       </button>
                     )
