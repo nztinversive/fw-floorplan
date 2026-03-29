@@ -3,7 +3,7 @@
 import Link from "next/link"
 import type Konva from "konva"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useMutation, useQuery } from "convex/react"
 import { useDebouncedCallback } from "use-debounce"
 
@@ -22,6 +22,27 @@ import { createSeedFloorPlan } from "@/lib/geometry"
 import { useEditorStore } from "@/lib/editor-store"
 import type { FloorPlanData, PersistedFloorPlan } from "@/lib/types"
 
+type UploadResponse = {
+  storageId: Id<"_storage">
+}
+
+async function uploadFileToStorage(uploadUrl: string, file: File): Promise<Id<"_storage">> {
+  const response = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": file.type || "application/octet-stream"
+    },
+    body: file
+  })
+
+  if (!response.ok) {
+    throw new Error("Upload failed")
+  }
+
+  const payload = (await response.json()) as UploadResponse
+  return payload.storageId
+}
+
 export default function ProjectEditorPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
@@ -34,14 +55,17 @@ export default function ProjectEditorPage() {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle")
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null)
   const [isCreatingFloor, setIsCreatingFloor] = useState(false)
+  const [isReplacingSourceImage, setIsReplacingSourceImage] = useState(false)
   const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
   const [isSourceImageVisible, setIsSourceImageVisible] = useState(true)
   const [sourceImageOpacity, setSourceImageOpacity] = useState(0.3)
   const hydratedFloorPlanIdRef = useRef<string | null>(null)
   const lastSavedSnapshotsRef = useRef<Record<number, string>>({})
+  const sourceImageByFloorRef = useRef<Record<number, Id<"_storage"> | undefined>>({})
   const currentFloorRef = useRef<number>(1)
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
   const saveFloorPlan = useMutation(api.floorPlans.save)
+  const uploadSource = useMutation(api.floorPlans.uploadSource)
   const actionError = useEditorStore((state) => state.actionError)
 
   const orderedFloorPlans = useMemo(
@@ -120,6 +144,8 @@ export default function ProjectEditorPage() {
     setFloorPlanData(activeFloorPlan.data, true)
     hydratedFloorPlanIdRef.current = activeFloorPlan._id
     lastSavedSnapshotsRef.current[activeFloorPlan.floor] = JSON.stringify(activeFloorPlan.data)
+    sourceImageByFloorRef.current[activeFloorPlan.floor] =
+      activeFloorPlan.sourceImage as Id<"_storage"> | undefined
     setSaveState("idle")
     setSaveErrorMessage(null)
   }, [activeFloorPlan, setFloorPlanData])
@@ -179,7 +205,7 @@ export default function ProjectEditorPage() {
       activeFloorPlan.floor,
       floorPlanData,
       nextSnapshot,
-      activeFloorPlan.sourceImage as Id<"_storage"> | undefined
+      sourceImageByFloorRef.current[activeFloorPlan.floor]
     )
   }, [activeFloorPlan, debouncedSave, floorPlanData, projectId])
 
@@ -212,6 +238,60 @@ export default function ProjectEditorPage() {
 
     router.replace(`/projects/${projectId}/edit?floor=${floor}`, { scroll: false })
   }
+
+  const handleSourceImageSelected = useCallback(
+    async (file: File) => {
+      if (!projectId || !activeFloorPlan || isReplacingSourceImage) {
+        return
+      }
+
+      const floor = activeFloorPlan.floor
+      const previousSourceImage = sourceImageByFloorRef.current[floor]
+      const nextSnapshot = JSON.stringify(floorPlanData)
+
+      setIsReplacingSourceImage(true)
+      setSaveState("saving")
+      setSaveErrorMessage(null)
+      debouncedSave.cancel()
+
+      try {
+        const uploadUrl = await uploadSource({})
+        const sourceImage = await uploadFileToStorage(uploadUrl, file)
+        sourceImageByFloorRef.current[floor] = sourceImage
+
+        await saveFloorPlan({
+          projectId,
+          floor,
+          sourceImage,
+          data: floorPlanData
+        })
+
+        lastSavedSnapshotsRef.current[floor] = nextSnapshot
+        setIsSourceImageVisible(true)
+        setSaveState("saved")
+        setSaveErrorMessage(null)
+        toast("Source image updated", "success")
+      } catch (error) {
+        sourceImageByFloorRef.current[floor] = previousSourceImage
+        console.error("Unable to replace the source image.", error)
+        setSaveState("error")
+        setSaveErrorMessage("Source image upload failed. Your current floor plan is unchanged.")
+        toast("Unable to replace source image", "error")
+      } finally {
+        setIsReplacingSourceImage(false)
+      }
+    },
+    [
+      activeFloorPlan,
+      debouncedSave,
+      floorPlanData,
+      isReplacingSourceImage,
+      projectId,
+      saveFloorPlan,
+      toast,
+      uploadSource
+    ]
+  )
 
   async function handleCreateFloor() {
     if (!projectId || !project || isCreatingFloor) {
@@ -387,6 +467,8 @@ export default function ProjectEditorPage() {
           overlayOpacity={sourceImageOpacity}
           onToggleOverlay={() => setIsSourceImageVisible((visible) => !visible)}
           onOverlayOpacityChange={setSourceImageOpacity}
+          onSourceImageSelected={handleSourceImageSelected}
+          isUploadingSourceImage={isReplacingSourceImage}
         />
         <div className="editor-grid">
           <div style={{ position: "relative" }}>

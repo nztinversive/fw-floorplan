@@ -30,6 +30,7 @@ import type {
 export type EditorTool =
   | "select"
   | "wall"
+  | "measure"
   | "room"
   | "door"
   | "window"
@@ -47,6 +48,7 @@ type EditorStore = {
   zoom: number;
   pan: Point;
   pendingWallStart: Point | null;
+  pendingMeasureStart: Point | null;
   pendingRoomPoints: Point[];
   pendingFurniture: PendingFurniture | null;
   setFloorPlanData: (data: FloorPlanData, resetHistory?: boolean) => void;
@@ -58,6 +60,7 @@ type EditorStore = {
   setZoom: (zoom: number) => void;
   setPan: (pan: Point) => void;
   setPendingWallStart: (point: Point | null) => void;
+  setPendingMeasureStart: (point: Point | null) => void;
   setPendingRoomPoints: (points: Point[]) => void;
   setPendingFurniture: (furniture: PendingFurniture | null) => void;
   addWall: (wall: Omit<Wall, "id">) => void;
@@ -106,6 +109,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   zoom: 1,
   pan: { x: 0, y: 0 },
   pendingWallStart: null,
+  pendingMeasureStart: null,
   pendingRoomPoints: [],
   pendingFurniture: null,
   setFloorPlanData: (data, resetHistory = false) =>
@@ -119,12 +123,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             selectedIds: [],
             actionError: null,
             pendingWallStart: null,
+            pendingMeasureStart: null,
             pendingRoomPoints: [],
             pendingFurniture: null
           }
         : {
             floorPlanData: synced,
             actionError: null,
+            pendingMeasureStart: null,
             ...pushHistory(get().history, get().historyIndex, synced)
           };
     }),
@@ -142,6 +148,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((state) => ({
       tool,
       pendingWallStart: null,
+      pendingMeasureStart: null,
       pendingRoomPoints: [],
       pendingFurniture: tool === "furniture" ? state.pendingFurniture : null,
       actionError: null
@@ -149,10 +156,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setZoom: (zoom) => set({ zoom }),
   setPan: (pan) => set({ pan }),
   setPendingWallStart: (point) => set({ pendingWallStart: point }),
+  setPendingMeasureStart: (point) => set({ pendingMeasureStart: point }),
   setPendingRoomPoints: (points) => set({ pendingRoomPoints: points }),
   setPendingFurniture: (pendingFurniture) =>
     set((state) => ({
       pendingFurniture,
+      pendingMeasureStart: null,
       tool:
         pendingFurniture
           ? "furniture"
@@ -507,6 +516,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         actionError: null,
         selectedIds: [],
         pendingWallStart: null,
+        pendingMeasureStart: null,
         pendingRoomPoints: [],
         pendingFurniture: null
       };
@@ -520,6 +530,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         actionError: null,
         selectedIds: [],
         pendingWallStart: null,
+        pendingMeasureStart: null,
         pendingRoomPoints: [],
         pendingFurniture: null
       };

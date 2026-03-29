@@ -35,10 +35,35 @@ type CanvasSize = {
   height: number
 }
 
+type SnapGuides = {
+  horizontal: number | null
+  vertical: number | null
+}
+
 const ROOM_COLORS = ["rgba(212, 168, 75, 0.18)", "rgba(100, 116, 139, 0.12)", "rgba(27, 42, 74, 0.08)"]
 const ORTHOGONAL_SNAP_THRESHOLD = 15
+const SNAP_GUIDE_THRESHOLD = 4
 const WALL_PLACEMENT_THRESHOLD = 40
 const ROOM_CLOSE_THRESHOLD = 15
+
+function findAlignedCoordinate(
+  value: number,
+  candidates: number[],
+  threshold: number
+): number | null {
+  let matched: number | null = null
+  let bestDelta = threshold + 1
+
+  for (const candidate of candidates) {
+    const delta = Math.abs(candidate - value)
+    if (delta <= threshold && delta < bestDelta) {
+      matched = candidate
+      bestDelta = delta
+    }
+  }
+
+  return matched
+}
 
 function snapWallEndpoint(start: Point, point: Point, scale: number, gridSize: number): Point {
   const snapped = snapPoint(point, scale, gridSize)
@@ -73,6 +98,8 @@ export default function FloorPlanCanvas({
   const frameRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState<CanvasSize>({ width: 960, height: 720 })
   const [mousePosition, setMousePosition] = useState<Point | null>(null)
+  const [snapGuides, setSnapGuides] = useState<SnapGuides>({ horizontal: null, vertical: null })
+  const [isDraggingElement, setIsDraggingElement] = useState(false)
   const [sourceImageElement, setSourceImageElement] = useState<HTMLImageElement | null>(null)
 
   const floorPlanData = useEditorStore((state) => state.floorPlanData)
@@ -81,6 +108,7 @@ export default function FloorPlanCanvas({
   const zoom = useEditorStore((state) => state.zoom)
   const pan = useEditorStore((state) => state.pan)
   const pendingWallStart = useEditorStore((state) => state.pendingWallStart)
+  const pendingMeasureStart = useEditorStore((state) => state.pendingMeasureStart)
   const pendingRoomPoints = useEditorStore((state) => state.pendingRoomPoints)
   const pendingFurniture = useEditorStore((state) => state.pendingFurniture)
   const setSelectedIds = useEditorStore((state) => state.setSelectedIds)
@@ -89,6 +117,7 @@ export default function FloorPlanCanvas({
   const setZoom = useEditorStore((state) => state.setZoom)
   const setPan = useEditorStore((state) => state.setPan)
   const setPendingWallStart = useEditorStore((state) => state.setPendingWallStart)
+  const setPendingMeasureStart = useEditorStore((state) => state.setPendingMeasureStart)
   const setPendingRoomPoints = useEditorStore((state) => state.setPendingRoomPoints)
   const addWall = useEditorStore((state) => state.addWall)
   const addRoom = useEditorStore((state) => state.addRoom)
@@ -97,6 +126,14 @@ export default function FloorPlanCanvas({
   const addFurniture = useEditorStore((state) => state.addFurniture)
   const moveElement = useEditorStore((state) => state.moveElement)
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds])
+  const wallEndpoints = useMemo(
+    () =>
+      floorPlanData.walls.flatMap((wall) => [
+        { x: wall.x1, y: wall.y1 },
+        { x: wall.x2, y: wall.y2 }
+      ]),
+    [floorPlanData.walls]
+  )
 
   useEffect(() => {
     const element = frameRef.current
@@ -161,22 +198,108 @@ export default function FloorPlanCanvas({
     [floorPlanData.gridSize, floorPlanData.scale]
   )
 
+  const viewportBounds = useMemo(
+    () => ({
+      left: -pan.x / zoom,
+      right: (size.width - pan.x) / zoom,
+      top: -pan.y / zoom,
+      bottom: (size.height - pan.y) / zoom
+    }),
+    [pan.x, pan.y, size.height, size.width, zoom]
+  )
+
+  const alignableWallEndpoints = useMemo(
+    () =>
+      wallEndpoints.filter(
+        (point) =>
+          !pendingWallStart ||
+          point.x !== pendingWallStart.x ||
+          point.y !== pendingWallStart.y
+      ),
+    [pendingWallStart, wallEndpoints]
+  )
+
+  const pendingMeasurementEnd = useMemo(() => {
+    if (tool !== "measure" || !pendingMeasureStart || !mousePosition) {
+      return null
+    }
+
+    return mousePosition
+  }, [mousePosition, pendingMeasureStart, tool])
+
   const pendingWallEnd = useMemo(() => {
     if (!pendingWallStart || !mousePosition) {
       return null
     }
 
-    return snapWallEndpoint(
+    const snappedPoint = snapWallEndpoint(
       pendingWallStart,
       mousePosition,
       floorPlanData.scale,
       floorPlanData.gridSize
     )
+    const vertical = findAlignedCoordinate(
+      snappedPoint.x,
+      alignableWallEndpoints.map((point) => point.x),
+      SNAP_GUIDE_THRESHOLD
+    )
+    const horizontal = findAlignedCoordinate(
+      snappedPoint.y,
+      alignableWallEndpoints.map((point) => point.y),
+      SNAP_GUIDE_THRESHOLD
+    )
+
+    return {
+      x: vertical ?? snappedPoint.x,
+      y: horizontal ?? snappedPoint.y
+    }
   }, [
+    alignableWallEndpoints,
     floorPlanData.gridSize,
     floorPlanData.scale,
     mousePosition,
     pendingWallStart
+  ])
+
+  useEffect(() => {
+    if (!mousePosition || (tool !== "wall" && !isDraggingElement)) {
+      setSnapGuides({ horizontal: null, vertical: null })
+      return
+    }
+
+    const referencePoint =
+      tool === "wall"
+        ? pendingWallEnd ??
+          snapPoint(mousePosition, floorPlanData.scale, floorPlanData.gridSize)
+        : mousePosition
+
+    const nextGuides = {
+      horizontal: findAlignedCoordinate(
+        referencePoint.y,
+        alignableWallEndpoints.map((point) => point.y),
+        SNAP_GUIDE_THRESHOLD
+      ),
+      vertical: findAlignedCoordinate(
+        referencePoint.x,
+        alignableWallEndpoints.map((point) => point.x),
+        SNAP_GUIDE_THRESHOLD
+      )
+    }
+
+    setSnapGuides((current) =>
+      current.horizontal === nextGuides.horizontal &&
+      current.vertical === nextGuides.vertical
+        ? current
+        : nextGuides
+    )
+  }, [
+    alignableWallEndpoints,
+    floorPlanData.gridSize,
+    floorPlanData.scale,
+    isDraggingElement,
+    mousePosition,
+    pendingWallEnd,
+    tool
   ])
 
   const pendingRoomPreviewPoint = useMemo(() => {
@@ -245,6 +368,20 @@ export default function FloorPlanCanvas({
     }
   }
 
+  function handleElementDragStart() {
+    setIsDraggingElement(true)
+  }
+
+  function handleElementDragMove() {
+    setMousePosition(getPointerPosition())
+  }
+
+  function handleElementDragEnd(id: string, event: Konva.KonvaEventObject<Event>) {
+    setIsDraggingElement(false)
+    moveElement(id, { x: event.target.x(), y: event.target.y() })
+    event.target.position({ x: 0, y: 0 })
+  }
+
   function handleStageClick(event: Konva.KonvaEventObject<MouseEvent | TouchEvent>) {
     const pointer = getPointerPosition()
     if (!pointer) {
@@ -261,6 +398,15 @@ export default function FloorPlanCanvas({
       return
     }
 
+    if (tool === "measure") {
+      if (!pendingMeasureStart) {
+        setPendingMeasureStart(pointer)
+      } else {
+        setPendingMeasureStart(null)
+      }
+      return
+    }
+
     if (tool === "wall") {
       if (!pendingWallStart) {
         const snappedToEndpoint = snapToNearestEndpoint(pointer, floorPlanData.walls, 15)
@@ -270,12 +416,10 @@ export default function FloorPlanCanvas({
       }
 
       const snappedToEndpoint = snapToNearestEndpoint(pointer, floorPlanData.walls, 15)
-      const endpoint = snappedToEndpoint ?? snapWallEndpoint(
-        pendingWallStart,
-        pointer,
-        floorPlanData.scale,
-        floorPlanData.gridSize
-      )
+      const endpoint = snappedToEndpoint ?? pendingWallEnd
+      if (!endpoint) {
+        return
+      }
 
       if (pointDistance(pendingWallStart, endpoint) < 4) {
         setPendingWallStart(null)
@@ -448,6 +592,37 @@ export default function FloorPlanCanvas({
             })}
           </Layer>
 
+          <Layer listening={false}>
+            {snapGuides.horizontal !== null ? (
+              <Line
+                points={[
+                  viewportBounds.left,
+                  snapGuides.horizontal,
+                  viewportBounds.right,
+                  snapGuides.horizontal
+                ]}
+                stroke="#3b82f6"
+                strokeWidth={1 / zoom}
+                dash={[6 / zoom, 4 / zoom]}
+                listening={false}
+              />
+            ) : null}
+            {snapGuides.vertical !== null ? (
+              <Line
+                points={[
+                  snapGuides.vertical,
+                  viewportBounds.top,
+                  snapGuides.vertical,
+                  viewportBounds.bottom
+                ]}
+                stroke="#3b82f6"
+                strokeWidth={1 / zoom}
+                dash={[6 / zoom, 4 / zoom]}
+                listening={false}
+              />
+            ) : null}
+          </Layer>
+
           <Layer>
             {floorPlanData.rooms.map((room, index) => {
               const labelPosition = polygonCentroid(room.polygon)
@@ -458,10 +633,9 @@ export default function FloorPlanCanvas({
                   draggable={tool === "select"}
                   onClick={(event) => handleElementSelect(room.id, event)}
                   onTap={(event) => handleElementSelect(room.id, event)}
-                  onDragEnd={(event) => {
-                    moveElement(room.id, { x: event.target.x(), y: event.target.y() })
-                    event.target.position({ x: 0, y: 0 })
-                  }}
+                  onDragStart={handleElementDragStart}
+                  onDragMove={handleElementDragMove}
+                  onDragEnd={(event) => handleElementDragEnd(room.id, event)}
                 >
                   <Line
                     closed
@@ -496,10 +670,9 @@ export default function FloorPlanCanvas({
                 draggable={tool === "select"}
                 onClick={(event) => handleElementSelect(wall.id, event)}
                 onTap={(event) => handleElementSelect(wall.id, event)}
-                onDragEnd={(event) => {
-                  moveElement(wall.id, { x: event.target.x(), y: event.target.y() })
-                  event.target.position({ x: 0, y: 0 })
-                }}
+                onDragStart={handleElementDragStart}
+                onDragMove={handleElementDragMove}
+                onDragEnd={(event) => handleElementDragEnd(wall.id, event)}
                 shadowBlur={selectedIdSet.has(wall.id) ? 8 : 0}
                 shadowColor="rgba(212, 168, 75, 0.75)"
               />
@@ -519,10 +692,9 @@ export default function FloorPlanCanvas({
                   draggable={tool === "select"}
                   onClick={(event) => handleElementSelect(door.id, event)}
                   onTap={(event) => handleElementSelect(door.id, event)}
-                  onDragEnd={(event) => {
-                    moveElement(door.id, { x: event.target.x(), y: event.target.y() })
-                    event.target.position({ x: 0, y: 0 })
-                  }}
+                  onDragStart={handleElementDragStart}
+                  onDragMove={handleElementDragMove}
+                  onDragEnd={(event) => handleElementDragEnd(door.id, event)}
                 >
                   <Arc
                     x={center.x}
@@ -553,10 +725,9 @@ export default function FloorPlanCanvas({
                   draggable={tool === "select"}
                   onClick={(event) => handleElementSelect(window.id, event)}
                   onTap={(event) => handleElementSelect(window.id, event)}
-                  onDragEnd={(event) => {
-                    moveElement(window.id, { x: event.target.x(), y: event.target.y() })
-                    event.target.position({ x: 0, y: 0 })
-                  }}
+                  onDragStart={handleElementDragStart}
+                  onDragMove={handleElementDragMove}
+                  onDragEnd={(event) => handleElementDragEnd(window.id, event)}
                 >
                   <Group x={center.x} y={center.y} rotation={rotation}>
                     <Line
@@ -589,10 +760,9 @@ export default function FloorPlanCanvas({
                   draggable={tool === "select"}
                   onClick={(event) => handleElementSelect(item.id, event)}
                   onTap={(event) => handleElementSelect(item.id, event)}
-                  onDragEnd={(event) => {
-                    moveElement(item.id, { x: event.target.x(), y: event.target.y() })
-                    event.target.position({ x: 0, y: 0 })
-                  }}
+                  onDragStart={handleElementDragStart}
+                  onDragMove={handleElementDragMove}
+                  onDragEnd={(event) => handleElementDragEnd(item.id, event)}
                 >
                   <Rect
                     x={-widthPx / 2}
@@ -675,6 +845,42 @@ export default function FloorPlanCanvas({
                     />
                   </>
                 ) : null}
+              </>
+            ) : null}
+
+            {pendingMeasureStart && pendingMeasurementEnd ? (
+              <>
+                <Circle
+                  x={pendingMeasureStart.x}
+                  y={pendingMeasureStart.y}
+                  radius={4 / zoom}
+                  fill="#3b82f6"
+                  listening={false}
+                />
+                <Line
+                  points={[
+                    pendingMeasureStart.x,
+                    pendingMeasureStart.y,
+                    pendingMeasurementEnd.x,
+                    pendingMeasurementEnd.y
+                  ]}
+                  stroke="#3b82f6"
+                  strokeWidth={2 / zoom}
+                  dash={[10 / zoom, 8 / zoom]}
+                  listening={false}
+                />
+                <Text
+                  x={(pendingMeasureStart.x + pendingMeasurementEnd.x) / 2}
+                  y={(pendingMeasureStart.y + pendingMeasurementEnd.y) / 2 - 16 / zoom}
+                  text={formatFeetInches(
+                    pointDistance(pendingMeasureStart, pendingMeasurementEnd),
+                    floorPlanData.scale
+                  )}
+                  fontSize={13 / zoom}
+                  fill="#3b82f6"
+                  fontStyle="bold"
+                  listening={false}
+                />
               </>
             ) : null}
 

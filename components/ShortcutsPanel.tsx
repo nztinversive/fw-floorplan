@@ -14,6 +14,7 @@ const SHORTCUT_GROUPS = [
     shortcuts: [
       { keys: ["Esc"], label: "Select tool" },
       { keys: ["W"], label: "Wall tool" },
+      { keys: ["M"], label: "Measure tool" },
       { keys: ["R"], label: "Room tool" },
       { keys: ["D"], label: "Door tool" },
       { keys: ["N"], label: "Window tool" },

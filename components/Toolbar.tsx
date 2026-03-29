@@ -1,8 +1,8 @@
 "use client"
 
 import type Konva from "konva"
-import type { ComponentType, RefObject } from "react"
-import { useCallback, useEffect, useState } from "react"
+import type { ChangeEvent, ComponentType, RefObject } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Armchair,
   Download,
@@ -14,6 +14,7 @@ import {
   MousePointer2,
   PanelTop,
   Plus,
+  Ruler,
   Redo2,
   SquareDashedBottom,
   SquareStack,
@@ -31,6 +32,8 @@ type ToolbarProps = {
   overlayOpacity: number
   onToggleOverlay: () => void
   onOverlayOpacityChange: (opacity: number) => void
+  onSourceImageSelected: (file: File) => void
+  isUploadingSourceImage?: boolean
 }
 
 const TOOLS: Array<{
@@ -41,6 +44,7 @@ const TOOLS: Array<{
 }> = [
   { id: "select", label: "Select", shortcut: "Esc", icon: MousePointer2 },
   { id: "wall", label: "Wall", shortcut: "W", icon: SquareStack },
+  { id: "measure", label: "Measure", shortcut: "M", icon: Ruler },
   { id: "room", label: "Room", shortcut: "R", icon: SquareDashedBottom },
   { id: "door", label: "Door", shortcut: "D", icon: DoorOpen },
   { id: "window", label: "Window", shortcut: "N", icon: PanelTop },
@@ -66,7 +70,9 @@ export default function Toolbar({
   overlayVisible,
   overlayOpacity,
   onToggleOverlay,
-  onOverlayOpacityChange
+  onOverlayOpacityChange,
+  onSourceImageSelected,
+  isUploadingSourceImage = false
 }: ToolbarProps) {
   const tool = useEditorStore((state) => state.tool)
   const zoom = useEditorStore((state) => state.zoom)
@@ -79,6 +85,7 @@ export default function Toolbar({
   const duplicateSelected = useEditorStore((state) => state.duplicateSelected)
   const undo = useEditorStore((state) => state.undo)
   const redo = useEditorStore((state) => state.redo)
+  const sourceImageInputRef = useRef<HTMLInputElement>(null)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
 
   const handleZoomToFit = useCallback(() => {
@@ -172,6 +179,9 @@ export default function Toolbar({
         if (key === "w") {
           event.preventDefault()
           setTool("wall")
+        } else if (key === "m") {
+          event.preventDefault()
+          setTool("measure")
         } else if (key === "r") {
           event.preventDefault()
           setTool("room")
@@ -206,6 +216,16 @@ export default function Toolbar({
     link.href = dataUrl
     link.download = "floor-plan.png"
     link.click()
+  }
+
+  function handleSourceImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    onSourceImageSelected(file)
+    event.target.value = ""
   }
 
   return (
@@ -272,6 +292,32 @@ export default function Toolbar({
         </div>
 
         <div className="toolbar-group">
+          <input
+            ref={sourceImageInputRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={handleSourceImageChange}
+          />
+          <button
+            type="button"
+            className="toolbar-btn-labeled"
+            title={sourceImageUrl ? "Replace source image" : "Upload source image"}
+            aria-label={sourceImageUrl ? "Replace source image" : "Upload source image"}
+            onClick={() => sourceImageInputRef.current?.click()}
+            disabled={isUploadingSourceImage}
+          >
+            <ImageIcon size={16} />
+            <span>
+              {isUploadingSourceImage
+                ? sourceImageUrl
+                  ? "Replacing..."
+                  : "Uploading..."
+                : sourceImageUrl
+                  ? "Replace image"
+                  : "Upload image"}
+            </span>
+          </button>
           {sourceImageUrl ? (
             <>
               <button
