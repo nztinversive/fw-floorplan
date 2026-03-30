@@ -4,7 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useMutation, useQuery } from "convex/react"
-import { DraftingCompass, Download, Image as ImageIcon, Link2, Pencil, Trash2 } from "lucide-react"
+import { DraftingCompass, Download, Image as ImageIcon, Layers, Link2, MapPin, Pencil, Trash2, User, CalendarDays } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import Breadcrumb from "@/components/Breadcrumb"
@@ -380,16 +380,36 @@ export default function ProjectOverviewPage() {
             <div className="panel-header">
               <div className="section-title">Project details</div>
             </div>
-            <dl className="key-value">
-              <dt>Client</dt>
-              <dd>{project.clientName || "Not set"}</dd>
-              <dt>Address</dt>
-              <dd>{project.address || "Not set"}</dd>
-              <dt>Created</dt>
-              <dd>{formatDate(project.createdAt)}</dd>
-              <dt>Floor plans</dt>
-              <dd>{orderedFloorPlans.length}</dd>
-            </dl>
+            <div className="detail-list">
+              <div className="detail-item">
+                <div className="detail-icon detail-icon-amber"><User size={14} /></div>
+                <div>
+                  <div className="detail-label">Client</div>
+                  <div className="detail-value">{project.clientName || "Not set"}</div>
+                </div>
+              </div>
+              <div className="detail-item">
+                <div className="detail-icon detail-icon-blue"><MapPin size={14} /></div>
+                <div>
+                  <div className="detail-label">Address</div>
+                  <div className="detail-value">{project.address || "Not set"}</div>
+                </div>
+              </div>
+              <div className="detail-item">
+                <div className="detail-icon detail-icon-green"><CalendarDays size={14} /></div>
+                <div>
+                  <div className="detail-label">Created</div>
+                  <div className="detail-value">{formatDate(project.createdAt)}</div>
+                </div>
+              </div>
+              <div className="detail-item">
+                <div className="detail-icon detail-icon-purple"><Layers size={14} /></div>
+                <div>
+                  <div className="detail-label">Floor plans</div>
+                  <div className="detail-value">{orderedFloorPlans.length}</div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="sidebar-card">
@@ -404,12 +424,20 @@ export default function ProjectOverviewPage() {
                       <strong>{formatFloorLabel(floorPlan.floor)}</strong>
                       <span className="badge">v{floorPlan.version}</span>
                     </div>
-                    <dl className="key-value">
-                      <dt>Rooms</dt>
-                      <dd>{floorPlan.data.rooms.length}</dd>
-                      <dt>Walls</dt>
-                      <dd>{floorPlan.data.walls.length}</dd>
-                    </dl>
+                    <div className="floor-stats-row">
+                      <div className="floor-stat">
+                        <span className="floor-stat-value">{floorPlan.data.rooms.length}</span>
+                        <span className="floor-stat-label">rooms</span>
+                      </div>
+                      <div className="floor-stat">
+                        <span className="floor-stat-value">{floorPlan.data.walls.length}</span>
+                        <span className="floor-stat-label">walls</span>
+                      </div>
+                      <div className="floor-stat">
+                        <span className="floor-stat-value">{floorPlan.data.doors?.length ?? 0}</span>
+                        <span className="floor-stat-label">doors</span>
+                      </div>
+                    </div>
                   </div>
                 )
               })}

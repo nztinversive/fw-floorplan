@@ -4,7 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useAction, useMutation, useQuery } from "convex/react"
-import { Download, ImagePlus, X } from "lucide-react"
+import { AlertTriangle, Download, ImagePlus, Palette, Sparkles, X } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import Breadcrumb from "@/components/Breadcrumb"
@@ -378,7 +378,7 @@ export default function ProjectRendersPage() {
             <StyleSelector selectedStyle={selectedStyle} onSelect={handleStyleSelect} />
           </section>
 
-          <aside className="sidebar-card">
+          <aside className="sidebar-card render-settings-sidebar">
             <div className="panel-header">
               <div>
                 <div className="section-title">Render settings</div>
@@ -386,30 +386,42 @@ export default function ProjectRendersPage() {
               </div>
             </div>
 
-            <div className="form-grid">
-              {(Object.entries(RENDER_SETTING_OPTIONS) as Array<[SettingKey, string[]]>).map(([key, options]) => (
-                <label key={key} className="field">
-                  <span className="field-label">
-                    {key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase())}
-                    {SETTING_TOOLTIPS[key] ? <SettingTooltip text={SETTING_TOOLTIPS[key]} /> : null}
-                  </span>
-                  <select
-                    className="field-select"
-                    value={settings[key]}
-                    onChange={(event) => updateSetting(key, event.target.value)}
-                    disabled={isGenerating}
-                  >
-                    {options.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ))}
+            {/* Materials group */}
+            <div className="settings-group">
+              <div className="settings-group-header">
+                <Palette size={14} />
+                <span>Materials &amp; Colors</span>
+              </div>
+              <div className="form-grid">
+                {(Object.entries(RENDER_SETTING_OPTIONS) as Array<[SettingKey, string[]]>).map(([key, options]) => (
+                  <label key={key} className="field">
+                    <span className="field-label">
+                      {key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase())}
+                      {SETTING_TOOLTIPS[key] ? <SettingTooltip text={SETTING_TOOLTIPS[key]} /> : null}
+                    </span>
+                    <select
+                      className="field-select"
+                      value={settings[key]}
+                      onChange={(event) => updateSetting(key, event.target.value)}
+                      disabled={isGenerating}
+                    >
+                      {options.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
             </div>
 
-            <div style={{ display: "grid", gap: "0.9rem", marginTop: "1rem" }}>
+            {/* View angle group */}
+            <div className="settings-group">
+              <div className="settings-group-header">
+                <Sparkles size={14} />
+                <span>Camera &amp; View</span>
+              </div>
               <div className="field">
                 <span className="field-label">View angle</span>
                 <div className="pill-row">
@@ -426,14 +438,23 @@ export default function ProjectRendersPage() {
                   ))}
                 </div>
               </div>
+            </div>
 
-              <button type="button" className="button" onClick={handleGenerateRender} disabled={isGenerating}>
+            {/* Generate action */}
+            <div className="settings-action">
+              <button type="button" className="button button-generate" onClick={handleGenerateRender} disabled={isGenerating}>
                 <ImagePlus size={18} />
                 {isGenerating ? "Generating..." : "Generate Render"}
               </button>
 
               <RenderProgress isGenerating={isGenerating} />
-              {errorMessage ? <div className="muted" style={{ color: "#9a3412" }}>{errorMessage}</div> : null}
+
+              {errorMessage ? (
+                <div className="error-banner">
+                  <AlertTriangle size={16} />
+                  <span>{errorMessage}</span>
+                </div>
+              ) : null}
             </div>
           </aside>
         </div>
@@ -549,10 +570,14 @@ export default function ProjectRendersPage() {
               ))}
             </div>
           ) : (
-            <div className="empty-state">
+            <div className="empty-state empty-state-v2">
+              <div className="empty-state-icon">
+                <ImagePlus size={36} />
+              </div>
               <div className="section-title">Generate your first render</div>
-              <div className="muted">
-                Pick a style preset, tune the exterior settings, and generate the first concept image for this home.
+              <div className="muted" style={{ maxWidth: "28rem" }}>
+                Pick a style preset on the left, tune materials and camera angle, then hit Generate.
+                Your photorealistic exterior concept will appear here.
               </div>
             </div>
           )}
