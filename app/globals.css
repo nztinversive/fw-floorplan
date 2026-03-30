@@ -2265,6 +2265,205 @@ button:disabled,
   animation: renderPulse 2s ease-in-out infinite;
 }
 
+/* ── Template Cards ── */
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.template-card {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1.5px solid var(--fw-border);
+  background: var(--fw-card);
+  cursor: pointer;
+  text-align: left;
+  position: relative;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.template-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(27, 42, 74, 0.2);
+  box-shadow: 0 8px 24px rgba(27, 42, 74, 0.08);
+}
+
+.template-card.is-selected {
+  border-color: var(--fw-amber);
+  background: rgba(212, 168, 75, 0.06);
+  box-shadow: 0 8px 24px rgba(212, 168, 75, 0.12);
+}
+
+.template-card-icon {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.65rem;
+  background: rgba(27, 42, 74, 0.06);
+  color: var(--fw-navy);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: background 180ms ease, color 180ms ease;
+}
+
+.template-card.is-selected .template-card-icon {
+  background: rgba(212, 168, 75, 0.15);
+  color: #96721c;
+}
+
+.template-card-content {
+  min-width: 0;
+}
+
+.template-card-name {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 0.95rem;
+  color: var(--fw-navy);
+}
+
+.template-card-desc {
+  font-size: 0.8rem;
+  color: var(--fw-slate);
+  margin-top: 0.2rem;
+  line-height: 1.4;
+}
+
+.template-card-check {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: var(--fw-amber);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  animation: fadeIn 180ms ease;
+}
+
+/* ── Furniture Library Polish ── */
+.furniture-chevron {
+  display: inline-flex;
+  transition: transform 200ms ease;
+}
+
+.furniture-section-toggle.is-expanded .furniture-chevron {
+  transform: rotate(90deg);
+}
+
+.furniture-list-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 250ms ease;
+  overflow: hidden;
+}
+
+.furniture-list-wrap.is-open {
+  grid-template-rows: 1fr;
+}
+
+.furniture-list-wrap > .furniture-list {
+  min-height: 0;
+}
+
+.furniture-item {
+  transition: background 140ms ease, transform 140ms ease, border-color 140ms ease;
+}
+
+.furniture-item:hover {
+  transform: translateX(2px);
+  background: rgba(27, 42, 74, 0.04);
+}
+
+.furniture-item.is-active {
+  background: rgba(212, 168, 75, 0.1);
+  border-color: rgba(212, 168, 75, 0.3);
+}
+
+.editor-dark .furniture-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.editor-dark .furniture-item.is-active {
+  background: rgba(212, 168, 75, 0.12);
+}
+
+/* ── Upload Preview ── */
+.upload-preview-wrap {
+  position: relative;
+  border-radius: 1rem;
+  overflow: hidden;
+  border: 1px solid var(--fw-border);
+}
+
+.upload-preview-enter {
+  animation: fadeIn 300ms ease;
+}
+
+.upload-preview-filename {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 0.55rem 0.85rem;
+  background: linear-gradient(transparent, rgba(21, 34, 56, 0.7));
+  color: white;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.upload-file-card {
+  animation: fadeIn 200ms ease;
+}
+
+/* ── Dropzone Transitions ── */
+.dropzone {
+  transition: border-color 200ms ease, background 200ms ease, transform 200ms ease;
+}
+
+.dropzone.is-active {
+  transform: scale(1.01);
+}
+
+/* ── Copy Button ── */
+.copy-btn {
+  transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.copy-btn.is-copied {
+  background: var(--fw-success) !important;
+  border-color: var(--fw-success) !important;
+  animation: copyPulse 300ms ease;
+}
+
+.copy-btn-icon {
+  display: inline-flex;
+  transition: transform 200ms ease;
+}
+
+.copy-btn.is-copied .copy-btn-icon {
+  transform: scale(1.15);
+}
+
+@keyframes copyPulse {
+  0% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-1px) scale(1.03); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+/* ── QR Code Slide ── */
+.qr-enter {
+  animation: slideUp 250ms ease;
+}
+
 /* ── Settings Groups ── */
 .render-settings-sidebar {
   display: grid;

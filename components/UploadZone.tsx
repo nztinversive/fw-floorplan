@@ -170,24 +170,27 @@ export default function UploadZone({ value, onChange }: UploadZoneProps) {
       </div>
 
       {value?.previewUrl ? (
-        <Image
-          className="upload-preview"
-          src={value.previewUrl}
-          alt={value.fileName}
-          width={1200}
-          height={800}
-          unoptimized
-        />
+        <div className="upload-preview-wrap">
+          <Image
+            className="upload-preview upload-preview-enter"
+            src={value.previewUrl}
+            alt={value.fileName}
+            width={1200}
+            height={800}
+            unoptimized
+          />
+          <div className="upload-preview-filename">{value.fileName}</div>
+        </div>
       ) : value ? (
-        <div className="panel">
+        <div className="panel upload-file-card">
           <div className="section-title">{value.fileName}</div>
           <div className="muted">Preview unavailable for this file type, but the data was captured.</div>
         </div>
       ) : null}
 
       {error ? (
-        <div className="field-hint" style={{ color: "#b42318" }}>
-          {error}
+        <div className="error-banner" style={{ marginTop: 0 }}>
+          <span>{error}</span>
         </div>
       ) : null}
     </div>

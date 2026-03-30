@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ChevronDown, ChevronRight, X } from "lucide-react"
+import { ChevronRight, X } from "lucide-react"
 
 import {
   FURNITURE_BY_ID,
@@ -59,7 +59,7 @@ export default function FurnitureLibrary({ isOpen, onClose }: FurnitureLibraryPr
   }
 
   return (
-    <aside className="sidebar-card furniture-library">
+    <aside className="sidebar-card furniture-library" style={{ animation: "fadeIn 200ms ease" }}>
       <div className="panel-header">
         <div>
           <div className="section-title">Furniture Library</div>
@@ -75,7 +75,7 @@ export default function FurnitureLibrary({ isOpen, onClose }: FurnitureLibraryPr
       </div>
 
       {pendingFurniture ? (
-        <div className="library-mode-note">
+        <div className="library-mode-note" style={{ animation: "fadeIn 200ms ease" }}>
           <strong>Furniture mode</strong>
           <span>Click the canvas to keep placing this item. Press ESC or close the panel to exit.</span>
         </div>
@@ -90,7 +90,7 @@ export default function FurnitureLibrary({ isOpen, onClose }: FurnitureLibraryPr
             <section key={category} className="furniture-section">
               <button
                 type="button"
-                className="furniture-section-toggle"
+                className={`furniture-section-toggle${isExpanded ? " is-expanded" : ""}`}
                 onClick={() =>
                   setExpandedCategories((current) => ({
                     ...current,
@@ -99,10 +99,12 @@ export default function FurnitureLibrary({ isOpen, onClose }: FurnitureLibraryPr
                 }
               >
                 <span>{category}</span>
-                {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                <span className="furniture-chevron">
+                  <ChevronRight size={16} />
+                </span>
               </button>
 
-              {isExpanded ? (
+              <div className={`furniture-list-wrap${isExpanded ? " is-open" : ""}`}>
                 <div className="furniture-list">
                   {items.map((item) => {
                     const isActive = pendingFurniture?.type === item.id
@@ -124,7 +126,7 @@ export default function FurnitureLibrary({ isOpen, onClose }: FurnitureLibraryPr
                     )
                   })}
                 </div>
-              ) : null}
+              </div>
             </section>
           )
         })}
