@@ -2264,6 +2264,295 @@ button:disabled,
   animation: renderPulse 2s ease-in-out infinite;
 }
 
+/* ── Hero V2 ── */
+.hero-panel-v2 {
+  display: grid;
+  grid-template-columns: 1fr minmax(200px, 0.65fr);
+  align-items: center;
+  gap: 2rem;
+  padding: 2.5rem 2.5rem 2.5rem 2.8rem;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(49, 77, 122, 0.95), transparent 70%),
+    radial-gradient(ellipse at 80% 80%, rgba(212, 168, 75, 0.12), transparent 50%),
+    linear-gradient(145deg, rgba(27, 42, 74, 0.98), rgba(21, 34, 56, 0.99));
+}
+
+.hero-content {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.hero-eyebrow {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--fw-amber);
+  font-weight: 600;
+}
+
+.hero-panel-v2 .hero-title {
+  font-size: clamp(2.2rem, 4.5vw, 3.4rem);
+  line-height: 1.05;
+}
+
+.hero-panel-v2 .hero-copy {
+  max-width: 36rem;
+  line-height: 1.55;
+}
+
+.hero-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-illustration {
+  width: 100%;
+  max-width: 320px;
+  opacity: 0.85;
+}
+
+/* ── Steps Section ── */
+.steps-section {
+  margin-top: 2rem;
+}
+
+.steps-header {
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 1.25rem;
+}
+
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.step-card {
+  position: relative;
+  padding: 1.5rem 1.25rem;
+  border-radius: 1.2rem;
+  border: 1px solid var(--fw-border);
+  background: var(--fw-card);
+  display: grid;
+  gap: 0.6rem;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.step-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(27, 42, 74, 0.1);
+}
+
+.step-number {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: rgba(212, 168, 75, 0.12);
+  color: var(--fw-amber);
+  font-size: 0.78rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.step-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.85rem;
+  background: linear-gradient(135deg, var(--fw-navy), rgba(49, 77, 122, 0.9));
+  color: white;
+  display: grid;
+  place-items: center;
+}
+
+.step-title {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.15rem;
+  color: var(--fw-navy);
+}
+
+.step-description {
+  font-size: 0.9rem;
+  color: var(--fw-slate);
+  line-height: 1.5;
+}
+
+/* ── Project Card V2 ── */
+.project-card-v2 {
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+  overflow: hidden;
+}
+
+.project-card-v2:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 48px rgba(27, 42, 74, 0.14);
+  border-color: rgba(212, 168, 75, 0.3);
+}
+
+.project-card-v2 .project-thumb {
+  display: block;
+  cursor: pointer;
+}
+
+.project-card-v2 .project-thumb img {
+  transition: transform 400ms ease;
+}
+
+.project-card-v2:hover .project-thumb img {
+  transform: scale(1.04);
+}
+
+/* Card overlay */
+.project-card-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(21, 34, 56, 0);
+  transition: background 250ms ease;
+  pointer-events: none;
+}
+
+.project-card-v2:hover .project-card-overlay {
+  background: rgba(21, 34, 56, 0.45);
+}
+
+.project-card-overlay-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  border-radius: 999px;
+  background: white;
+  color: var(--fw-navy);
+  font-size: 0.82rem;
+  font-weight: 600;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.project-card-v2:hover .project-card-overlay-text {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Meta layout */
+.project-meta-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.project-meta-time {
+  font-size: 0.82rem;
+}
+
+/* Quick actions row */
+.project-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.project-card-v2:hover .project-card-actions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.project-card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 0.6rem;
+  background: rgba(27, 42, 74, 0.06);
+  color: var(--fw-navy);
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.project-card-action:hover {
+  background: var(--fw-navy);
+  color: white;
+}
+
+/* ── Empty State V2 ── */
+.empty-state-v2 {
+  padding: 3.5rem 2rem;
+}
+
+.empty-state-icon {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 1.2rem;
+  background: linear-gradient(135deg, rgba(27, 42, 74, 0.08), rgba(212, 168, 75, 0.1));
+  border: 1px dashed rgba(27, 42, 74, 0.18);
+  color: var(--fw-navy);
+  display: grid;
+  place-items: center;
+  margin-bottom: 0.5rem;
+}
+
+/* ── Footer ── */
+.site-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2rem 0 1rem;
+  margin-top: 3rem;
+  border-top: 1px solid var(--fw-border);
+  font-size: 0.82rem;
+  color: var(--fw-slate);
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.footer-brand-text {
+  opacity: 0.8;
+}
+
+.footer-links {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.footer-links a {
+  color: var(--fw-slate);
+  transition: color 140ms ease;
+}
+
+.footer-links a:hover {
+  color: var(--fw-navy);
+}
+
+.footer-sep {
+  opacity: 0.4;
+}
+
+.footer-copy {
+  opacity: 0.6;
+}
+
 @media (max-width: 1024px) {
   .overview-grid,
   .editor-grid,
@@ -2275,6 +2564,18 @@ button:disabled,
   .canvas-frame {
     height: 60vh;
     min-height: 480px;
+  }
+
+  .hero-panel-v2 {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-visual {
+    display: none;
+  }
+
+  .steps-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2342,5 +2643,16 @@ button:disabled,
 
   .toast {
     max-width: 100%;
+  }
+
+  .site-footer {
+    flex-direction: column;
+    gap: 0.75rem;
+    text-align: center;
+  }
+
+  .project-card-actions {
+    opacity: 1;
+    transform: none;
   }
 }
