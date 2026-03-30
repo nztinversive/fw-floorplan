@@ -263,7 +263,7 @@ export default function HelpPage() {
             </div>
             <ol className="help-list">
               <li>Open the Versions panel in the editor.</li>
-              <li>Enter a descriptive version name such as "Kitchen option A".</li>
+              <li>Enter a descriptive version name such as &quot;Kitchen option A&quot;.</li>
               <li>Save the current state, preview stored versions, and restore one when needed.</li>
             </ol>
           </section>
