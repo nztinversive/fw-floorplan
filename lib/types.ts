@@ -64,12 +64,20 @@ export type Dimension = {
   valueFt: number;
 };
 
+export type Annotation = {
+  id: string;
+  from: Point;
+  to: Point;
+  label: string;
+};
+
 export type FloorPlanData = {
   walls: Wall[];
   rooms: Room[];
   doors: Door[];
   windows: Window[];
   dimensions: Dimension[];
+  annotations: Annotation[];
   furniture: Furniture[];
   scale: number;
   gridSize: number;

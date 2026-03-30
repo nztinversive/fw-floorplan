@@ -1,4 +1,5 @@
 import type {
+  Annotation,
   Dimension,
   Door,
   FloorPlanData,
@@ -14,6 +15,7 @@ export const EMPTY_FLOOR_PLAN: FloorPlanData = {
   doors: [],
   windows: [],
   dimensions: [],
+  annotations: [],
   furniture: [],
   scale: 24,
   gridSize: 6
@@ -27,7 +29,18 @@ export function createId(prefix: string): string {
 }
 
 export function cloneFloorPlanData(data: FloorPlanData): FloorPlanData {
-  return JSON.parse(JSON.stringify(data)) as FloorPlanData;
+  const cloned = JSON.parse(JSON.stringify(data)) as Partial<FloorPlanData>;
+  return {
+    ...EMPTY_FLOOR_PLAN,
+    ...cloned,
+    walls: cloned.walls ?? [],
+    rooms: cloned.rooms ?? [],
+    doors: cloned.doors ?? [],
+    windows: cloned.windows ?? [],
+    dimensions: cloned.dimensions ?? [],
+    annotations: cloned.annotations ?? [],
+    furniture: cloned.furniture ?? []
+  };
 }
 
 export function clamp(value: number, min: number, max: number): number {
@@ -544,8 +557,16 @@ export function syncDerivedData(data: FloorPlanData): FloorPlanData {
     ...room,
     areaSqFt: calculateRoomAreaSqFt(room, next.scale)
   }));
+  next.annotations = next.annotations.map((annotation) => syncAnnotationLabel(annotation, next.scale));
   next.dimensions = deriveDimensions(next.walls, next.scale);
   return next;
+}
+
+function syncAnnotationLabel(annotation: Annotation, scale: number): Annotation {
+  return {
+    ...annotation,
+    label: formatFeetInches(pointDistance(annotation.from, annotation.to), scale)
+  };
 }
 
 export function createSeedFloorPlan(sourceImage?: string): {
@@ -632,6 +653,7 @@ export function createSeedFloorPlan(sourceImage?: string): {
     doors,
     windows,
     dimensions: [],
+    annotations: [],
     furniture: [],
     scale,
     gridSize: 6

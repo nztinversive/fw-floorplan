@@ -1,9 +1,9 @@
 "use client"
 
 import { useMemo } from "react"
-import { Box, DoorOpen, Grid3x3, Move, Sofa, Trash2 } from "lucide-react"
+import { Box, DoorOpen, Grid3x3, Move, RulerDimensionLine, Sofa, Trash2 } from "lucide-react"
 
-import { formatFeetInches, getWallAngle, getWallLength } from "@/lib/geometry"
+import { formatFeetInches, getWallAngle, getWallLength, pointDistance } from "@/lib/geometry"
 import { useEditorStore } from "@/lib/editor-store"
 import type { Wall } from "@/lib/types"
 
@@ -46,6 +46,7 @@ const TYPE_META: Record<string, { icon: typeof Box; color: string; label: string
   door: { icon: DoorOpen, color: "amber", label: "Door" },
   window: { icon: Box, color: "purple", label: "Window" },
   furniture: { icon: Sofa, color: "amber", label: "Furniture" },
+  annotation: { icon: RulerDimensionLine, color: "blue", label: "Annotation" },
 }
 
 export default function PropertiesPanel() {
@@ -85,8 +86,14 @@ export default function PropertiesPanel() {
       return { type: "furniture" as const, item: furniture }
     }
 
+    const annotation = floorPlanData.annotations.find((entry) => entry.id === selectedId)
+    if (annotation) {
+      return { type: "annotation" as const, item: annotation }
+    }
+
     return null
   }, [
+    floorPlanData.annotations,
     floorPlanData.doors,
     floorPlanData.furniture,
     floorPlanData.rooms,
@@ -139,7 +146,7 @@ export default function PropertiesPanel() {
           <div className="prop-empty" style={{ animation: "fadeIn 200ms ease" }}>
             <Move size={24} style={{ opacity: 0.3 }} />
             <div className="muted">
-              Select a wall, room, door, window, or furniture item to inspect and edit its properties.
+              Select a wall, room, door, window, furniture item, or annotation to inspect and edit its properties.
             </div>
           </div>
         ) : null}
@@ -276,6 +283,38 @@ export default function PropertiesPanel() {
                   value={selection.item.rotation}
                   onChange={(value) => updateElement(selection.item.id, { rotation: value })}
                 />
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {selection?.type === "annotation" ? (
+          <div className="property-list prop-enter">
+            <div className="property-card">
+              <div className="property-title">
+                <strong>Annotation</strong>
+                <span className="badge">
+                  {formatFeetInches(
+                    pointDistance(selection.item.from, selection.item.to),
+                    floorPlanData.scale
+                  )}
+                </span>
+              </div>
+              <label className="field">
+                <span className="field-label">Label</span>
+                <input
+                  className="field-input"
+                  value={selection.item.label}
+                  onChange={(event) => updateElement(selection.item.id, { label: event.target.value })}
+                />
+              </label>
+              <div className="prop-coords">
+                <span>
+                  Start: {pxToFeet(selection.item.from.x, floorPlanData.scale)}′, {pxToFeet(selection.item.from.y, floorPlanData.scale)}′
+                </span>
+                <span>
+                  End: {pxToFeet(selection.item.to.x, floorPlanData.scale)}′, {pxToFeet(selection.item.to.y, floorPlanData.scale)}′
+                </span>
               </div>
             </div>
           </div>

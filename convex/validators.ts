@@ -56,6 +56,16 @@ export const floorPlanDataValidator = v.object({
       valueFt: v.number()
     })
   ),
+  annotations: v.optional(
+    v.array(
+      v.object({
+        id: v.string(),
+        from: pointValidator,
+        to: pointValidator,
+        label: v.string()
+      })
+    )
+  ),
   furniture: v.array(
     v.object({
       id: v.string(),

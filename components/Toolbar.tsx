@@ -13,9 +13,11 @@ import {
   Minus,
   MousePointer2,
   PanelTop,
+  PencilRuler,
   Plus,
   Ruler,
   Redo2,
+  Scaling,
   SquareDashedBottom,
   SquareStack,
   Undo2
@@ -48,6 +50,8 @@ const TOOLS: Array<{
   { id: "select", label: "Select", shortcut: "Esc", icon: MousePointer2 },
   { id: "wall", label: "Wall", shortcut: "W", icon: SquareStack },
   { id: "measure", label: "Measure", shortcut: "M", icon: Ruler },
+  { id: "annotate", label: "Annotate", shortcut: "A", icon: PencilRuler },
+  { id: "calibrate", label: "Calibrate", shortcut: "C", icon: Scaling },
   { id: "room", label: "Room", shortcut: "R", icon: SquareDashedBottom },
   { id: "door", label: "Door", shortcut: "D", icon: DoorOpen },
   { id: "window", label: "Window", shortcut: "N", icon: PanelTop },
@@ -204,6 +208,12 @@ export default function Toolbar({
         if (key === "w") {
           event.preventDefault()
           setTool("wall")
+        } else if (key === "a") {
+          event.preventDefault()
+          setTool("annotate")
+        } else if (key === "c") {
+          event.preventDefault()
+          setTool("calibrate")
         } else if (key === "m") {
           event.preventDefault()
           setTool("measure")

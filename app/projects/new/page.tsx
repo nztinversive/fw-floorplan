@@ -126,6 +126,7 @@ export default function NewProjectPage() {
               height: feetToInches(window.height)
             })),
             dimensions: [],
+            annotations: [],
             furniture: [],
             scale: extracted.scale > 0 ? extracted.scale : 24,
             gridSize: 6

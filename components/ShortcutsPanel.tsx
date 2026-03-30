@@ -15,9 +15,12 @@ const SHORTCUT_GROUPS = [
       { keys: ["Esc"], label: "Select tool" },
       { keys: ["W"], label: "Wall tool" },
       { keys: ["M"], label: "Measure tool" },
+      { keys: ["A"], label: "Annotation tool" },
+      { keys: ["C"], label: "Scale calibration tool" },
       { keys: ["R"], label: "Room tool" },
       { keys: ["D"], label: "Door tool" },
       { keys: ["N"], label: "Window tool" },
+      { keys: ["T"], label: "Furniture tool" },
     ],
   },
   {

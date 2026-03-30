@@ -32,6 +32,7 @@ function buildTemplate(
     doors: doorsWithIds,
     windows: windowsWithIds,
     dimensions: [],
+    annotations: [],
     furniture: [],
     scale: 24,
     gridSize: 6

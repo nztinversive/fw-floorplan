@@ -9,7 +9,9 @@ export default function CanvasGuidance() {
     floorPlanData.walls.length > 0 ||
     floorPlanData.rooms.length > 0 ||
     floorPlanData.doors.length > 0 ||
-    floorPlanData.windows.length > 0
+    floorPlanData.windows.length > 0 ||
+    floorPlanData.furniture.length > 0 ||
+    floorPlanData.annotations.length > 0
 
   if (hasContent) return null
 

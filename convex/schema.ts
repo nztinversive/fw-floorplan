@@ -51,6 +51,13 @@ const dimension = v.object({
   valueFt: v.number()
 });
 
+const annotation = v.object({
+  id: v.string(),
+  from: point,
+  to: point,
+  label: v.string()
+});
+
 const furniture = v.object({
   id: v.string(),
   type: v.string(),
@@ -67,6 +74,7 @@ const floorPlanData = v.object({
   doors: v.array(door),
   windows: v.array(windowShape),
   dimensions: v.array(dimension),
+  annotations: v.optional(v.array(annotation)),
   furniture: v.array(furniture),
   scale: v.number(),
   gridSize: v.number()
