@@ -478,14 +478,14 @@ export default function ProjectRendersPage() {
           </div>
 
           {comparisonMode ? (
-            <div className="comparison-shell">
+            <div className="comparison-shell comparison-enter">
               <div className="comparison-header">
                 <div>
                   <div className="section-title">Comparison mode</div>
                   <div className="muted">
                     {comparisonRenders.length === 2
                       ? "Two renders selected. Review style, angle, and setting differences side by side."
-                      : "Select two render cards below to compare them side by side."}
+                      : `Select ${2 - comparisonRenders.length} more render${comparisonRenders.length === 1 ? "" : "s"} below to compare side by side.`}
                   </div>
                 </div>
                 <button

@@ -2265,6 +2265,161 @@ button:disabled,
   animation: renderPulse 2s ease-in-out infinite;
 }
 
+/* ── Properties Panel ── */
+.prop-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.prop-type-blue {
+  background: rgba(27, 42, 74, 0.08);
+  color: var(--fw-navy);
+}
+
+.prop-type-green {
+  background: rgba(29, 125, 86, 0.08);
+  color: var(--fw-success);
+}
+
+.prop-type-amber {
+  background: rgba(212, 168, 75, 0.12);
+  color: #96721c;
+}
+
+.prop-type-purple {
+  background: rgba(124, 58, 237, 0.08);
+  color: #7c3aed;
+}
+
+.editor-dark .prop-type-blue {
+  background: rgba(100, 160, 255, 0.1);
+  color: rgba(140, 180, 255, 0.85);
+}
+
+.editor-dark .prop-type-green {
+  background: rgba(29, 125, 86, 0.12);
+  color: rgba(80, 200, 140, 0.85);
+}
+
+.editor-dark .prop-type-amber {
+  background: rgba(212, 168, 75, 0.1);
+  color: var(--fw-amber);
+}
+
+.editor-dark .prop-type-purple {
+  background: rgba(124, 58, 237, 0.1);
+  color: rgba(160, 120, 255, 0.85);
+}
+
+.prop-enter {
+  animation: fadeIn 200ms ease;
+}
+
+.prop-empty {
+  text-align: center;
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+  padding: 1.5rem;
+  animation: fadeIn 200ms ease;
+}
+
+.prop-measurement {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--fw-navy);
+  font-variant-numeric: tabular-nums;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.editor-dark .prop-measurement {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.prop-coords {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--fw-slate);
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-dark .prop-coords {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.prop-delete-btn {
+  width: 100%;
+  color: #b42318 !important;
+  border-color: rgba(180, 35, 24, 0.15) !important;
+}
+
+.prop-delete-btn:hover {
+  background: rgba(180, 35, 24, 0.06) !important;
+}
+
+.editor-dark .prop-delete-btn {
+  color: rgba(255, 100, 80, 0.85) !important;
+  border-color: rgba(255, 100, 80, 0.15) !important;
+}
+
+.editor-dark .prop-delete-btn:hover {
+  background: rgba(255, 100, 80, 0.08) !important;
+}
+
+/* ── Comparison Enter ── */
+.comparison-enter {
+  animation: slideUp 260ms ease;
+}
+
+/* ── Page-level entrance ── */
+.page-shell {
+  animation: pageEnter 300ms ease;
+}
+
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Card hover consistency ── */
+.panel,
+.sidebar-card {
+  transition: box-shadow 200ms ease;
+}
+
+.sidebar-card:hover {
+  box-shadow: 0 12px 32px rgba(27, 42, 74, 0.08);
+}
+
+.editor-dark .sidebar-card:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Render card hover ── */
+.render-card {
+  transition: transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.render-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px rgba(27, 42, 74, 0.12);
+}
+
 /* ── Template Cards ── */
 .template-grid {
   display: grid;
@@ -3210,5 +3365,56 @@ button:disabled,
   .project-card-actions {
     opacity: 1;
     transform: none;
+  }
+
+  .hero-panel-v2 {
+    padding: 1.5rem;
+  }
+
+  .hero-panel-v2 .hero-title {
+    font-size: 1.8rem;
+  }
+
+  .template-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .share-meta-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .stat-card-v2 {
+    padding-left: 1.2rem;
+    padding-top: 2.8rem;
+  }
+
+  .stat-card-icon {
+    top: 0.85rem;
+    left: 0.85rem;
+  }
+
+  .share-link-url-row {
+    flex-direction: column;
+  }
+
+  .comparison-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .prop-coords {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .floor-stats-row {
+    gap: 0.75rem;
+  }
+
+  .detail-list {
+    gap: 0.65rem;
+  }
+
+  .steps-grid {
+    grid-template-columns: 1fr;
   }
 }
