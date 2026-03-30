@@ -58,16 +58,19 @@ const STEPS = [
     icon: Upload,
     title: "Upload",
     description: "Drop a floor plan image or PDF. We extract walls and rooms automatically.",
+    tags: ["PDF support", "AI extraction", "HEIC/JPEG/PNG"],
   },
   {
     icon: PenTool,
     title: "Edit",
     description: "Refine geometry, label rooms, add furniture. Professional editor with dark mode.",
+    tags: ["Dark mode", "Furniture library", "Undo/Redo"],
   },
   {
     icon: ImageIcon,
     title: "Render",
     description: "Generate photorealistic exterior renders in Craftsman, Farmhouse, or Contemporary styles.",
+    tags: ["3 styles", "Batch generate", "PDF export"],
   },
 ]
 
@@ -179,10 +182,15 @@ export default function DashboardPage() {
               <div key={step.title} className="step-card">
                 <div className="step-number">{i + 1}</div>
                 <div className="step-icon">
-                  <step.icon size={24} />
+                  <step.icon size={22} />
                 </div>
                 <div className="step-title">{step.title}</div>
                 <div className="step-description">{step.description}</div>
+                <div className="step-tags">
+                  {step.tags.map((tag) => (
+                    <span key={tag} className="step-tag">{tag}</span>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
