@@ -153,6 +153,10 @@ export const remove = mutationGeneric({
       .query("renders")
       .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
       .collect();
+    const versions = await ctx.db
+      .query("versions")
+      .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
+      .collect();
 
     const storageIds = new Set<Id<"_storage">>();
     if (project.thumbnail) {
@@ -175,6 +179,10 @@ export const remove = mutationGeneric({
 
     for (const render of renders) {
       await ctx.db.delete(render._id);
+    }
+
+    for (const version of versions) {
+      await ctx.db.delete(version._id);
     }
 
     for (const storageId of storageIds) {

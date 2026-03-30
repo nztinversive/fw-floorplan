@@ -116,6 +116,15 @@ export default defineSchema({
   })
     .index("by_projectId", ["projectId"])
     .index("by_projectId_floor", ["projectId", "floor"]),
+  versions: defineTable({
+    projectId: v.id("projects"),
+    floor: v.number(),
+    name: v.string(),
+    data: floorPlanData,
+    createdAt: v.number()
+  })
+    .index("by_projectId", ["projectId"])
+    .index("by_projectId_floor", ["projectId", "floor"]),
   renders: defineTable({
     projectId: v.id("projects"),
     style: v.string(),

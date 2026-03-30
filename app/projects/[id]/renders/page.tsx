@@ -37,8 +37,18 @@ import type { PersistedFloorPlan, RenderSettings, StoredRender } from "@/lib/typ
 
 type PendingRenderAction = "favorite" | "delete" | "regenerate"
 type SettingKey = keyof StylePresetDefaults
+type BatchProgress = {
+  completed: number
+  total: number
+  failed: number
+}
 
 const INITIAL_STYLE = STYLE_PRESETS[0].id
+const EMPTY_BATCH_PROGRESS: BatchProgress = {
+  completed: 0,
+  total: 0,
+  failed: 0
+}
 
 function getDefaultSettings(
   styleId: StylePresetId,
@@ -68,6 +78,11 @@ export default function ProjectRendersPage() {
   const [selectedStyle, setSelectedStyle] = useState<StylePresetId>(INITIAL_STYLE)
   const [settings, setSettings] = useState<RenderSettings>(() => getDefaultSettings(INITIAL_STYLE))
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isBatchGenerating, setIsBatchGenerating] = useState(false)
+  const [batchProgress, setBatchProgress] = useState<BatchProgress>(EMPTY_BATCH_PROGRESS)
+  const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false)
+  const [batchStyles, setBatchStyles] = useState<StylePresetId[]>([INITIAL_STYLE])
+  const [batchAngles, setBatchAngles] = useState<RenderViewAngle[]>([DEFAULT_RENDER_VIEW_ANGLE])
   const [comparisonMode, setComparisonMode] = useState(false)
   const [selectedRenderIds, setSelectedRenderIds] = useState<string[]>([])
   const [isExportingPackage, setIsExportingPackage] = useState(false)
@@ -120,6 +135,14 @@ export default function ProjectRendersPage() {
         })),
     [renders]
   )
+  const isGenerationBusy = isGenerating || isBatchGenerating
+  const batchRenderCount = batchStyles.length * batchAngles.length
+  const batchProgressPercent =
+    batchProgress.total > 0 ? (batchProgress.completed / batchProgress.total) * 100 : 0
+  const batchProgressLabel =
+    batchProgress.total > 0
+      ? `Generating ${Math.min(batchProgress.completed + 1, batchProgress.total)} of ${batchProgress.total}...`
+      : null
 
   function handleOpenLightbox(renderId: string) {
     const renderIndex = renders.filter((r) => r.imageUrl).findIndex((r) => r.id === renderId)
@@ -148,7 +171,7 @@ export default function ProjectRendersPage() {
   }
 
   async function triggerGeneration(nextStyle: string, nextSettings: RenderSettings) {
-    if (!projectId || isGenerating) return
+    if (!projectId || isGenerationBusy) return
 
     setErrorMessage(null)
     setIsGenerating(true)
@@ -175,6 +198,96 @@ export default function ProjectRendersPage() {
 
   async function handleGenerateRender() {
     await triggerGeneration(selectedStyle, settings)
+  }
+
+  function handleOpenBatchDialog() {
+    setBatchStyles([selectedStyle])
+    setBatchAngles([settings.viewAngle])
+    setIsBatchDialogOpen(true)
+  }
+
+  function toggleBatchStyle(styleId: StylePresetId) {
+    setBatchStyles((current) =>
+      current.includes(styleId)
+        ? current.filter((style) => style !== styleId)
+        : [...current, styleId]
+    )
+  }
+
+  function toggleBatchAngle(viewAngle: RenderViewAngle) {
+    setBatchAngles((current) =>
+      current.includes(viewAngle)
+        ? current.filter((angle) => angle !== viewAngle)
+        : [...current, viewAngle]
+    )
+  }
+
+  async function handleBatchGenerate() {
+    if (!projectId || isGenerationBusy) {
+      return
+    }
+
+    if (batchStyles.length === 0 || batchAngles.length === 0) {
+      toast("Select at least one style and one angle", "warning")
+      return
+    }
+
+    const combinations = batchStyles.flatMap((styleId) =>
+      batchAngles.map((viewAngle) => ({
+        styleId,
+        viewAngle
+      }))
+    )
+
+    setIsBatchDialogOpen(false)
+    setErrorMessage(null)
+    setIsBatchGenerating(true)
+    setBatchProgress({
+      completed: 0,
+      total: combinations.length,
+      failed: 0
+    })
+
+    let failed = 0
+
+    for (const [index, combination] of combinations.entries()) {
+      try {
+        await generateRender({
+          projectId,
+          style: combination.styleId,
+          viewAngle: combination.viewAngle,
+          settings: {
+            ...settings,
+            style: combination.styleId,
+            viewAngle: combination.viewAngle
+          }
+        })
+      } catch (error) {
+        failed += 1
+        console.error("Unable to generate batch render.", error)
+      } finally {
+        setBatchProgress({
+          completed: index + 1,
+          total: combinations.length,
+          failed
+        })
+      }
+    }
+
+    setIsBatchGenerating(false)
+
+    if (failed > 0) {
+      setErrorMessage(
+        `Batch completed with ${failed} failed ${failed === 1 ? "render" : "renders"}.`
+      )
+      toast(
+        `Batch finished with ${failed} failure${failed === 1 ? "" : "s"}`,
+        "warning"
+      )
+    } else {
+      setErrorMessage(null)
+      toast(`Batch generated ${combinations.length} render${combinations.length === 1 ? "" : "s"}`, "success")
+    }
   }
 
   async function handleToggleFavorite(renderId: string) {
@@ -403,7 +516,7 @@ export default function ProjectRendersPage() {
                       className="field-select"
                       value={settings[key]}
                       onChange={(event) => updateSetting(key, event.target.value)}
-                      disabled={isGenerating}
+                      disabled={isGenerationBusy}
                     >
                       {options.map((option) => (
                         <option key={option} value={option}>
@@ -431,7 +544,7 @@ export default function ProjectRendersPage() {
                       type="button"
                       className={`pill-button${settings.viewAngle === viewAngle ? " is-active" : ""}`}
                       onClick={() => handleViewAngleSelect(viewAngle)}
-                      disabled={isGenerating}
+                      disabled={isGenerationBusy}
                     >
                       {RENDER_VIEW_ANGLE_LABELS[viewAngle]}
                     </button>
@@ -442,12 +555,40 @@ export default function ProjectRendersPage() {
 
             {/* Generate action */}
             <div className="settings-action">
-              <button type="button" className="button button-generate" onClick={handleGenerateRender} disabled={isGenerating}>
+              <button
+                type="button"
+                className="button button-generate"
+                onClick={handleGenerateRender}
+                disabled={isGenerationBusy}
+              >
                 <ImagePlus size={18} />
                 {isGenerating ? "Generating..." : "Generate Render"}
               </button>
+              <button
+                type="button"
+                className="button-secondary button-generate"
+                onClick={handleOpenBatchDialog}
+                disabled={isGenerationBusy}
+              >
+                <Sparkles size={18} />
+                {isBatchGenerating ? "Batch running..." : "Batch Generate"}
+              </button>
 
               <RenderProgress isGenerating={isGenerating} />
+
+              {isBatchGenerating && batchProgressLabel ? (
+                <div className="batch-progress-card">
+                  <div className="creation-progress-bar">
+                    <span style={{ width: `${batchProgressPercent}%` }} />
+                  </div>
+                  <div className="batch-progress-meta">
+                    <strong>{batchProgressLabel}</strong>
+                    <span className="muted">
+                      {batchProgress.failed} failed of {batchProgress.total}
+                    </span>
+                  </div>
+                </div>
+              ) : null}
 
               {errorMessage ? (
                 <div className="error-banner">
@@ -600,6 +741,78 @@ export default function ProjectRendersPage() {
         onConfirm={confirmDeleteRender}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {isBatchDialogOpen ? (
+        <div className="dialog-backdrop" onClick={() => setIsBatchDialogOpen(false)}>
+          <div
+            className="dialog-panel batch-dialog"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="batch-generate-title"
+          >
+            <div className="dialog-body">
+              <div className="dialog-title" id="batch-generate-title">
+                Batch generate renders
+              </div>
+              <div className="dialog-message">
+                Current material, roof, palette, landscape, and lighting settings apply to every combination.
+              </div>
+
+              <div className="batch-dialog-grid">
+                <div className="batch-option-group">
+                  <div className="field-label">Style presets</div>
+                  <div className="batch-option-list">
+                    {STYLE_PRESETS.map((preset) => (
+                      <label key={preset.id} className="batch-option-item">
+                        <input
+                          type="checkbox"
+                          checked={batchStyles.includes(preset.id)}
+                          onChange={() => toggleBatchStyle(preset.id)}
+                        />
+                        <span>{preset.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="batch-option-group">
+                  <div className="field-label">View angles</div>
+                  <div className="batch-option-list">
+                    {RENDER_VIEW_ANGLES.map((viewAngle) => (
+                      <label key={viewAngle} className="batch-option-item">
+                        <input
+                          type="checkbox"
+                          checked={batchAngles.includes(viewAngle)}
+                          onChange={() => toggleBatchAngle(viewAngle)}
+                        />
+                        <span>{RENDER_VIEW_ANGLE_LABELS[viewAngle]}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="batch-summary">
+                This will generate {batchRenderCount} render{batchRenderCount === 1 ? "" : "s"} ({batchStyles.length} styles x {batchAngles.length} angles)
+              </div>
+            </div>
+            <div className="dialog-footer">
+              <button type="button" className="button-ghost" onClick={() => setIsBatchDialogOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="button"
+                onClick={handleBatchGenerate}
+                disabled={batchRenderCount === 0}
+              >
+                Start batch
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   )
 }

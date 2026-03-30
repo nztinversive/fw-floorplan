@@ -19,6 +19,7 @@ import { SkeletonPanel } from "@/components/Skeleton"
 import { useToast } from "@/components/Toast"
 import Toolbar from "@/components/Toolbar"
 import UnsavedChangesGuard from "@/components/UnsavedChangesGuard"
+import VersionsPanel from "@/components/VersionsPanel"
 import { formatFloorLabel, getNextFloorNumber, parseFloorParam, sortFloors } from "@/lib/floor-utils"
 import { createSeedFloorPlan } from "@/lib/geometry"
 import { useEditorStore } from "@/lib/editor-store"
@@ -62,6 +63,7 @@ export default function ProjectEditorPage() {
   const [isSourceImageVisible, setIsSourceImageVisible] = useState(true)
   const [sourceImageOpacity, setSourceImageOpacity] = useState(0.3)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [isVersionsOpen, setIsVersionsOpen] = useState(false)
   const [showCalibrationDialog, setShowCalibrationDialog] = useState(false)
   const [calibrationFeetInput, setCalibrationFeetInput] = useState("")
   const hydratedFloorPlanIdRef = useRef<string | null>(null)
@@ -418,6 +420,13 @@ export default function ProjectEditorPage() {
     setCalibrationFeetInput("")
   }
 
+  function handleRestoreVersion(data: FloorPlanData, versionName: string) {
+    debouncedSave.cancel()
+    setFloorPlanData(data, true, `Restored version: ${versionName}`)
+    setSaveState("idle")
+    setSaveErrorMessage(null)
+  }
+
   return (
     <main className="page-shell">
       <UnsavedChangesGuard hasUnsavedChanges={hasUnsavedChanges} />
@@ -442,6 +451,13 @@ export default function ProjectEditorPage() {
           </div>
         </div>
         <div className="button-row" style={{ alignItems: "center" }}>
+          <button
+            type="button"
+            className={`button-ghost${isVersionsOpen ? " is-active" : ""}`}
+            onClick={() => setIsVersionsOpen((open) => !open)}
+          >
+            {isVersionsOpen ? "Hide versions" : "Versions"}
+          </button>
           <button
             type="button"
             className="button-secondary"
@@ -521,7 +537,17 @@ export default function ProjectEditorPage() {
             />
             <CanvasGuidance />
           </div>
-          <PropertiesPanel />
+          <div className="editor-sidebar">
+            {isVersionsOpen ? (
+              <VersionsPanel
+                projectId={projectId}
+                floor={selectedFloor}
+                floorPlanData={floorPlanData}
+                onRestore={handleRestoreVersion}
+              />
+            ) : null}
+            <PropertiesPanel />
+          </div>
         </div>
       </div>
 

@@ -105,8 +105,7 @@ export default function PropertiesPanel() {
   const meta = selection ? TYPE_META[selection.type] : null
 
   return (
-    <aside className="editor-sidebar">
-      <div className="sidebar-card">
+    <div className="sidebar-card">
         <div className="panel-header">
           <div className="section-title">Properties</div>
           {selection && meta ? (
@@ -319,8 +318,7 @@ export default function PropertiesPanel() {
             </div>
           </div>
         ) : null}
-      </div>
-    </aside>
+    </div>
   )
 
   function updateWallLength(wall: Wall, ft: number, scale: number) {

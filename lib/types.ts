@@ -129,6 +129,15 @@ export type PersistedFloorPlan = StoredFloorPlan & {
   _id: string;
 };
 
+export type StoredFloorPlanVersion = {
+  id: string;
+  projectId: string;
+  floor: number;
+  name: string;
+  data: FloorPlanData;
+  createdAt: number;
+};
+
 export type StoredProject = {
   id: string;
   name: string;
