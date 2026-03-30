@@ -12,6 +12,7 @@ import type * as ai from "../ai.js";
 import type * as floorPlans from "../floorPlans.js";
 import type * as projects from "../projects.js";
 import type * as renders from "../renders.js";
+import type * as validators from "../validators.js";
 import type * as versions from "../versions.js";
 
 import type {
@@ -25,6 +26,7 @@ declare const fullApi: ApiFromModules<{
   floorPlans: typeof floorPlans;
   projects: typeof projects;
   renders: typeof renders;
+  validators: typeof validators;
   versions: typeof versions;
 }>;
 

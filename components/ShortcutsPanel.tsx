@@ -3,46 +3,12 @@
 import { X } from "lucide-react"
 import { useEffect } from "react"
 
+import { SHORTCUT_GROUPS } from "@/lib/shortcuts"
+
 type ShortcutsPanelProps = {
   open: boolean
   onClose: () => void
 }
-
-const SHORTCUT_GROUPS = [
-  {
-    title: "Tools",
-    shortcuts: [
-      { keys: ["Esc"], label: "Select tool" },
-      { keys: ["W"], label: "Wall tool" },
-      { keys: ["M"], label: "Measure tool" },
-      { keys: ["A"], label: "Annotation tool" },
-      { keys: ["C"], label: "Scale calibration tool" },
-      { keys: ["R"], label: "Room tool" },
-      { keys: ["D"], label: "Door tool" },
-      { keys: ["N"], label: "Window tool" },
-      { keys: ["T"], label: "Furniture tool" },
-    ],
-  },
-  {
-    title: "Editing",
-    shortcuts: [
-      { keys: ["Shift", "Click"], label: "Add or remove from selection" },
-      { keys: ["Del"], label: "Delete selected items" },
-      { keys: ["Ctrl", "D"], label: "Duplicate selection" },
-      { keys: ["Ctrl", "Z"], label: "Undo" },
-      { keys: ["Ctrl", "Shift", "Z"], label: "Redo" },
-    ],
-  },
-  {
-    title: "Canvas",
-    shortcuts: [
-      { keys: ["Scroll"], label: "Zoom in / out" },
-      { keys: ["Space", "Drag"], label: "Pan canvas" },
-      { keys: ["F"], label: "Zoom to fit" },
-      { keys: ["?"], label: "Toggle this panel" },
-    ],
-  },
-]
 
 export default function ShortcutsPanel({ open, onClose }: ShortcutsPanelProps) {
   useEffect(() => {

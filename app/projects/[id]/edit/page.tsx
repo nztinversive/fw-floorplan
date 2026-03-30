@@ -14,6 +14,7 @@ import Breadcrumb from "@/components/Breadcrumb"
 import CanvasGuidance from "@/components/CanvasGuidance"
 import FloorPlanCanvas from "@/components/FloorPlanCanvas"
 import HistoryPanel from "@/components/HistoryPanel"
+import OnboardingTour from "@/components/OnboardingTour"
 import PropertiesPanel from "@/components/PropertiesPanel"
 import { SkeletonPanel } from "@/components/Skeleton"
 import { useToast } from "@/components/Toast"
@@ -595,6 +596,8 @@ export default function ProjectEditorPage() {
           </div>
         </div>
       ) : null}
+
+      <OnboardingTour />
     </main>
   )
 }

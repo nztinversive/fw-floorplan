@@ -278,6 +278,7 @@ export default function Toolbar({
               key={id}
               type="button"
               className={`toolbar-btn-labeled${tool === id ? " is-active" : ""}`}
+              data-onboarding={`tool-${id}`}
               title={`${label} (${shortcut})`}
               aria-label={label}
               onClick={() => setTool(id)}
@@ -343,6 +344,7 @@ export default function Toolbar({
           <button
             type="button"
             className="toolbar-btn-labeled"
+            data-onboarding="upload-image"
             title={sourceImageUrl ? "Replace source image" : "Upload source image"}
             aria-label={sourceImageUrl ? "Replace source image" : "Upload source image"}
             onClick={() => sourceImageInputRef.current?.click()}
@@ -397,11 +399,21 @@ export default function Toolbar({
           >
             <Maximize size={16} />
           </button>
-          <button type="button" className="button-secondary" onClick={handleExport}>
+          <button
+            type="button"
+            className="button-secondary"
+            data-onboarding="export-png"
+            onClick={handleExport}
+          >
             <Download size={18} />
             Export PNG
           </button>
-          <button type="button" className="button-secondary" onClick={handleDxfExport}>
+          <button
+            type="button"
+            className="button-secondary"
+            data-onboarding="export-dxf"
+            onClick={handleDxfExport}
+          >
             <Download size={18} />
             Export DXF
           </button>

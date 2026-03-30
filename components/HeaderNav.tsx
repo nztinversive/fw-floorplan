@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useParams, usePathname } from "next/navigation"
 import { useQuery } from "convex/react"
-import { DraftingCompass, Eye, Image as ImageIcon, Link2 } from "lucide-react"
+import { CircleHelp, DraftingCompass, Eye, Image as ImageIcon, Link2 } from "lucide-react"
 
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
@@ -16,12 +16,22 @@ export default function HeaderNav() {
     | undefined
 
   const isProjectPage = pathname?.startsWith("/projects/") && projectId
+  const isHelp = pathname === "/help"
   const project = useQuery(
     api.projects.get,
     isProjectPage ? { id: projectId! } : "skip"
   )
 
-  if (!isProjectPage || !project) return null
+  if (!isProjectPage || !project) {
+    return (
+      <nav className="header-nav-v2">
+        <Link href="/help" className={`header-nav-link${isHelp ? " is-active" : ""}`}>
+          <CircleHelp size={14} />
+          Help
+        </Link>
+      </nav>
+    )
+  }
 
   const base = `/projects/${projectId}`
   const isOverview = pathname === base
@@ -48,6 +58,10 @@ export default function HeaderNav() {
       <Link href={`${base}/share`} className={`header-nav-link${isShare ? " is-active" : ""}`}>
         <Link2 size={14} />
         Share
+      </Link>
+      <Link href="/help" className={`header-nav-link${isHelp ? " is-active" : ""}`}>
+        <CircleHelp size={14} />
+        Help
       </Link>
     </nav>
   )
