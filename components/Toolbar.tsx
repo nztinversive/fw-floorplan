@@ -21,11 +21,14 @@ import {
   Undo2
 } from "lucide-react"
 
+import ShortcutsPanel from "@/components/ShortcutsPanel"
+import { generateDxf } from "@/lib/dxf-export"
 import { clamp } from "@/lib/geometry"
 import { useEditorStore, type EditorTool } from "@/lib/editor-store"
-import ShortcutsPanel from "@/components/ShortcutsPanel"
 
 type ToolbarProps = {
+  projectName: string
+  exportFileName?: string
   stageRef: RefObject<Konva.Stage | null>
   sourceImageUrl?: string | null
   overlayVisible: boolean
@@ -51,6 +54,26 @@ const TOOLS: Array<{
   { id: "furniture", label: "Furniture", shortcut: "T", icon: Armchair }
 ]
 
+function sanitizeFileStem(value: string) {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "floor-plan"
+  )
+}
+
+function downloadTextFile(contents: string, fileName: string, mimeType: string) {
+  const blob = new Blob([contents], { type: mimeType })
+  const objectUrl = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = objectUrl
+  link.download = fileName
+  link.click()
+  URL.revokeObjectURL(objectUrl)
+}
+
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false
@@ -65,6 +88,8 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 export default function Toolbar({
+  projectName,
+  exportFileName,
   stageRef,
   sourceImageUrl,
   overlayVisible,
@@ -218,6 +243,12 @@ export default function Toolbar({
     link.click()
   }
 
+  function handleDxfExport() {
+    const dxf = generateDxf(floorPlanData, projectName)
+    const fileStem = sanitizeFileStem(exportFileName ?? projectName)
+    downloadTextFile(dxf, `${fileStem}.dxf`, "application/dxf;charset=utf-8")
+  }
+
   function handleSourceImageChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     if (!file) {
@@ -359,6 +390,10 @@ export default function Toolbar({
           <button type="button" className="button-secondary" onClick={handleExport}>
             <Download size={18} />
             Export PNG
+          </button>
+          <button type="button" className="button-secondary" onClick={handleDxfExport}>
+            <Download size={18} />
+            Export DXF
           </button>
           <button
             type="button"

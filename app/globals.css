@@ -2682,6 +2682,30 @@ button:disabled,
   margin-top: 0.1rem;
 }
 
+.info-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.18);
+  color: #1d4ed8;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.info-banner svg {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.info-banner .icon-button {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: #1d4ed8;
+}
+
 /* ── Detail List (sidebar) ── */
 .detail-list {
   display: grid;
@@ -3416,5 +3440,44 @@ button:disabled,
 
   .steps-grid {
     grid-template-columns: 1fr;
+  }
+
+  .editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .canvas-frame {
+    min-height: 400px;
+    height: 50vh;
+  }
+
+  .pill-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .pill-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .toolbar-group {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .toolbar-group::-webkit-scrollbar {
+    display: none;
+  }
+
+  .toolbar-slider-group {
+    min-width: max-content;
+  }
+
+  .editor-sidebar {
+    max-height: 50vh;
+    overflow-y: auto;
   }
 }

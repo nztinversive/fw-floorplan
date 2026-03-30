@@ -2,9 +2,9 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useMutation, useQuery } from "convex/react"
-import { DraftingCompass, Download, Image as ImageIcon, Layers, Link2, MapPin, Pencil, Trash2, User, CalendarDays } from "lucide-react"
+import { DraftingCompass, Download, Image as ImageIcon, Info, Layers, Link2, MapPin, Pencil, Trash2, User, CalendarDays, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import Breadcrumb from "@/components/Breadcrumb"
@@ -15,6 +15,7 @@ import { useToast } from "@/components/Toast"
 import UnsavedChangesGuard from "@/components/UnsavedChangesGuard"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
+import { generateDxf } from "@/lib/dxf-export"
 import { formatDate } from "@/lib/file-utils"
 import { formatFloorLabel, getNextFloorNumber, getPrimaryFloor, sortFloors } from "@/lib/floor-utils"
 import { createSeedFloorPlan } from "@/lib/geometry"
@@ -24,7 +25,9 @@ import type { PersistedFloorPlan } from "@/lib/types"
 export default function ProjectOverviewPage() {
   const params = useParams<{ id: string }>()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
+  const [showExtractionBanner, setShowExtractionBanner] = useState(false)
   const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as
     | Id<"projects">
     | undefined
@@ -38,6 +41,12 @@ export default function ProjectOverviewPage() {
   const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  useEffect(() => {
+    if (searchParams.get("extraction") === "failed") {
+      setShowExtractionBanner(true)
+    }
+  }, [searchParams])
 
   // Inline editing state
   const [isEditing, setIsEditing] = useState(false)
@@ -199,6 +208,21 @@ export default function ProjectOverviewPage() {
     }
   }
 
+  function handleExportDxf() {
+    if (!project || !activeFloorPlan) return
+
+    const dxf = generateDxf(activeFloorPlan.data, project.name)
+    const safeName = project.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "floor-plan"
+    const blob = new Blob([dxf], { type: "application/dxf;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `${safeName}-${formatFloorLabel(selectedFloor).toLowerCase().replace(/\s+/g, "-")}.dxf`
+    link.click()
+    URL.revokeObjectURL(url)
+    toast("DXF exported", "success")
+  }
+
   if (projectId && project === undefined) {
     return (
       <main className="page-shell">
@@ -229,6 +253,19 @@ export default function ProjectOverviewPage() {
         { label: "Projects", href: "/" },
         { label: project.name }
       ]} />
+
+      {showExtractionBanner ? (
+        <div className="info-banner" style={{ marginBottom: "1rem" }}>
+          <Info size={18} />
+          <div>
+            <strong>AI extraction was unable to read this image.</strong>{" "}
+            A starter layout has been provided — use the source image overlay in the editor to trace your floor plan.
+          </div>
+          <button type="button" className="icon-button" onClick={() => setShowExtractionBanner(false)} aria-label="Dismiss">
+            <X size={16} />
+          </button>
+        </div>
+      ) : null}
 
       <div className="page-heading">
         <div>
@@ -291,6 +328,15 @@ export default function ProjectOverviewPage() {
             >
               <Download size={18} />
               {isExportingPdf ? "Exporting..." : "Export PDF"}
+            </button>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={handleExportDxf}
+              disabled={orderedFloorPlans.length === 0}
+            >
+              <Download size={18} />
+              Export DXF
             </button>
             <button
               type="button"

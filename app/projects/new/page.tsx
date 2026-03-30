@@ -13,7 +13,7 @@ import UploadZone, { type UploadAsset } from "@/components/UploadZone"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import { FLOOR_PLAN_TEMPLATES } from "@/lib/floor-plan-templates"
-import { createSeedFloorPlan, cloneFloorPlanData, syncDerivedData } from "@/lib/geometry"
+import { cloneFloorPlanData, createSeedFloorPlan, syncDerivedData } from "@/lib/geometry"
 import type { FloorPlanData } from "@/lib/types"
 
 type FormState = {
@@ -72,6 +72,7 @@ export default function NewProjectPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [status, setStatus] = useState("")
+  const [extractionFailed, setExtractionFailed] = useState(false)
   const createProject = useMutation(api.projects.createWithInitialFloorPlan)
   const uploadSource = useMutation(api.floorPlans.uploadSource)
   const extractFloorPlan = useAction(api.ai.extractFloorPlan)
@@ -89,8 +90,10 @@ export default function NewProjectPage() {
     }
 
     setIsSaving(true)
+    setExtractionFailed(false)
 
     try {
+      let didExtractionFail = false
       let sourceImage: Id<"_storage"> | undefined
 
       if (upload) {
@@ -100,7 +103,7 @@ export default function NewProjectPage() {
       }
 
       const templateMatch = selectedTemplate
-        ? FLOOR_PLAN_TEMPLATES.find((t) => t.id === selectedTemplate)
+        ? FLOOR_PLAN_TEMPLATES.find((template) => template.id === selectedTemplate)
         : null
       let floorPlanData = templateMatch
         ? cloneFloorPlanData(templateMatch.data)
@@ -127,11 +130,13 @@ export default function NewProjectPage() {
             scale: extracted.scale > 0 ? extracted.scale : 24,
             gridSize: 6
           })
-          setStatus(`Extraction complete — confidence ${Math.round(extracted.confidence * 100)}%`)
+          setStatus(`Extraction complete - confidence ${Math.round(extracted.confidence * 100)}%`)
         } catch (error) {
+          didExtractionFail = true
+          setExtractionFailed(true)
           console.error("AI extraction failed, using seed floor plan instead.", error)
-          setStatus("AI extraction failed — using default layout")
-          toast("AI extraction failed — using default layout", "warning")
+          setStatus("AI extraction failed - using starter layout")
+          toast("AI extraction failed - using starter layout", "warning")
         }
       }
 
@@ -147,7 +152,7 @@ export default function NewProjectPage() {
       })
 
       toast("Project created successfully", "success")
-      router.push(`/projects/${projectId}`)
+      router.push(`/projects/${projectId}${didExtractionFail || extractionFailed ? "?extraction=failed" : ""}`)
     } catch (error) {
       console.error("Unable to create project.", error)
       toast("Unable to create project", "error")

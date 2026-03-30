@@ -461,6 +461,8 @@ export default function ProjectEditorPage() {
 
       <div className="editor-shell editor-dark">
         <Toolbar
+          projectName={project.name}
+          exportFileName={`${project.name}-${formatFloorLabel(selectedFloor)}`}
           stageRef={stageRef}
           sourceImageUrl={activeSourceImageUrl}
           overlayVisible={isSourceImageVisible}
