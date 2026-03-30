@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation"
 import { useQuery } from "convex/react"
-import { Download, Expand } from "lucide-react"
+import { Download, Expand, MapPin, User, Layers, Image as ImageIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import Lightbox from "@/components/Lightbox"
@@ -156,19 +156,23 @@ export default function ProjectSharePage() {
         </div>
 
         <div className="share-meta-grid">
-          <div className="stat-card">
+          <div className="stat-card stat-card-v2">
+            <div className="stat-card-icon stat-card-icon-blue"><MapPin size={18} /></div>
             <div className="stat-label">Address</div>
             <div className="stat-value share-stat">{project.address || "Not provided"}</div>
           </div>
-          <div className="stat-card">
+          <div className="stat-card stat-card-v2">
+            <div className="stat-card-icon stat-card-icon-amber"><User size={18} /></div>
             <div className="stat-label">Client</div>
             <div className="stat-value share-stat">{project.clientName || "Not provided"}</div>
           </div>
-          <div className="stat-card">
+          <div className="stat-card stat-card-v2">
+            <div className="stat-card-icon stat-card-icon-green"><Layers size={18} /></div>
             <div className="stat-label">Floors shown</div>
             <div className="stat-value share-stat">{floorPlans.length}</div>
           </div>
-          <div className="stat-card">
+          <div className="stat-card stat-card-v2">
+            <div className="stat-card-icon stat-card-icon-purple"><ImageIcon size={18} /></div>
             <div className="stat-label">Renders shown</div>
             <div className="stat-value share-stat">{visibleRenders.length}</div>
           </div>

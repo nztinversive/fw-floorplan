@@ -5,6 +5,7 @@ import type { ReactNode } from "react"
 
 import "@/app/globals.css"
 import Providers from "@/app/providers"
+import HeaderNav from "@/components/HeaderNav"
 
 const displayFont = Cormorant_Garamond({
   subsets: ["latin"],
@@ -41,6 +42,7 @@ export default function RootLayout({
                   <div className="brand-subtitle">Fading West</div>
                 </div>
               </Link>
+              <HeaderNav />
             </header>
             {children}
           </div>

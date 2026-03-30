@@ -332,25 +332,22 @@ export default function ProjectOverviewPage() {
                 ))}
               </div>
 
-              <div className="overview-thumb" style={{ position: "relative" }}>
+              <div className="overview-thumb overview-thumb-v2" style={{ position: "relative" }}>
                 {activeFloorPreview ? (
                   <Image
+                    key={selectedFloor}
                     src={activeFloorPreview.dataUrl}
                     alt={`${project.name} ${formatFloorLabel(selectedFloor).toLowerCase()} preview`}
                     fill
                     sizes="(max-width: 1024px) 100vw, 70vw"
                     unoptimized
+                    className="floor-preview-image"
                   />
                 ) : (
-                  <div
-                    style={{
-                      minHeight: "360px",
-                      display: "grid",
-                      placeItems: "center",
-                      color: "var(--fw-slate)"
-                    }}
-                  >
-                    No floor preview available
+                  <div className="floor-preview-empty">
+                    <DraftingCompass size={28} />
+                    <div>No floor preview available</div>
+                    <div className="muted" style={{ fontSize: "0.82rem" }}>Open the editor to start drawing walls and rooms</div>
                   </div>
                 )}
               </div>

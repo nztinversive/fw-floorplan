@@ -70,6 +70,7 @@ button {
   backdrop-filter: blur(18px);
   background: rgba(250, 247, 242, 0.82);
   border-bottom: 1px solid var(--fw-border);
+  box-shadow: 0 1px 8px rgba(27, 42, 74, 0.06);
 }
 
 .brand-lockup {
@@ -2264,6 +2265,156 @@ button:disabled,
   animation: renderPulse 2s ease-in-out infinite;
 }
 
+/* ── Header Nav V2 ── */
+.header-nav-v2 {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.header-nav-project {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 0.92rem;
+  color: var(--fw-navy);
+  font-weight: 600;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-nav-divider {
+  width: 1px;
+  height: 1.5rem;
+  background: var(--fw-border);
+  margin: 0 0.65rem;
+}
+
+.header-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--fw-slate);
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.header-nav-link:hover {
+  background: rgba(27, 42, 74, 0.06);
+  color: var(--fw-navy);
+}
+
+.header-nav-link.is-active {
+  background: rgba(27, 42, 74, 0.1);
+  color: var(--fw-navy);
+  font-weight: 600;
+}
+
+/* ── Creation Progress ── */
+.creation-progress {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: rgba(27, 42, 74, 0.04);
+  border: 1px solid var(--fw-border);
+}
+
+.creation-progress-bar {
+  width: 100%;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.12);
+  overflow: hidden;
+}
+
+.creation-progress-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--fw-amber), #e8ca82);
+  transition: width 600ms ease;
+}
+
+.creation-progress-label {
+  font-size: 0.85rem;
+  color: var(--fw-navy);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.creation-progress-label::before {
+  content: "";
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--fw-amber);
+  animation: renderPulse 1.6s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* ── Floor Preview ── */
+.overview-thumb-v2 {
+  transition: opacity 300ms ease;
+}
+
+.floor-preview-image {
+  animation: fadeIn 300ms ease;
+}
+
+.floor-preview-empty {
+  min-height: 360px;
+  display: grid;
+  gap: 0.5rem;
+  place-items: center;
+  place-content: center;
+  text-align: center;
+  color: var(--fw-slate);
+  padding: 2rem;
+}
+
+/* ── Stat Card V2 ── */
+.stat-card-v2 {
+  position: relative;
+  padding-left: 3.5rem;
+}
+
+.stat-card-icon {
+  position: absolute;
+  top: 1.2rem;
+  left: 1.2rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.55rem;
+  display: grid;
+  place-items: center;
+}
+
+.stat-card-icon-blue {
+  background: rgba(27, 42, 74, 0.1);
+  color: var(--fw-navy);
+}
+
+.stat-card-icon-amber {
+  background: rgba(212, 168, 75, 0.15);
+  color: #96721c;
+}
+
+.stat-card-icon-green {
+  background: rgba(29, 125, 86, 0.1);
+  color: var(--fw-success);
+}
+
+.stat-card-icon-purple {
+  background: rgba(124, 58, 237, 0.1);
+  color: #7c3aed;
+}
+
 /* ── Hero V2 ── */
 .hero-panel-v2 {
   display: grid;
@@ -2608,7 +2759,8 @@ button:disabled,
   }
 
   .header-pill,
-  .header-nav {
+  .header-nav,
+  .header-nav-v2 {
     display: none;
   }
 

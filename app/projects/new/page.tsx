@@ -219,6 +219,15 @@ export default function NewProjectPage() {
           <TemplateSelector selected={selectedTemplate} onSelect={setSelectedTemplate} />
         </div>
 
+        {isSaving && status && (
+          <div className="creation-progress" style={{ marginTop: "1.25rem" }}>
+            <div className="creation-progress-bar">
+              <span style={{ width: status.includes("Uploading") ? "25%" : status.includes("Analyzing") ? "55%" : status.includes("Extraction") ? "75%" : status.includes("Creating") ? "90%" : "10%" }} />
+            </div>
+            <div className="creation-progress-label">{status}</div>
+          </div>
+        )}
+
         <div className="button-row" style={{ marginTop: "1.25rem" }}>
           <button type="submit" className="button" disabled={!isValid || isSaving}>
             {isSaving ? (status || "Creating...") : "Create project"}
