@@ -2,8 +2,9 @@
 
 import Link from "next/link"
 import type Konva from "konva"
+import { Clock } from "lucide-react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useMutation, useQuery } from "convex/react"
 import { useDebouncedCallback } from "use-debounce"
 
@@ -12,6 +13,7 @@ import type { Id } from "@/convex/_generated/dataModel"
 import Breadcrumb from "@/components/Breadcrumb"
 import CanvasGuidance from "@/components/CanvasGuidance"
 import FloorPlanCanvas from "@/components/FloorPlanCanvas"
+import HistoryPanel from "@/components/HistoryPanel"
 import PropertiesPanel from "@/components/PropertiesPanel"
 import { SkeletonPanel } from "@/components/Skeleton"
 import { useToast } from "@/components/Toast"
@@ -59,6 +61,9 @@ export default function ProjectEditorPage() {
   const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
   const [isSourceImageVisible, setIsSourceImageVisible] = useState(true)
   const [sourceImageOpacity, setSourceImageOpacity] = useState(0.3)
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [showCalibrationDialog, setShowCalibrationDialog] = useState(false)
+  const [calibrationFeetInput, setCalibrationFeetInput] = useState("")
   const hydratedFloorPlanIdRef = useRef<string | null>(null)
   const lastSavedSnapshotsRef = useRef<Record<number, string>>({})
   const sourceImageByFloorRef = useRef<Record<number, Id<"_storage"> | undefined>>({})
@@ -67,6 +72,7 @@ export default function ProjectEditorPage() {
   const saveFloorPlan = useMutation(api.floorPlans.save)
   const uploadSource = useMutation(api.floorPlans.uploadSource)
   const actionError = useEditorStore((state) => state.actionError)
+  const calibrationPoints = useEditorStore((state) => state.calibrationPoints)
 
   const orderedFloorPlans = useMemo(
     () =>
@@ -100,6 +106,8 @@ export default function ProjectEditorPage() {
 
   const floorPlanData = useEditorStore((state) => state.floorPlanData)
   const setFloorPlanData = useEditorStore((state) => state.setFloorPlanData)
+  const setCalibrationPoints = useEditorStore((state) => state.setCalibrationPoints)
+  const calibrateScale = useEditorStore((state) => state.calibrateScale)
 
   useEffect(() => {
     currentFloorRef.current = selectedFloor
@@ -153,6 +161,13 @@ export default function ProjectEditorPage() {
   useEffect(() => {
     setIsSourceImageVisible(Boolean(activeSourceImageUrl))
   }, [activeSourceImageUrl])
+
+  useEffect(() => {
+    if (calibrationPoints.length === 2) {
+      setCalibrationFeetInput("")
+      setShowCalibrationDialog(true)
+    }
+  }, [calibrationPoints])
 
   const debouncedSave = useDebouncedCallback(
     async (
@@ -390,6 +405,19 @@ export default function ProjectEditorPage() {
 
   const hasUnsavedChanges = saveState === "saving" || saveState === "error"
 
+  function handleCloseCalibrationDialog() {
+    setShowCalibrationDialog(false)
+    setCalibrationFeetInput("")
+    setCalibrationPoints([])
+  }
+
+  function handleSubmitCalibration(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    calibrateScale(parseFloat(calibrationFeetInput))
+    setShowCalibrationDialog(false)
+    setCalibrationFeetInput("")
+  }
+
   return (
     <main className="page-shell">
       <UnsavedChangesGuard hasUnsavedChanges={hasUnsavedChanges} />
@@ -473,7 +501,18 @@ export default function ProjectEditorPage() {
           isUploadingSourceImage={isReplacingSourceImage}
         />
         <div className="editor-grid">
-          <div style={{ position: "relative" }}>
+          <div style={{ position: "relative", overflow: "hidden" }}>
+            <HistoryPanel open={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} />
+            <button
+              type="button"
+              className={`icon-button${isHistoryOpen ? " is-active" : ""}`}
+              aria-label={isHistoryOpen ? "Close history panel" : "Open history panel"}
+              aria-pressed={isHistoryOpen}
+              onClick={() => setIsHistoryOpen((open) => !open)}
+              style={{ position: "absolute", top: "1rem", right: "1rem", zIndex: 110 }}
+            >
+              <Clock size={16} />
+            </button>
             <FloorPlanCanvas
               stageRef={stageRef}
               sourceImageUrl={activeSourceImageUrl}
@@ -485,6 +524,51 @@ export default function ProjectEditorPage() {
           <PropertiesPanel />
         </div>
       </div>
+
+      {showCalibrationDialog ? (
+        <div className="dialog-backdrop" onClick={handleCloseCalibrationDialog}>
+          <div
+            className="dialog-panel"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="calibration-dialog-title"
+          >
+            <form onSubmit={handleSubmitCalibration}>
+              <div className="dialog-body">
+                <div className="dialog-title" id="calibration-dialog-title">
+                  Calibrate scale
+                </div>
+                <div className="dialog-message">
+                  Enter the real distance between these two points.
+                </div>
+                <label className="field">
+                  <span className="field-label">Distance in feet</span>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    required
+                    autoFocus
+                    className="field-input"
+                    value={calibrationFeetInput}
+                    onChange={(event) => setCalibrationFeetInput(event.target.value)}
+                    placeholder="12"
+                  />
+                </label>
+              </div>
+              <div className="dialog-footer">
+                <button type="button" className="button-ghost" onClick={handleCloseCalibrationDialog}>
+                  Cancel
+                </button>
+                <button type="submit" className="button">
+                  Apply calibration
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </main>
   )
 }

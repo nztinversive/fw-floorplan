@@ -109,6 +109,8 @@ export default function FloorPlanCanvas({
   const pan = useEditorStore((state) => state.pan)
   const pendingWallStart = useEditorStore((state) => state.pendingWallStart)
   const pendingMeasureStart = useEditorStore((state) => state.pendingMeasureStart)
+  const pendingAnnotationStart = useEditorStore((state) => state.pendingAnnotationStart)
+  const calibrationPoints = useEditorStore((state) => state.calibrationPoints)
   const pendingRoomPoints = useEditorStore((state) => state.pendingRoomPoints)
   const pendingFurniture = useEditorStore((state) => state.pendingFurniture)
   const setSelectedIds = useEditorStore((state) => state.setSelectedIds)
@@ -118,12 +120,15 @@ export default function FloorPlanCanvas({
   const setPan = useEditorStore((state) => state.setPan)
   const setPendingWallStart = useEditorStore((state) => state.setPendingWallStart)
   const setPendingMeasureStart = useEditorStore((state) => state.setPendingMeasureStart)
+  const setPendingAnnotationStart = useEditorStore((state) => state.setPendingAnnotationStart)
+  const setCalibrationPoints = useEditorStore((state) => state.setCalibrationPoints)
   const setPendingRoomPoints = useEditorStore((state) => state.setPendingRoomPoints)
   const addWall = useEditorStore((state) => state.addWall)
   const addRoom = useEditorStore((state) => state.addRoom)
   const addDoor = useEditorStore((state) => state.addDoor)
   const addWindow = useEditorStore((state) => state.addWindow)
   const addFurniture = useEditorStore((state) => state.addFurniture)
+  const addAnnotation = useEditorStore((state) => state.addAnnotation)
   const moveElement = useEditorStore((state) => state.moveElement)
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const wallEndpoints = useMemo(
@@ -226,6 +231,14 @@ export default function FloorPlanCanvas({
 
     return mousePosition
   }, [mousePosition, pendingMeasureStart, tool])
+
+  const pendingAnnotationEnd = useMemo(() => {
+    if (tool !== "annotate" || !pendingAnnotationStart || !mousePosition) {
+      return null
+    }
+
+    return mousePosition
+  }, [mousePosition, pendingAnnotationStart, tool])
 
   const pendingWallEnd = useMemo(() => {
     if (!pendingWallStart || !mousePosition) {
@@ -433,6 +446,24 @@ export default function FloorPlanCanvas({
         y2: endpoint.y,
         thickness: 8
       })
+      return
+    }
+
+    if (tool === "annotate") {
+      if (!pendingAnnotationStart) {
+        setPendingAnnotationStart(pointer)
+      } else {
+        addAnnotation(pendingAnnotationStart, pointer)
+      }
+      return
+    }
+
+    if (tool === "calibrate") {
+      if (calibrationPoints.length >= 2) {
+        setCalibrationPoints([pointer])
+      } else {
+        setCalibrationPoints([...calibrationPoints, pointer])
+      }
       return
     }
 
@@ -788,6 +819,47 @@ export default function FloorPlanCanvas({
               )
             })}
 
+            {floorPlanData.annotations.map((annotation) => {
+              const midpoint = {
+                x: (annotation.from.x + annotation.to.x) / 2,
+                y: (annotation.from.y + annotation.to.y) / 2
+              }
+              const isSelected = selectedIdSet.has(annotation.id)
+
+              return (
+                <Group
+                  key={annotation.id}
+                  draggable={tool === "select"}
+                  onClick={(event) => handleElementSelect(annotation.id, event)}
+                  onTap={(event) => handleElementSelect(annotation.id, event)}
+                  onDragStart={handleElementDragStart}
+                  onDragMove={handleElementDragMove}
+                  onDragEnd={(event) => handleElementDragEnd(annotation.id, event)}
+                >
+                  <Line
+                    points={[annotation.from.x, annotation.from.y, annotation.to.x, annotation.to.y]}
+                    stroke="#16a34a"
+                    strokeWidth={(isSelected ? 3 : 2) / zoom}
+                    dash={[10 / zoom, 8 / zoom]}
+                    hitStrokeWidth={16 / zoom}
+                    shadowBlur={isSelected ? 8 / zoom : 0}
+                    shadowColor="rgba(22, 163, 74, 0.55)"
+                  />
+                  <Text
+                    x={midpoint.x}
+                    y={midpoint.y - 18 / zoom}
+                    width={120 / zoom}
+                    offsetX={60 / zoom}
+                    align="center"
+                    fontSize={13 / zoom}
+                    fill={isSelected ? "#166534" : "#16a34a"}
+                    fontStyle="bold"
+                    text={annotation.label}
+                  />
+                </Group>
+              )
+            })}
+
             {/* Dimension labels on placed walls */}
             {floorPlanData.walls.map((wall) => {
               const length = getWallLength(wall)
@@ -884,6 +956,76 @@ export default function FloorPlanCanvas({
               </>
             ) : null}
 
+            {pendingAnnotationStart && pendingAnnotationEnd ? (
+              <>
+                <Circle
+                  x={pendingAnnotationStart.x}
+                  y={pendingAnnotationStart.y}
+                  radius={4 / zoom}
+                  fill="#16a34a"
+                  listening={false}
+                />
+                <Line
+                  points={[
+                    pendingAnnotationStart.x,
+                    pendingAnnotationStart.y,
+                    pendingAnnotationEnd.x,
+                    pendingAnnotationEnd.y
+                  ]}
+                  stroke="#16a34a"
+                  strokeWidth={2 / zoom}
+                  dash={[10 / zoom, 8 / zoom]}
+                  listening={false}
+                />
+                <Text
+                  x={(pendingAnnotationStart.x + pendingAnnotationEnd.x) / 2}
+                  y={(pendingAnnotationStart.y + pendingAnnotationEnd.y) / 2 - 18 / zoom}
+                  width={120 / zoom}
+                  offsetX={60 / zoom}
+                  align="center"
+                  fontSize={13 / zoom}
+                  fill="#16a34a"
+                  fontStyle="bold"
+                  text={formatFeetInches(
+                    pointDistance(pendingAnnotationStart, pendingAnnotationEnd),
+                    floorPlanData.scale
+                  )}
+                  listening={false}
+                />
+              </>
+            ) : null}
+
+            {calibrationPoints.length > 0 ? (
+              <>
+                {calibrationPoints.map((point, index) => (
+                  <Circle
+                    key={`calibration-point-${index}`}
+                    x={point.x}
+                    y={point.y}
+                    radius={5 / zoom}
+                    fill="#3b82f6"
+                    stroke="#eff6ff"
+                    strokeWidth={1.5 / zoom}
+                    listening={false}
+                  />
+                ))}
+                {calibrationPoints.length === 2 ? (
+                  <Line
+                    points={[
+                      calibrationPoints[0].x,
+                      calibrationPoints[0].y,
+                      calibrationPoints[1].x,
+                      calibrationPoints[1].y
+                    ]}
+                    stroke="#3b82f6"
+                    strokeWidth={2 / zoom}
+                    dash={[10 / zoom, 8 / zoom]}
+                    listening={false}
+                  />
+                ) : null}
+              </>
+            ) : null}
+
             {pendingRoomPoints.length > 0 ? (
               <>
                 {pendingRoomLinePoints.length >= 4 ? (
@@ -917,6 +1059,9 @@ export default function FloorPlanCanvas({
         <span>
           {floorPlanData.walls.length} walls • {floorPlanData.rooms.length} rooms • {floorPlanData.doors.length} doors • {floorPlanData.windows.length} windows • {floorPlanData.furniture.length} furniture
         </span>
+      </div>
+      <div className="canvas-caption">
+        <span>{floorPlanData.annotations.length} annotations</span>
       </div>
     </section>
   )
