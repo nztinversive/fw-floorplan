@@ -35,15 +35,21 @@ export default function ProjectSharePage() {
   const floorPlans = project?.floorPlans
     ? sortFloors(project.floorPlans as PersistedFloorPlan[])
     : []
-  const renders = (rendersQuery ?? []).map((render) => ({
-    ...render,
-    settings: {
-      ...render.settings,
-      viewAngle: render.settings.viewAngle ?? DEFAULT_RENDER_VIEW_ANGLE
-    }
-  }))
-  const favoriteRenders = renders.filter((render) => render.isFavorite)
-  const visibleRenders = favoriteRenders.length > 0 ? favoriteRenders : renders
+  const renders = useMemo(
+    () =>
+      (rendersQuery ?? []).map((render) => ({
+        ...render,
+        settings: {
+          ...render.settings,
+          viewAngle: render.settings.viewAngle ?? DEFAULT_RENDER_VIEW_ANGLE
+        }
+      })),
+    [rendersQuery]
+  )
+  const visibleRenders = useMemo(() => {
+    const favs = renders.filter((render) => render.isFavorite)
+    return favs.length > 0 ? favs : renders
+  }, [renders])
 
   const lightboxImages = useMemo(
     () =>
@@ -213,7 +219,7 @@ export default function ProjectSharePage() {
             <div>
               <div className="section-title">Render gallery</div>
               <div className="muted">
-                {favoriteRenders.length > 0
+                {renders.some((r) => r.isFavorite)
                   ? "Showing favorited renders."
                   : "No favorites selected, so all saved renders are shown."}
               </div>
