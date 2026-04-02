@@ -8,7 +8,11 @@ import { DraftingCompass, Download, Image as ImageIcon, Info, Layers, Link2, Map
 import { useEffect, useMemo, useState } from "react"
 
 import Breadcrumb from "@/components/Breadcrumb"
+import ComplianceChecker from "@/components/ComplianceChecker"
 import ConfirmDialog from "@/components/ConfirmDialog"
+import CostEstimator from "@/components/CostEstimator"
+import RoomAreaSummaryDashboard from "@/components/RoomAreaSummaryDashboard"
+import RoomSchedule from "@/components/RoomSchedule"
 import ShareLinkCard from "@/components/ShareLinkCard"
 import { SkeletonPanel } from "@/components/Skeleton"
 import { useToast } from "@/components/Toast"
@@ -21,6 +25,8 @@ import { formatFloorLabel, getNextFloorNumber, getPrimaryFloor, sortFloors } fro
 import { createSeedFloorPlan } from "@/lib/geometry"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
 import type { PersistedFloorPlan } from "@/lib/types"
+
+type OverviewInsightsTab = "summary" | "cost" | "schedule" | "compliance"
 
 export default function ProjectOverviewPage() {
   const params = useParams<{ id: string }>()
@@ -41,6 +47,7 @@ export default function ProjectOverviewPage() {
   const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [activeInsightsTab, setActiveInsightsTab] = useState<OverviewInsightsTab>("summary")
 
   useEffect(() => {
     if (searchParams.get("extraction") === "failed") {
@@ -491,6 +498,102 @@ export default function ProjectOverviewPage() {
           </div>
         </aside>
       </div>
+
+      <section className="panel insights-panel">
+        <div className="panel-header">
+          <div>
+            <div className="section-title">Construction workflow</div>
+            <div className="muted">
+              Project-wide area analytics plus selected-floor estimating, scheduling, and validation.
+            </div>
+          </div>
+          <span className="badge">
+            {activeInsightsTab === "summary"
+              ? `${orderedFloorPlans.length} floor${orderedFloorPlans.length === 1 ? "" : "s"}`
+              : activeFloorPlan
+                ? formatFloorLabel(activeFloorPlan.floor)
+                : "No floor selected"}
+          </span>
+        </div>
+
+        <div className="insights-tabs" role="tablist" aria-label="Construction workflow sections">
+          {[
+            { key: "summary", label: "Area summary" },
+            { key: "cost", label: "Cost estimator" },
+            { key: "schedule", label: "Room schedule" },
+            { key: "compliance", label: "Compliance" }
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={activeInsightsTab === tab.key}
+              className={`insight-tab${activeInsightsTab === tab.key ? " is-active" : ""}`}
+              onClick={() => setActiveInsightsTab(tab.key as OverviewInsightsTab)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div
+          role="tabpanel"
+          className="insight-panel"
+          hidden={activeInsightsTab !== "summary"}
+        >
+          <RoomAreaSummaryDashboard
+            floorPlans={orderedFloorPlans.map((floorPlan) => ({
+              floor: floorPlan.floor,
+              data: floorPlan.data
+            }))}
+          />
+        </div>
+
+        <div
+          role="tabpanel"
+          className="insight-panel"
+          hidden={activeInsightsTab !== "cost"}
+        >
+          {activeFloorPlan ? (
+            <CostEstimator data={activeFloorPlan.data} />
+          ) : (
+            <div className="empty-state compact-empty-state">
+              <div className="section-title">No floor selected</div>
+              <div className="muted">Create or choose a floor plan to estimate material costs.</div>
+            </div>
+          )}
+        </div>
+
+        <div
+          role="tabpanel"
+          className="insight-panel"
+          hidden={activeInsightsTab !== "schedule"}
+        >
+          {activeFloorPlan ? (
+            <RoomSchedule data={activeFloorPlan.data} floor={activeFloorPlan.floor} />
+          ) : (
+            <div className="empty-state compact-empty-state">
+              <div className="section-title">No floor selected</div>
+              <div className="muted">Create or choose a floor plan to generate a room schedule.</div>
+            </div>
+          )}
+        </div>
+
+        <div
+          role="tabpanel"
+          className="insight-panel"
+          hidden={activeInsightsTab !== "compliance"}
+        >
+          {activeFloorPlan ? (
+            <ComplianceChecker data={activeFloorPlan.data} />
+          ) : (
+            <div className="empty-state compact-empty-state">
+              <div className="section-title">No floor selected</div>
+              <div className="muted">Create or choose a floor plan to run validation checks.</div>
+            </div>
+          )}
+        </div>
+      </section>
 
       <ShareLinkCard url={typeof window !== "undefined" ? `${window.location.origin}/projects/${projectId}/share` : `/projects/${projectId}/share`} />
 
