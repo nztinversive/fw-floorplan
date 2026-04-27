@@ -10,6 +10,7 @@ import {
   Eraser,
   Image as ImageIcon,
   Maximize,
+  MessageSquare,
   Minus,
   MousePointer2,
   PanelTop,
@@ -26,6 +27,7 @@ import {
 import ShortcutsPanel from "@/components/ShortcutsPanel"
 import { generateDxf } from "@/lib/dxf-export"
 import { clamp } from "@/lib/geometry"
+import { downloadSvg, generateSvg } from "@/lib/svg-export"
 import { useEditorStore, type EditorTool } from "@/lib/editor-store"
 
 type ToolbarProps = {
@@ -51,6 +53,7 @@ const TOOLS: Array<{
   { id: "wall", label: "Wall", shortcut: "W", icon: SquareStack },
   { id: "measure", label: "Measure", shortcut: "M", icon: Ruler },
   { id: "annotate", label: "Annotate", shortcut: "A", icon: PencilRuler },
+  { id: "comment", label: "Comment", shortcut: "K", icon: MessageSquare },
   { id: "calibrate", label: "Calibrate", shortcut: "C", icon: Scaling },
   { id: "room", label: "Room", shortcut: "R", icon: SquareDashedBottom },
   { id: "door", label: "Door", shortcut: "D", icon: DoorOpen },
@@ -211,6 +214,9 @@ export default function Toolbar({
         } else if (key === "a") {
           event.preventDefault()
           setTool("annotate")
+        } else if (key === "k") {
+          event.preventDefault()
+          setTool("comment")
         } else if (key === "c") {
           event.preventDefault()
           setTool("calibrate")
@@ -257,6 +263,12 @@ export default function Toolbar({
     const dxf = generateDxf(floorPlanData, projectName)
     const fileStem = sanitizeFileStem(exportFileName ?? projectName)
     downloadTextFile(dxf, `${fileStem}.dxf`, "application/dxf;charset=utf-8")
+  }
+
+  function handleSvgExport() {
+    const svg = generateSvg(floorPlanData, { showGrid: true })
+    const fileStem = sanitizeFileStem(exportFileName ?? projectName)
+    downloadSvg(svg, `${fileStem}.svg`)
   }
 
   function handleSourceImageChange(event: ChangeEvent<HTMLInputElement>) {
@@ -416,6 +428,14 @@ export default function Toolbar({
           >
             <Download size={18} />
             Export DXF
+          </button>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={handleSvgExport}
+          >
+            <Download size={18} />
+            Export SVG
           </button>
           <button
             type="button"

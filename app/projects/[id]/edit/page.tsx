@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import type Konva from "konva"
-import { Clock } from "lucide-react"
+import { Clock, MessageSquare } from "lucide-react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useMutation, useQuery } from "convex/react"
@@ -12,6 +12,7 @@ import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import Breadcrumb from "@/components/Breadcrumb"
 import CanvasGuidance from "@/components/CanvasGuidance"
+import CommentsPanel from "@/components/CommentsPanel"
 import FloorPlanCanvas from "@/components/FloorPlanCanvas"
 import HistoryPanel from "@/components/HistoryPanel"
 import OnboardingTour from "@/components/OnboardingTour"
@@ -24,7 +25,7 @@ import VersionsPanel from "@/components/VersionsPanel"
 import { formatFloorLabel, getNextFloorNumber, parseFloorParam, sortFloors } from "@/lib/floor-utils"
 import { createSeedFloorPlan } from "@/lib/geometry"
 import { useEditorStore } from "@/lib/editor-store"
-import type { FloorPlanData, PersistedFloorPlan } from "@/lib/types"
+import type { CommentStatus, FloorPlanData, PersistedFloorPlan, Point, ProjectComment } from "@/lib/types"
 
 type UploadResponse = {
   storageId: Id<"_storage">
@@ -65,17 +66,30 @@ export default function ProjectEditorPage() {
   const [sourceImageOpacity, setSourceImageOpacity] = useState(0.3)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [isVersionsOpen, setIsVersionsOpen] = useState(false)
+  const [isCommentsOpen, setIsCommentsOpen] = useState(true)
   const [showCalibrationDialog, setShowCalibrationDialog] = useState(false)
   const [calibrationFeetInput, setCalibrationFeetInput] = useState("")
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null)
+  const [pendingCommentPoint, setPendingCommentPoint] = useState<Point | null>(null)
+  const [commentAuthorName, setCommentAuthorName] = useState("")
+  const [commentText, setCommentText] = useState("")
+  const [commentStatus, setCommentStatus] = useState<CommentStatus>("open")
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false)
   const hydratedFloorPlanIdRef = useRef<string | null>(null)
   const lastSavedSnapshotsRef = useRef<Record<number, string>>({})
   const sourceImageByFloorRef = useRef<Record<number, Id<"_storage"> | undefined>>({})
   const currentFloorRef = useRef<number>(1)
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
+  const commentsQuery = useQuery(api.comments.listComments, projectId ? { projectId } : "skip")
   const saveFloorPlan = useMutation(api.floorPlans.save)
   const uploadSource = useMutation(api.floorPlans.uploadSource)
+  const addComment = useMutation(api.comments.addComment)
+  const resolveComment = useMutation(api.comments.resolveComment)
+  const deleteComment = useMutation(api.comments.deleteComment)
   const actionError = useEditorStore((state) => state.actionError)
   const calibrationPoints = useEditorStore((state) => state.calibrationPoints)
+  const tool = useEditorStore((state) => state.tool)
+  const setTool = useEditorStore((state) => state.setTool)
 
   const orderedFloorPlans = useMemo(
     () =>
@@ -106,6 +120,18 @@ export default function ProjectEditorPage() {
     [orderedFloorPlans, selectedFloor]
   )
   const activeSourceImageUrl = activeFloorPlan?.sourceImageUrl ?? null
+  const comments = useMemo(() => (commentsQuery ?? []) as ProjectComment[], [commentsQuery])
+  const floorLabelById = useMemo(
+    () =>
+      Object.fromEntries(
+        orderedFloorPlans.map((floorPlan) => [floorPlan._id, formatFloorLabel(floorPlan.floor)])
+      ),
+    [orderedFloorPlans]
+  )
+  const visibleComments = useMemo(
+    () => comments.filter((comment) => comment.floorPlanId === activeFloorPlan?._id),
+    [activeFloorPlan?._id, comments]
+  )
 
   const floorPlanData = useEditorStore((state) => state.floorPlanData)
   const setFloorPlanData = useEditorStore((state) => state.setFloorPlanData)
@@ -171,6 +197,10 @@ export default function ProjectEditorPage() {
       setShowCalibrationDialog(true)
     }
   }, [calibrationPoints])
+
+  useEffect(() => {
+    setPendingCommentPoint(null)
+  }, [activeFloorPlan?._id])
 
   const debouncedSave = useDebouncedCallback(
     async (
@@ -428,6 +458,89 @@ export default function ProjectEditorPage() {
     setSaveErrorMessage(null)
   }
 
+  function handleCommentPlacement(point: Point) {
+    setPendingCommentPoint(point)
+    setSelectedCommentId(null)
+    setIsCommentsOpen(true)
+  }
+
+  function handleSelectComment(comment: ProjectComment) {
+    setSelectedCommentId(comment._id)
+    setPendingCommentPoint(null)
+    setIsCommentsOpen(true)
+
+    if (!comment.floorPlanId || comment.floorPlanId === activeFloorPlan?._id) {
+      return
+    }
+
+    const targetFloor = orderedFloorPlans.find((floorPlan) => floorPlan._id === comment.floorPlanId)
+    if (targetFloor) {
+      navigateToFloor(targetFloor.floor)
+    }
+  }
+
+  function handleCancelCommentPlacement() {
+    setPendingCommentPoint(null)
+    setCommentText("")
+    setCommentStatus("open")
+    if (tool === "comment") {
+      setTool("select")
+    }
+  }
+
+  async function handleSubmitComment() {
+    if (!projectId || !activeFloorPlan || !pendingCommentPoint || isSubmittingComment) {
+      return
+    }
+
+    setIsSubmittingComment(true)
+    try {
+      const commentId = await addComment({
+        projectId,
+        floorPlanId: activeFloorPlan._id as Id<"floorPlans">,
+        x: pendingCommentPoint.x,
+        y: pendingCommentPoint.y,
+        authorName: commentAuthorName,
+        text: commentText,
+        status: commentStatus
+      })
+      setSelectedCommentId(commentId)
+      setPendingCommentPoint(null)
+      setCommentText("")
+      setCommentStatus("open")
+      setTool("select")
+      toast("Comment added", "success")
+    } catch (error) {
+      console.error("Unable to save comment.", error)
+      toast("Unable to save comment", "error")
+    } finally {
+      setIsSubmittingComment(false)
+    }
+  }
+
+  async function handleResolveComment(commentId: string) {
+    try {
+      await resolveComment({ commentId: commentId as Id<"comments"> })
+      toast("Comment resolved", "success")
+    } catch (error) {
+      console.error("Unable to resolve comment.", error)
+      toast("Unable to resolve comment", "error")
+    }
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    try {
+      await deleteComment({ commentId: commentId as Id<"comments"> })
+      if (selectedCommentId === commentId) {
+        setSelectedCommentId(null)
+      }
+      toast("Comment deleted", "success")
+    } catch (error) {
+      console.error("Unable to delete comment.", error)
+      toast("Unable to delete comment", "error")
+    }
+  }
+
   return (
     <main className="page-shell">
       <UnsavedChangesGuard hasUnsavedChanges={hasUnsavedChanges} />
@@ -452,6 +565,15 @@ export default function ProjectEditorPage() {
           </div>
         </div>
         <div className="button-row" style={{ alignItems: "center" }}>
+          <button
+            type="button"
+            className={`button-ghost${isCommentsOpen ? " is-active" : ""}`}
+            onClick={() => setIsCommentsOpen((open) => !open)}
+          >
+            <MessageSquare size={16} />
+            {isCommentsOpen ? "Hide comments" : "Comments"}
+            <span className="badge">{comments.length}</span>
+          </button>
           <button
             type="button"
             className={`button-ghost${isVersionsOpen ? " is-active" : ""}`}
@@ -535,6 +657,11 @@ export default function ProjectEditorPage() {
               sourceImageUrl={activeSourceImageUrl}
               overlayVisible={isSourceImageVisible}
               overlayOpacity={sourceImageOpacity}
+              comments={visibleComments}
+              selectedCommentId={selectedCommentId}
+              pendingCommentPoint={pendingCommentPoint}
+              onCommentPlacement={handleCommentPlacement}
+              onSelectComment={handleSelectComment}
             />
             <CanvasGuidance />
           </div>
@@ -545,6 +672,28 @@ export default function ProjectEditorPage() {
                 floor={selectedFloor}
                 floorPlanData={floorPlanData}
                 onRestore={handleRestoreVersion}
+              />
+            ) : null}
+            {isCommentsOpen ? (
+              <CommentsPanel
+                comments={comments}
+                floorLabelById={floorLabelById}
+                selectedCommentId={selectedCommentId}
+                onSelectComment={handleSelectComment}
+                onResolveComment={handleResolveComment}
+                onDeleteComment={handleDeleteComment}
+                authorName={commentAuthorName}
+                draftText={commentText}
+                draftStatus={commentStatus}
+                pendingPlacement={pendingCommentPoint}
+                onAuthorNameChange={setCommentAuthorName}
+                onDraftTextChange={setCommentText}
+                onDraftStatusChange={setCommentStatus}
+                onSubmitComment={handleSubmitComment}
+                onCancelPlacement={handleCancelCommentPlacement}
+                isSubmitting={isSubmittingComment}
+                title="Project comments"
+                subtitle="Review notes across every floor and pin new items on the active plan."
               />
             ) : null}
             <PropertiesPanel />

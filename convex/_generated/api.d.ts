@@ -9,7 +9,9 @@
  */
 
 import type * as ai from "../ai.js";
+import type * as comments from "../comments.js";
 import type * as floorPlans from "../floorPlans.js";
+import type * as members from "../members.js";
 import type * as projects from "../projects.js";
 import type * as renderPresets from "../renderPresets.js";
 import type * as renders from "../renders.js";
@@ -24,7 +26,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   ai: typeof ai;
+  comments: typeof comments;
   floorPlans: typeof floorPlans;
+  members: typeof members;
   projects: typeof projects;
   renderPresets: typeof renderPresets;
   renders: typeof renders;

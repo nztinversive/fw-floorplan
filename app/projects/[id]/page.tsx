@@ -4,10 +4,11 @@ import Image from "next/image"
 import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useMutation, useQuery } from "convex/react"
-import { DraftingCompass, Download, Image as ImageIcon, Info, Layers, Link2, MapPin, Pencil, Trash2, User, CalendarDays, X } from "lucide-react"
+import { CalendarDays, DraftingCompass, Download, Image as ImageIcon, Info, Layers, Link2, MapPin, MessageSquare, Pencil, Trash2, User, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import Breadcrumb from "@/components/Breadcrumb"
+import CommentsPanel from "@/components/CommentsPanel"
 import ComplianceChecker from "@/components/ComplianceChecker"
 import ConfirmDialog from "@/components/ConfirmDialog"
 import CostEstimator from "@/components/CostEstimator"
@@ -25,9 +26,20 @@ import { formatDate } from "@/lib/file-utils"
 import { formatFloorLabel, getNextFloorNumber, getPrimaryFloor, sortFloors } from "@/lib/floor-utils"
 import { createSeedFloorPlan } from "@/lib/geometry"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
-import type { PersistedFloorPlan } from "@/lib/types"
+import { downloadSvg, generateSvg } from "@/lib/svg-export"
+import type { PersistedFloorPlan, ProjectComment } from "@/lib/types"
 
 type OverviewInsightsTab = "summary" | "cost" | "schedule" | "compliance"
+
+function sanitizeFileStem(value: string) {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "floor-plan"
+  )
+}
 
 export default function ProjectOverviewPage() {
   const params = useParams<{ id: string }>()
@@ -39,6 +51,7 @@ export default function ProjectOverviewPage() {
     | Id<"projects">
     | undefined
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
+  const commentsQuery = useQuery(api.comments.listComments, projectId ? { projectId } : "skip")
   const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip")
   const versionsQuery = useQuery(api.versions.listProjectVersions, projectId ? { projectId } : "skip")
   const saveFloorPlan = useMutation(api.floorPlans.save)
@@ -49,6 +62,7 @@ export default function ProjectOverviewPage() {
   const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showComparisonDialog, setShowComparisonDialog] = useState(false)
+  const [showCommentsSection, setShowCommentsSection] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [activeInsightsTab, setActiveInsightsTab] = useState<OverviewInsightsTab>("summary")
 
@@ -103,6 +117,14 @@ export default function ProjectOverviewPage() {
   const activeFloorPreview = useMemo(
     () => (activeFloorPlan ? generateFloorPlanPreview(activeFloorPlan.data) : null),
     [activeFloorPlan]
+  )
+  const comments = useMemo(() => (commentsQuery ?? []) as ProjectComment[], [commentsQuery])
+  const floorLabelById = useMemo(
+    () =>
+      Object.fromEntries(
+        orderedFloorPlans.map((floorPlan) => [floorPlan._id, formatFloorLabel(floorPlan.floor)])
+      ),
+    [orderedFloorPlans]
   )
   const comparisonOptionsCount = orderedFloorPlans.length + (versionsQuery?.length ?? 0)
 
@@ -234,6 +256,16 @@ export default function ProjectOverviewPage() {
     toast("DXF exported", "success")
   }
 
+  function handleExportSvg() {
+    if (!project || !activeFloorPlan) return
+
+    const svg = generateSvg(activeFloorPlan.data, { showGrid: true })
+    const safeName = sanitizeFileStem(project.name)
+    const floorLabel = formatFloorLabel(selectedFloor).toLowerCase().replace(/\s+/g, "-")
+    downloadSvg(svg, `${safeName}-${floorLabel}.svg`)
+    toast("SVG exported", "success")
+  }
+
   if (projectId && project === undefined) {
     return (
       <main className="page-shell">
@@ -319,6 +351,15 @@ export default function ProjectOverviewPage() {
         </div>
         {!isEditing && (
           <div className="button-row" style={{ alignItems: "center" }}>
+            <button
+              type="button"
+              className={`button-ghost${showCommentsSection ? " is-active" : ""}`}
+              onClick={() => setShowCommentsSection((open) => !open)}
+            >
+              <MessageSquare size={16} />
+              {showCommentsSection ? "Hide comments" : "Comments"}
+              <span className="badge">{comments.length}</span>
+            </button>
             <button type="button" className="button-ghost" onClick={startEditing} title="Edit project details">
               <Pencil size={16} />
               Edit
@@ -356,6 +397,15 @@ export default function ProjectOverviewPage() {
             >
               <Download size={18} />
               Export DXF
+            </button>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={handleExportSvg}
+              disabled={orderedFloorPlans.length === 0}
+            >
+              <Download size={18} />
+              Export SVG
             </button>
             <button
               type="button"
@@ -606,6 +656,18 @@ export default function ProjectOverviewPage() {
           )}
         </div>
       </section>
+
+      {showCommentsSection ? (
+        <section className="panel" style={{ marginTop: "1.5rem" }}>
+          <CommentsPanel
+            comments={comments}
+            floorLabelById={floorLabelById}
+            showComposer={false}
+            title="Project comments"
+            subtitle="Track review notes and resolved items across all saved floors."
+          />
+        </section>
+      ) : null}
 
       <ShareLinkCard url={typeof window !== "undefined" ? `${window.location.origin}/projects/${projectId}/share` : `/projects/${projectId}/share`} />
 

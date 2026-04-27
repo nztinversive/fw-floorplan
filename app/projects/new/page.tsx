@@ -20,12 +20,14 @@ type FormState = {
   name: string
   address: string
   clientName: string
+  ownerEmail: string
 }
 
 const INITIAL_FORM: FormState = {
   name: "",
   address: "",
-  clientName: ""
+  clientName: "",
+  ownerEmail: ""
 }
 
 type UploadResponse = {
@@ -146,6 +148,7 @@ export default function NewProjectPage() {
         name: form.name.trim(),
         address: form.address.trim() || undefined,
         clientName: form.clientName.trim() || undefined,
+        ownerEmail: form.ownerEmail.trim() || undefined,
         thumbnail: sourceImage,
         sourceImage,
         floor: 1,
@@ -200,6 +203,17 @@ export default function NewProjectPage() {
               value={form.clientName}
               onChange={(event) => updateField("clientName", event.target.value)}
               placeholder="Avery Carter"
+            />
+          </label>
+
+          <label className="field">
+            <span className="field-label">Owner email</span>
+            <input
+              className="field-input"
+              type="email"
+              value={form.ownerEmail}
+              onChange={(event) => updateField("ownerEmail", event.target.value)}
+              placeholder="owner@fadingwest.com"
             />
           </label>
 

@@ -83,6 +83,32 @@ export type FloorPlanData = {
   gridSize: number;
 };
 
+export type CommentStatus = "open" | "resolved";
+
+export type ProjectComment = {
+  _id: string;
+  projectId: string;
+  floorPlanId?: string;
+  x: number;
+  y: number;
+  authorName: string;
+  text: string;
+  status: CommentStatus;
+  createdAt: number;
+  resolvedAt?: number;
+};
+
+export type ProjectMemberRole = "owner" | "editor" | "viewer";
+
+export type ProjectMember = {
+  _id: string;
+  projectId: string;
+  email: string;
+  role: ProjectMemberRole;
+  invitedAt: number;
+  acceptedAt?: number;
+};
+
 export type RenderSettings = {
   style: string;
   sidingMaterial: string;
@@ -153,6 +179,7 @@ export type StoredProject = {
   name: string;
   address?: string;
   clientName?: string;
+  ownerEmail?: string;
   createdAt: number;
   updatedAt: number;
   thumbnail?: string;

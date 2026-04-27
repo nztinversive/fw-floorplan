@@ -20,14 +20,20 @@ import {
   snapPoint,
   snapToNearestEndpoint
 } from "@/lib/geometry"
+import CommentPin from "@/components/CommentPin"
 import { useEditorStore } from "@/lib/editor-store"
-import type { Point } from "@/lib/types"
+import type { Point, ProjectComment } from "@/lib/types"
 
 type FloorPlanCanvasProps = {
   stageRef: RefObject<Konva.Stage | null>
   sourceImageUrl?: string | null
   overlayVisible?: boolean
   overlayOpacity?: number
+  comments?: ProjectComment[]
+  selectedCommentId?: string | null
+  pendingCommentPoint?: Point | null
+  onCommentPlacement?: (point: Point) => void
+  onSelectComment?: (comment: ProjectComment) => void
 }
 
 type CanvasSize = {
@@ -93,7 +99,12 @@ export default function FloorPlanCanvas({
   stageRef,
   sourceImageUrl,
   overlayVisible = true,
-  overlayOpacity = 0.3
+  overlayOpacity = 0.3,
+  comments = [],
+  selectedCommentId = null,
+  pendingCommentPoint = null,
+  onCommentPlacement,
+  onSelectComment
 }: FloorPlanCanvasProps) {
   const frameRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState<CanvasSize>({ width: 960, height: 720 })
@@ -455,6 +466,11 @@ export default function FloorPlanCanvas({
       } else {
         addAnnotation(pendingAnnotationStart, pointer)
       }
+      return
+    }
+
+    if (tool === "comment") {
+      onCommentPlacement?.(pointer)
       return
     }
 
@@ -859,6 +875,28 @@ export default function FloorPlanCanvas({
                 </Group>
               )
             })}
+
+            {comments.map((comment) => (
+              <CommentPin
+                key={comment._id}
+                x={comment.x}
+                y={comment.y}
+                zoom={zoom}
+                status={comment.status}
+                selected={selectedCommentId === comment._id}
+                onClick={() => onSelectComment?.(comment)}
+              />
+            ))}
+
+            {pendingCommentPoint ? (
+              <CommentPin
+                x={pendingCommentPoint.x}
+                y={pendingCommentPoint.y}
+                zoom={zoom}
+                status="open"
+                pending
+              />
+            ) : null}
 
             {/* Dimension labels on placed walls */}
             {floorPlanData.walls.map((wall) => {

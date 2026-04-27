@@ -32,6 +32,7 @@ export type EditorTool =
   | "wall"
   | "measure"
   | "annotate"
+  | "comment"
   | "calibrate"
   | "room"
   | "door"

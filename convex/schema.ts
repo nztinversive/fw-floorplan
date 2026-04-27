@@ -87,6 +87,7 @@ export default defineSchema({
     name: v.string(),
     address: v.optional(v.string()),
     clientName: v.optional(v.string()),
+    ownerEmail: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
     thumbnail: v.optional(v.id("_storage"))
@@ -127,5 +128,27 @@ export default defineSchema({
     viewAngle: v.string(),
     settings: renderSettingsValidator,
     createdAt: v.number()
-  }).index("by_projectId", ["projectId"])
+  }).index("by_projectId", ["projectId"]),
+  comments: defineTable({
+    projectId: v.id("projects"),
+    floorPlanId: v.optional(v.id("floorPlans")),
+    x: v.number(),
+    y: v.number(),
+    authorName: v.string(),
+    text: v.string(),
+    status: v.union(v.literal("open"), v.literal("resolved")),
+    createdAt: v.number(),
+    resolvedAt: v.optional(v.number())
+  })
+    .index("by_projectId", ["projectId"])
+    .index("by_projectId_floorPlanId", ["projectId", "floorPlanId"]),
+  members: defineTable({
+    projectId: v.id("projects"),
+    email: v.string(),
+    role: v.union(v.literal("owner"), v.literal("editor"), v.literal("viewer")),
+    invitedAt: v.number(),
+    acceptedAt: v.optional(v.number())
+  })
+    .index("by_projectId", ["projectId"])
+    .index("by_projectId_email", ["projectId", "email"])
 });

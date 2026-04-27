@@ -2,6 +2,7 @@ import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { floorPlanDataValidator } from "./validators";
+import { ensureProjectOwnerMember } from "./members";
 
 export const list = queryGeneric({
   args: {},
@@ -61,18 +62,22 @@ export const create = mutationGeneric({
     name: v.string(),
     address: v.optional(v.string()),
     clientName: v.optional(v.string()),
+    ownerEmail: v.optional(v.string()),
     thumbnail: v.optional(v.id("_storage"))
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    return await ctx.db.insert("projects", {
+    const projectId = await ctx.db.insert("projects", {
       name: args.name,
       address: args.address,
       clientName: args.clientName,
+      ownerEmail: args.ownerEmail,
       createdAt: now,
       updatedAt: now,
       thumbnail: args.thumbnail
     });
+    await ensureProjectOwnerMember(ctx, projectId, args.ownerEmail);
+    return projectId;
   }
 });
 
@@ -81,6 +86,7 @@ export const createWithInitialFloorPlan = mutationGeneric({
     name: v.string(),
     address: v.optional(v.string()),
     clientName: v.optional(v.string()),
+    ownerEmail: v.optional(v.string()),
     thumbnail: v.optional(v.id("_storage")),
     sourceImage: v.optional(v.id("_storage")),
     floor: v.number(),
@@ -92,10 +98,12 @@ export const createWithInitialFloorPlan = mutationGeneric({
       name: args.name,
       address: args.address,
       clientName: args.clientName,
+      ownerEmail: args.ownerEmail,
       createdAt: now,
       updatedAt: now,
       thumbnail: args.thumbnail
     });
+    await ensureProjectOwnerMember(ctx, projectId, args.ownerEmail);
 
     await ctx.db.insert("floorPlans", {
       projectId,
@@ -115,6 +123,7 @@ export const update = mutationGeneric({
     name: v.optional(v.string()),
     address: v.optional(v.string()),
     clientName: v.optional(v.string()),
+    ownerEmail: v.optional(v.string()),
     thumbnail: v.optional(v.id("_storage"))
   },
   handler: async (ctx, args) => {
@@ -127,6 +136,7 @@ export const update = mutationGeneric({
       name: args.name ?? project.name,
       address: args.address ?? project.address,
       clientName: args.clientName ?? project.clientName,
+      ownerEmail: args.ownerEmail ?? project.ownerEmail,
       thumbnail: args.thumbnail ?? project.thumbnail,
       updatedAt: Date.now()
     });
@@ -161,6 +171,14 @@ export const remove = mutationGeneric({
       .query("renderPresets")
       .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
       .collect();
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
+      .collect();
+    const members = await ctx.db
+      .query("members")
+      .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
+      .collect();
 
     const storageIds = new Set<Id<"_storage">>();
     if (project.thumbnail) {
@@ -191,6 +209,14 @@ export const remove = mutationGeneric({
 
     for (const renderPreset of renderPresets) {
       await ctx.db.delete(renderPreset._id);
+    }
+
+    for (const comment of comments) {
+      await ctx.db.delete(comment._id);
+    }
+
+    for (const member of members) {
+      await ctx.db.delete(member._id);
     }
 
     for (const storageId of storageIds) {
