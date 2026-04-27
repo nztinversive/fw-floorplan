@@ -5,6 +5,31 @@ export const pointValidator = v.object({
   y: v.number()
 });
 
+export const renderViewAngleValidator = v.union(
+  v.literal("front-three-quarter"),
+  v.literal("front-elevation"),
+  v.literal("rear-elevation"),
+  v.literal("aerial")
+);
+
+export const renderSettingsFields = {
+  style: v.string(),
+  sidingMaterial: v.string(),
+  roofStyle: v.string(),
+  colorPalette: v.string(),
+  landscaping: v.string(),
+  timeOfDay: v.string(),
+  season: v.string(),
+  viewAngle: renderViewAngleValidator
+} as const;
+
+export const renderSettingsValidator = v.object(renderSettingsFields);
+
+export const legacyRenderSettingsValidator = v.object({
+  ...renderSettingsFields,
+  viewAngle: v.optional(renderViewAngleValidator)
+});
+
 export const floorPlanDataValidator = v.object({
   walls: v.array(
     v.object({

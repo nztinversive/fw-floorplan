@@ -11,6 +11,7 @@ import Breadcrumb from "@/components/Breadcrumb"
 import ComplianceChecker from "@/components/ComplianceChecker"
 import ConfirmDialog from "@/components/ConfirmDialog"
 import CostEstimator from "@/components/CostEstimator"
+import FloorPlanComparison from "@/components/FloorPlanComparison"
 import RoomAreaSummaryDashboard from "@/components/RoomAreaSummaryDashboard"
 import RoomSchedule from "@/components/RoomSchedule"
 import ShareLinkCard from "@/components/ShareLinkCard"
@@ -39,6 +40,7 @@ export default function ProjectOverviewPage() {
     | undefined
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
   const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip")
+  const versionsQuery = useQuery(api.versions.listProjectVersions, projectId ? { projectId } : "skip")
   const saveFloorPlan = useMutation(api.floorPlans.save)
   const updateProject = useMutation(api.projects.update)
   const removeProject = useMutation(api.projects.remove)
@@ -46,6 +48,7 @@ export default function ProjectOverviewPage() {
   const [isCreatingFloor, setIsCreatingFloor] = useState(false)
   const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [showComparisonDialog, setShowComparisonDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [activeInsightsTab, setActiveInsightsTab] = useState<OverviewInsightsTab>("summary")
 
@@ -101,6 +104,7 @@ export default function ProjectOverviewPage() {
     () => (activeFloorPlan ? generateFloorPlanPreview(activeFloorPlan.data) : null),
     [activeFloorPlan]
   )
+  const comparisonOptionsCount = orderedFloorPlans.length + (versionsQuery?.length ?? 0)
 
   function startEditing() {
     if (!project) return
@@ -326,6 +330,14 @@ export default function ProjectOverviewPage() {
               disabled={isCreatingFloor}
             >
               {isCreatingFloor ? "Creating..." : "Add floor"}
+            </button>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={() => setShowComparisonDialog(true)}
+              disabled={comparisonOptionsCount < 2 || versionsQuery === undefined}
+            >
+              Compare
             </button>
             <button
               type="button"
@@ -596,6 +608,44 @@ export default function ProjectOverviewPage() {
       </section>
 
       <ShareLinkCard url={typeof window !== "undefined" ? `${window.location.origin}/projects/${projectId}/share` : `/projects/${projectId}/share`} />
+
+      {showComparisonDialog ? (
+        <div className="dialog-backdrop" onClick={() => setShowComparisonDialog(false)}>
+          <div
+            className="dialog-panel floor-compare-dialog"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="floor-compare-title"
+          >
+            <div className="dialog-body">
+              <div className="comparison-header">
+                <div>
+                  <div className="dialog-title" id="floor-compare-title">
+                    Compare floor plans
+                  </div>
+                  <div className="dialog-message">
+                    Review floor-to-floor changes, saved versions, and the current state in one place.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="icon-button"
+                  onClick={() => setShowComparisonDialog(false)}
+                  aria-label="Close floor plan comparison"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <FloorPlanComparison
+                orderedFloorPlans={orderedFloorPlans}
+                versions={versionsQuery ?? []}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ConfirmDialog
         open={showDeleteDialog}

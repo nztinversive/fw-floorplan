@@ -138,6 +138,16 @@ export type StoredFloorPlanVersion = {
   createdAt: number;
 };
 
+export type StoredRenderPreset = {
+  id: string;
+  projectId: string;
+  name: string;
+  style: string;
+  viewAngle: RenderViewAngle;
+  settings: RenderSettings;
+  createdAt: number;
+};
+
 export type StoredProject = {
   id: string;
   name: string;

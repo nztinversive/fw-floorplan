@@ -1,6 +1,8 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+import { legacyRenderSettingsValidator, renderSettingsValidator } from "./validators";
+
 const point = v.object({
   x: v.number(),
   y: v.number()
@@ -80,24 +82,6 @@ const floorPlanData = v.object({
   gridSize: v.number()
 });
 
-const renderSettings = v.object({
-  style: v.string(),
-  sidingMaterial: v.string(),
-  roofStyle: v.string(),
-  colorPalette: v.string(),
-  landscaping: v.string(),
-  timeOfDay: v.string(),
-  season: v.string(),
-  viewAngle: v.optional(
-    v.union(
-      v.literal("front-three-quarter"),
-      v.literal("front-elevation"),
-      v.literal("rear-elevation"),
-      v.literal("aerial")
-    )
-  )
-});
-
 export default defineSchema({
   projects: defineTable({
     name: v.string(),
@@ -128,12 +112,20 @@ export default defineSchema({
   renders: defineTable({
     projectId: v.id("projects"),
     style: v.string(),
-    settings: renderSettings,
+    settings: legacyRenderSettingsValidator,
     imageUrl: v.id("_storage"),
     prompt: v.string(),
     isFavorite: v.boolean(),
     createdAt: v.number()
   })
     .index("by_projectId", ["projectId"])
-    .index("by_projectId_and_createdAt", ["projectId", "createdAt"])
+    .index("by_projectId_and_createdAt", ["projectId", "createdAt"]),
+  renderPresets: defineTable({
+    projectId: v.id("projects"),
+    name: v.string(),
+    style: v.string(),
+    viewAngle: v.string(),
+    settings: renderSettingsValidator,
+    createdAt: v.number()
+  }).index("by_projectId", ["projectId"])
 });

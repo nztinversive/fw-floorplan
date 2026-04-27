@@ -4,7 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useAction, useMutation, useQuery } from "convex/react"
-import { AlertTriangle, Download, ImagePlus, Palette, Sparkles, X } from "lucide-react"
+import { AlertTriangle, Download, ImagePlus, Palette, Sparkles, Trash2, X } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import Breadcrumb from "@/components/Breadcrumb"
@@ -33,7 +33,7 @@ import {
 } from "@/lib/style-presets"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
 import { sortFloors } from "@/lib/floor-utils"
-import type { PersistedFloorPlan, RenderSettings, StoredRender } from "@/lib/types"
+import type { PersistedFloorPlan, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
 type PendingRenderAction = "favorite" | "delete" | "regenerate"
 type SettingKey = keyof StylePresetDefaults
@@ -65,20 +65,33 @@ function getStyleLabel(style: string) {
   return STYLE_PRESET_MAP[style as keyof typeof STYLE_PRESET_MAP]?.name ?? style
 }
 
+function formatTimestamp(timestamp: number) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(timestamp)
+}
+
 export default function ProjectRendersPage() {
   const params = useParams<{ id: string }>()
   const { toast } = useToast()
   const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as Id<"projects"> | undefined
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
   const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip")
+  const presetsQuery = useQuery(api.renderPresets.listPresets, projectId ? { projectId } : "skip")
   const generateRender = useAction(api.renders.generateRender)
   const toggleFavorite = useMutation(api.renders.toggleFavorite)
   const removeRender = useMutation(api.renders.remove)
+  const savePreset = useMutation(api.renderPresets.savePreset)
+  const deletePreset = useMutation(api.renderPresets.deletePreset)
 
   const [selectedStyle, setSelectedStyle] = useState<StylePresetId>(INITIAL_STYLE)
   const [settings, setSettings] = useState<RenderSettings>(() => getDefaultSettings(INITIAL_STYLE))
+  const [presetName, setPresetName] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
   const [isBatchGenerating, setIsBatchGenerating] = useState(false)
+  const [isSavingPreset, setIsSavingPreset] = useState(false)
+  const [deletingPresetId, setDeletingPresetId] = useState<string | null>(null)
   const [batchProgress, setBatchProgress] = useState<BatchProgress>(EMPTY_BATCH_PROGRESS)
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false)
   const [batchStyles, setBatchStyles] = useState<StylePresetId[]>([INITIAL_STYLE])
@@ -111,6 +124,23 @@ export default function ProjectRendersPage() {
         createdAt: render.createdAt
       })),
     [rendersQuery]
+  )
+  const renderPresets = useMemo<StoredRenderPreset[]>(
+    () =>
+      (presetsQuery ?? []).map((preset) => ({
+        id: preset._id,
+        projectId: preset.projectId,
+        name: preset.name,
+        style: preset.style,
+        viewAngle: (preset.settings.viewAngle ?? preset.viewAngle) as RenderViewAngle,
+        settings: {
+          ...preset.settings,
+          style: preset.style,
+          viewAngle: (preset.settings.viewAngle ?? preset.viewAngle) as RenderViewAngle
+        },
+        createdAt: preset.createdAt
+      })),
+    [presetsQuery]
   )
 
   const comparisonRenders = useMemo(
@@ -152,6 +182,18 @@ export default function ProjectRendersPage() {
   function handleStyleSelect(styleId: StylePresetId) {
     setSelectedStyle(styleId)
     setSettings((current) => getDefaultSettings(styleId, current.viewAngle))
+  }
+
+  function handleLoadPreset(preset: StoredRenderPreset) {
+    const nextStyle = preset.style as StylePresetId
+
+    setSelectedStyle(nextStyle)
+    setSettings({
+      ...preset.settings,
+      style: nextStyle,
+      viewAngle: preset.viewAngle
+    })
+    toast(`Loaded preset "${preset.name}"`, "info")
   }
 
   function updateSetting(key: SettingKey, value: string) {
@@ -198,6 +240,59 @@ export default function ProjectRendersPage() {
 
   async function handleGenerateRender() {
     await triggerGeneration(selectedStyle, settings)
+  }
+
+  async function handleSavePreset() {
+    const trimmedName = presetName.trim()
+    if (!projectId || isSavingPreset) {
+      return
+    }
+
+    if (!trimmedName) {
+      toast("Enter a preset name before saving", "warning")
+      return
+    }
+
+    setIsSavingPreset(true)
+
+    try {
+      await savePreset({
+        projectId,
+        name: trimmedName,
+        style: selectedStyle,
+        viewAngle: settings.viewAngle,
+        settings: {
+          ...settings,
+          style: selectedStyle,
+          viewAngle: settings.viewAngle
+        }
+      })
+      setPresetName("")
+      toast(`Saved preset "${trimmedName}"`, "success")
+    } catch (error) {
+      console.error("Unable to save preset.", error)
+      toast("Unable to save this preset right now", "error")
+    } finally {
+      setIsSavingPreset(false)
+    }
+  }
+
+  async function handleDeletePreset(presetId: string) {
+    if (deletingPresetId) {
+      return
+    }
+
+    setDeletingPresetId(presetId)
+
+    try {
+      await deletePreset({ presetId: presetId as Id<"renderPresets"> })
+      toast("Preset deleted", "success")
+    } catch (error) {
+      console.error("Unable to delete preset.", error)
+      toast("Unable to delete this preset right now", "error")
+    } finally {
+      setDeletingPresetId(null)
+    }
   }
 
   function handleOpenBatchDialog() {
@@ -550,6 +645,72 @@ export default function ProjectRendersPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+            </div>
+
+            <div className="settings-group">
+              <div className="settings-group-header">
+                <ImagePlus size={14} />
+                <span>Saved presets</span>
+              </div>
+
+              <div className="versions-save-row render-presets-save-row">
+                <label className="field" style={{ margin: 0 }}>
+                  <span className="field-label">Preset name</span>
+                  <input
+                    className="field-input"
+                    value={presetName}
+                    onChange={(event) => setPresetName(event.target.value)}
+                    placeholder="Warm front elevation"
+                    disabled={isGenerationBusy || isSavingPreset}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={handleSavePreset}
+                  disabled={isGenerationBusy || isSavingPreset}
+                >
+                  {isSavingPreset ? "Saving..." : "Save preset"}
+                </button>
+              </div>
+
+              <div className="render-presets-list">
+                {presetsQuery === undefined ? (
+                  <div className="versions-empty">
+                    <div className="muted">Loading presets...</div>
+                  </div>
+                ) : renderPresets.length === 0 ? (
+                  <div className="versions-empty">
+                    <div className="muted">Save a named settings combination to reuse styles and camera angles later.</div>
+                  </div>
+                ) : (
+                  renderPresets.map((preset) => (
+                    <div key={preset.id} className="render-preset-item">
+                      <button
+                        type="button"
+                        className="render-preset-load"
+                        onClick={() => handleLoadPreset(preset)}
+                        disabled={isGenerationBusy}
+                      >
+                        <span className="render-preset-name">{preset.name}</span>
+                        <span className="render-preset-meta">
+                          {getStyleLabel(preset.style)} | {RENDER_VIEW_ANGLE_LABELS[preset.viewAngle]}
+                        </span>
+                        <span className="render-preset-meta">{formatTimestamp(preset.createdAt)}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        onClick={() => handleDeletePreset(preset.id)}
+                        disabled={deletingPresetId === preset.id}
+                        aria-label={`Delete preset ${preset.name}`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 

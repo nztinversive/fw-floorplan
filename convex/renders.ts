@@ -9,24 +9,7 @@ import {
   type RenderViewAngle
 } from "../lib/render-angles";
 import { STYLE_PRESET_MAP, type StylePresetId } from "../lib/style-presets";
-
-const viewAngleValidator = v.union(
-  v.literal("front-three-quarter"),
-  v.literal("front-elevation"),
-  v.literal("rear-elevation"),
-  v.literal("aerial")
-);
-
-const renderSettingsValidator = v.object({
-  style: v.string(),
-  sidingMaterial: v.string(),
-  roofStyle: v.string(),
-  colorPalette: v.string(),
-  landscaping: v.string(),
-  timeOfDay: v.string(),
-  season: v.string(),
-  viewAngle: v.optional(viewAngleValidator)
-});
+import { renderSettingsValidator, renderViewAngleValidator } from "./validators";
 
 type FloorPlanDoc = Doc<"floorPlans">;
 type ProjectWithFloorPlans = Doc<"projects"> & {
@@ -404,7 +387,7 @@ export const generateRender = action({
     projectId: v.id("projects"),
     style: v.string(),
     settings: renderSettingsValidator,
-    viewAngle: viewAngleValidator
+    viewAngle: renderViewAngleValidator
   },
   handler: async (ctx, args) => {
     const project = (await ctx.runQuery(api.projects.get, {

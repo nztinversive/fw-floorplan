@@ -68,6 +68,30 @@ export const getVersion = queryGeneric({
   }
 });
 
+export const listProjectVersions = queryGeneric({
+  args: {
+    projectId: v.id("projects")
+  },
+  handler: async (ctx, args) => {
+    const versions = await ctx.db
+      .query("versions")
+      .withIndex("by_projectId", (query: any) => query.eq("projectId", args.projectId))
+      .order("desc")
+      .take(200);
+
+    return versions
+      .sort((left, right) => right.createdAt - left.createdAt)
+      .map((version) => ({
+        _id: version._id,
+        projectId: version.projectId,
+        floor: version.floor,
+        name: version.name,
+        data: version.data,
+        createdAt: version.createdAt
+      }));
+  }
+});
+
 export const deleteVersion = mutationGeneric({
   args: {
     versionId: v.id("versions")
