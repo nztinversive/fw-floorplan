@@ -626,11 +626,66 @@ button:disabled,
 }
 
 .cost-assumption {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
   padding: 0.9rem 1rem;
-  border-radius: 0.9rem;
+  border-radius: 0.5rem;
   background: rgba(27, 42, 74, 0.05);
   color: var(--fw-slate);
   font-size: 0.9rem;
+}
+
+.design-review-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.design-review-item {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+  padding: 1rem;
+  border: 1px solid var(--fw-border);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.design-review-item.is-good {
+  border-color: rgba(29, 125, 86, 0.16);
+  background: rgba(240, 253, 244, 0.72);
+}
+
+.design-review-item.is-info {
+  border-color: rgba(37, 99, 235, 0.16);
+  background: rgba(239, 246, 255, 0.75);
+}
+
+.design-review-item.is-warning {
+  border-color: rgba(180, 83, 9, 0.18);
+  background: rgba(255, 251, 235, 0.85);
+}
+
+.design-review-badge.is-good {
+  background: rgba(29, 125, 86, 0.12);
+  color: var(--fw-success);
+}
+
+.design-review-badge.is-info {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.design-review-badge.is-warning {
+  background: rgba(180, 83, 9, 0.12);
+  color: #9a3412;
+}
+
+.room-signal-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 8rem;
 }
 
 .cost-input {
@@ -719,6 +774,11 @@ button:disabled,
 .compliance-icon-shell.is-warning {
   background: rgba(180, 83, 9, 0.12);
   color: #b45309;
+}
+
+.compliance-icon-shell.is-info {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
 }
 
 .compliance-icon-shell.is-success {

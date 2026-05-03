@@ -11,6 +11,7 @@ import CommentsPanel from "@/components/CommentsPanel"
 import ComplianceChecker from "@/components/ComplianceChecker"
 import ConfirmDialog from "@/components/ConfirmDialog"
 import CostEstimator from "@/components/CostEstimator"
+import DesignReviewPanel from "@/components/DesignReviewPanel"
 import FloorPlanComparison from "@/components/FloorPlanComparison"
 import ReadOnlyFloorPlanCanvas from "@/components/ReadOnlyFloorPlanCanvas"
 import RoomAreaSummaryDashboard from "@/components/RoomAreaSummaryDashboard"
@@ -29,7 +30,7 @@ import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-expor
 import { downloadSvg, generateSvg } from "@/lib/svg-export"
 import type { PersistedFloorPlan, ProjectComment } from "@/lib/types"
 
-type OverviewInsightsTab = "summary" | "cost" | "schedule" | "compliance"
+type OverviewInsightsTab = "summary" | "design" | "cost" | "schedule" | "compliance"
 
 function sanitizeFileStem(value: string) {
   return (
@@ -566,7 +567,7 @@ export default function ProjectOverviewPage() {
           <div>
             <div className="section-title">Construction workflow</div>
             <div className="muted">
-              Project-wide area analytics plus selected-floor estimating, scheduling, and validation.
+              Project-wide area analytics plus selected-floor design, estimating, scheduling, and validation.
             </div>
           </div>
           <span className="badge">
@@ -581,6 +582,7 @@ export default function ProjectOverviewPage() {
         <div className="insights-tabs" role="tablist" aria-label="Construction workflow sections">
           {[
             { key: "summary", label: "Area summary" },
+            { key: "design", label: "Design review" },
             { key: "cost", label: "Cost estimator" },
             { key: "schedule", label: "Room schedule" },
             { key: "compliance", label: "Compliance" }
@@ -609,6 +611,21 @@ export default function ProjectOverviewPage() {
               data: floorPlan.data
             }))}
           />
+        </div>
+
+        <div
+          role="tabpanel"
+          className="insight-panel"
+          hidden={activeInsightsTab !== "design"}
+        >
+          {activeFloorPlan ? (
+            <DesignReviewPanel data={activeFloorPlan.data} />
+          ) : (
+            <div className="empty-state compact-empty-state">
+              <div className="section-title">No floor selected</div>
+              <div className="muted">Create or choose a floor plan to review home-design quality.</div>
+            </div>
+          )}
         </div>
 
         <div
