@@ -20,13 +20,14 @@ type CanvasSize = {
 
 const ROOM_COLORS = ["rgba(212, 168, 75, 0.18)", "rgba(100, 116, 139, 0.12)", "rgba(27, 42, 74, 0.08)"];
 
-function getContentBounds(data: FloorPlanData) {
+function getContentBounds(data: FloorPlanData, comments: ProjectComment[]) {
   const points = [
     ...data.walls.flatMap((wall) => [
       { x: wall.x1, y: wall.y1 },
       { x: wall.x2, y: wall.y2 }
     ]),
-    ...data.rooms.flatMap((room) => room.polygon)
+    ...data.rooms.flatMap((room) => room.polygon),
+    ...comments.map((comment) => ({ x: comment.x, y: comment.y }))
   ];
 
   if (points.length === 0) {
@@ -73,7 +74,7 @@ export default function ReadOnlyFloorPlanCanvas({ data, comments = [] }: ReadOnl
   }, []);
 
   useEffect(() => {
-    const bounds = getContentBounds(data);
+    const bounds = getContentBounds(data, comments);
     if (!bounds) {
       setZoom(1);
       setPan({ x: 0, y: 0 });
@@ -94,7 +95,7 @@ export default function ReadOnlyFloorPlanCanvas({ data, comments = [] }: ReadOnl
       x: size.width / 2 - ((bounds.minX + bounds.maxX) / 2) * nextZoom,
       y: size.height / 2 - ((bounds.minY + bounds.maxY) / 2) * nextZoom
     });
-  }, [data, size.height, size.width]);
+  }, [comments, data, size.height, size.width]);
 
   const gridSpacing = useMemo(
     () => (data.scale * data.gridSize) / 12,
