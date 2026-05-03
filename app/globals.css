@@ -828,6 +828,82 @@ button:disabled,
   color: var(--fw-ink);
 }
 
+.editor-layout-assistant {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(29, 125, 86, 0.16);
+  border-radius: 0.5rem;
+  background: rgba(240, 253, 244, 0.58);
+}
+
+.editor-layout-assistant-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  color: #166534;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.editor-layout-assistant-header span:last-child {
+  color: rgba(22, 101, 52, 0.68);
+  font-size: 0.76rem;
+}
+
+.editor-layout-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.editor-layout-card {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.7rem;
+  border: 1px solid rgba(29, 125, 86, 0.14);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.editor-layout-card-copy {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+}
+
+.editor-layout-card-copy > span:last-child {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  color: var(--fw-slate);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.editor-layout-card-copy strong {
+  color: var(--fw-ink);
+}
+
+.editor-layout-action {
+  justify-self: stretch;
+  min-height: 2.35rem;
+  border: 1px solid rgba(29, 125, 86, 0.2);
+  border-radius: 0.5rem;
+  background: rgba(29, 125, 86, 0.08);
+  color: #14532d;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.editor-layout-action:hover {
+  border-color: rgba(29, 125, 86, 0.34);
+  background: rgba(29, 125, 86, 0.14);
+}
+
 .cost-input {
   min-width: 110px;
 }
@@ -2000,6 +2076,43 @@ button:disabled,
 
 .editor-dark .editor-fix-action strong {
   color: white;
+}
+
+.editor-dark .editor-layout-assistant {
+  background: rgba(29, 125, 86, 0.1);
+  border-color: rgba(74, 222, 128, 0.18);
+}
+
+.editor-dark .editor-layout-assistant-header {
+  color: rgba(134, 239, 172, 0.95);
+}
+
+.editor-dark .editor-layout-assistant-header span:last-child {
+  color: rgba(187, 247, 208, 0.58);
+}
+
+.editor-dark .editor-layout-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.editor-dark .editor-layout-card-copy > span:last-child {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.editor-dark .editor-layout-card-copy strong {
+  color: white;
+}
+
+.editor-dark .editor-layout-action {
+  background: rgba(74, 222, 128, 0.1);
+  border-color: rgba(74, 222, 128, 0.18);
+  color: rgba(187, 247, 208, 0.95);
+}
+
+.editor-dark .editor-layout-action:hover {
+  background: rgba(74, 222, 128, 0.16);
+  border-color: rgba(74, 222, 128, 0.28);
 }
 
 /* ── Toolbar labels ── */

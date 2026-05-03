@@ -6,6 +6,7 @@ import type { RefObject } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { FURNITURE_BY_ID } from "@/lib/furniture-library"
+import { getFurnitureClearanceInches } from "@/lib/furniture-clearance"
 import { getDesignReview } from "@/lib/floor-plan-analysis"
 import {
   calculateRoomAreaSqFt,
@@ -52,16 +53,6 @@ const ORTHOGONAL_SNAP_THRESHOLD = 15
 const SNAP_GUIDE_THRESHOLD = 4
 const WALL_PLACEMENT_THRESHOLD = 40
 const ROOM_CLOSE_THRESHOLD = 15
-
-function getFurnitureClearanceInches(type: string): number {
-  if (type.startsWith("dining-table")) return 36
-  if (["refrigerator", "stove", "dishwasher", "kitchen-island"].includes(type)) return 36
-  if (["queen-bed", "king-bed", "twin-bed"].includes(type)) return 24
-  if (["toilet", "sink-vanity", "bathtub", "shower"].includes(type)) return 24
-  if (["couch", "loveseat", "armchair", "office-chair", "dining-chair"].includes(type)) return 24
-
-  return 18
-}
 
 function findAlignedCoordinate(
   value: number,
@@ -963,6 +954,21 @@ export default function FloorPlanCanvas({
                     text={furnitureLabel}
                     listening={false}
                   />
+                  {hasDesignWarning ? (
+                    <Group x={widthPx / 2 - 8} y={-depthPx / 2 + 8} listening={false}>
+                      <Circle radius={8} fill="#dc2626" stroke="white" strokeWidth={1.5} />
+                      <Text
+                        x={-4}
+                        y={-6}
+                        width={8}
+                        align="center"
+                        fontSize={11}
+                        fontStyle="bold"
+                        fill="white"
+                        text="!"
+                      />
+                    </Group>
+                  ) : null}
                 </Group>
               )
             })}

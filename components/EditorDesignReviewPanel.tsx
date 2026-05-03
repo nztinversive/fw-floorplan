@@ -1,7 +1,7 @@
 "use client"
 
-import { AlertTriangle, CheckCircle2, Crosshair, DoorOpen, Info, Sparkles } from "lucide-react"
-import { useMemo } from "react"
+import { AlertTriangle, BedDouble, CheckCircle2, ChefHat, Crosshair, DoorOpen, Info, Sparkles } from "lucide-react"
+import { useCallback, useMemo } from "react"
 
 import {
   getDesignReview,
@@ -9,9 +9,15 @@ import {
   type DesignReviewSeverity
 } from "@/lib/floor-plan-analysis"
 import { FURNITURE_BY_ID } from "@/lib/furniture-library"
-import { getWallLength, pointOnWall, polygonCentroid, roomTouchesWall } from "@/lib/geometry"
+import { createId, getWallLength, pointOnWall, polygonCentroid, roomTouchesWall } from "@/lib/geometry"
 import { useEditorStore } from "@/lib/editor-store"
-import type { FloorPlanData, Furniture, Point, Room } from "@/lib/types"
+import {
+  getFurnitureForRoom,
+  getRoomCategory,
+  getRoomLayoutPlans,
+  type RoomLayoutPlan
+} from "@/lib/room-layout-assistant"
+import type { FloorPlanData, Point, Room } from "@/lib/types"
 
 type TargetKind = NonNullable<DesignReviewItem["targetKind"]>
 
@@ -44,47 +50,6 @@ function getScoreLabel(score: number) {
   return SCORE_LABELS.find((entry) => score >= entry.threshold)?.label ?? "Needs review"
 }
 
-function pointInPolygon(point: Point, polygon: Point[]) {
-  if (polygon.length < 3) return false
-
-  let inside = false
-
-  for (let index = 0, previousIndex = polygon.length - 1; index < polygon.length; previousIndex = index, index += 1) {
-    const current = polygon[index]
-    const previous = polygon[previousIndex]
-    const crosses =
-      current.y > point.y !== previous.y > point.y &&
-      point.x < ((previous.x - current.x) * (point.y - current.y)) / (previous.y - current.y || 1) + current.x
-
-    if (crosses) {
-      inside = !inside
-    }
-  }
-
-  return inside
-}
-
-function furnitureCenter(furniture: Furniture): Point {
-  return {
-    x: furniture.x + furniture.width / 2,
-    y: furniture.y + furniture.depth / 2
-  }
-}
-
-function getFurnitureForRoom(room: Room, furniture: Furniture[]) {
-  return furniture.filter((item) => pointInPolygon(furnitureCenter(item), room.polygon))
-}
-
-function getRoomCategory(room: Room) {
-  const label = room.label.trim().toLowerCase()
-
-  if (/(bed|primary|suite|guest|kid|nursery)/.test(label)) return "bedroom"
-  if (/(kitchen|pantry)/.test(label)) return "kitchen"
-  if (/(living|family|great)/.test(label)) return "living"
-
-  return "general"
-}
-
 function getTargetPoint(data: FloorPlanData, item: DesignReviewItem): FocusTarget {
   if (!item.targetId || !item.targetKind || item.targetKind === "general") {
     return { kind: item.targetKind }
@@ -115,6 +80,7 @@ export default function EditorDesignReviewPanel() {
   const setTool = useEditorStore((state) => state.setTool)
   const setZoom = useEditorStore((state) => state.setZoom)
   const setPan = useEditorStore((state) => state.setPan)
+  const setFloorPlanData = useEditorStore((state) => state.setFloorPlanData)
   const addDoor = useEditorStore((state) => state.addDoor)
   const addFurniture = useEditorStore((state) => state.addFurniture)
 
@@ -124,6 +90,40 @@ export default function EditorDesignReviewPanel() {
     [review.warnings]
   )
   const scoreLabel = getScoreLabel(review.score)
+  const layoutPlans = useMemo(() => getRoomLayoutPlans(floorPlanData).slice(0, 5), [floorPlanData])
+
+  const focusRoom = useCallback((room: Room) => {
+    const center = polygonCentroid(room.polygon)
+    setTool("select")
+    setSelectedIds([room.id])
+    setZoom(1.35)
+    setPan({
+      x: 320 - center.x * 1.35,
+      y: 320 - center.y * 1.35
+    })
+  }, [setPan, setSelectedIds, setTool, setZoom])
+
+  const applyLayoutPlan = useCallback((plan: RoomLayoutPlan) => {
+    if (plan.items.length === 0) {
+      focusRoom(plan.room)
+      return
+    }
+
+    const nextFurniture = plan.items.map(({ label: _label, ...item }) => ({
+      id: createId("furniture"),
+      ...item
+    }))
+
+    setFloorPlanData(
+      {
+        ...floorPlanData,
+        furniture: [...floorPlanData.furniture, ...nextFurniture]
+      },
+      false,
+      `${plan.room.label} layout applied`
+    )
+    focusRoom(plan.room)
+  }, [floorPlanData, focusRoom, setFloorPlanData])
 
   const fixActions = useMemo<FixAssistAction[]>(() => {
     const actions: FixAssistAction[] = []
@@ -141,17 +141,6 @@ export default function EditorDesignReviewPanel() {
         width: catalogItem.width,
         depth: catalogItem.depth,
         rotation
-      })
-    }
-
-    const focusRoom = (room: Room) => {
-      const center = polygonCentroid(room.polygon)
-      setTool("select")
-      setSelectedIds([room.id])
-      setZoom(1.35)
-      setPan({
-        x: 320 - center.x * 1.35,
-        y: 320 - center.y * 1.35
       })
     }
 
@@ -243,15 +232,12 @@ export default function EditorDesignReviewPanel() {
   }, [
     addDoor,
     addFurniture,
+    focusRoom,
     floorPlanData.furniture,
     floorPlanData.rooms,
     floorPlanData.scale,
     floorPlanData.walls,
     review.warnings,
-    setPan,
-    setSelectedIds,
-    setTool,
-    setZoom
   ])
 
   function focusItem(item: DesignReviewItem) {
@@ -315,6 +301,44 @@ export default function EditorDesignReviewPanel() {
                 </span>
               </button>
             ))}
+          </div>
+        </div>
+      ) : null}
+
+      {layoutPlans.length > 0 ? (
+        <div className="editor-layout-assistant">
+          <div className="editor-layout-assistant-header">
+            <span>Room Layout Assistant</span>
+            <span>{layoutPlans.length} rooms</span>
+          </div>
+          <div className="editor-layout-list">
+            {layoutPlans.map((plan) => {
+              const LayoutIcon = plan.category === "kitchen" ? ChefHat : BedDouble
+
+              return (
+                <article key={plan.room.id} className="editor-layout-card">
+                  <div className="editor-layout-card-copy">
+                    <span className={`compliance-icon-shell is-${plan.items.length > 0 ? "info" : "good"}`}>
+                      <LayoutIcon size={15} />
+                    </span>
+                    <span>
+                      <strong>{plan.title}</strong>
+                      <span>
+                        {plan.dimensions.widthFt} ft by {plan.dimensions.depthFt} ft
+                      </span>
+                      <span>{plan.description}</span>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="editor-layout-action"
+                    onClick={() => applyLayoutPlan(plan)}
+                  >
+                    {plan.items.length > 0 ? `Apply ${plan.category} layout` : "Focus room"}
+                  </button>
+                </article>
+              )
+            })}
           </div>
         </div>
       ) : null}

@@ -1,4 +1,5 @@
 import { FURNITURE_BY_ID } from "@/lib/furniture-library"
+import { getFurnitureClearanceConflicts } from "@/lib/furniture-clearance"
 import { getWallLength, pointDistance, roomTouchesWall } from "@/lib/geometry"
 import type { FloorPlanData, Furniture, Point, Room, Wall } from "@/lib/types"
 
@@ -179,8 +180,8 @@ function pointInPolygon(point: Point, polygon: Point[]) {
 
 function furnitureCenter(furniture: Furniture): Point {
   return {
-    x: furniture.x + furniture.width / 2,
-    y: furniture.y + furniture.depth / 2
+    x: furniture.x,
+    y: furniture.y
   }
 }
 
@@ -681,6 +682,28 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
         `${catalogItem?.label ?? item.type} footprint is ${itemWidthFt} ft by ${itemDepthFt} ft.`,
         "Confirm roughly 36 inches around the table for chairs and circulation.",
         { targetId: item.id, targetKind: "furniture" }
+      ))
+    }
+  }
+
+  for (const conflict of getFurnitureClearanceConflicts(data)) {
+    furnitureItems.push(makeDesignItem(
+      conflict.id,
+      conflict.severity,
+      conflict.subject,
+      conflict.message,
+      conflict.recommendation,
+      { targetId: conflict.furnitureId, targetKind: "furniture" }
+    ))
+
+    if (conflict.relatedFurnitureId) {
+      furnitureItems.push(makeDesignItem(
+        `${conflict.id}-related`,
+        conflict.severity,
+        conflict.subject,
+        conflict.message,
+        conflict.recommendation,
+        { targetId: conflict.relatedFurnitureId, targetKind: "furniture" }
       ))
     }
   }
