@@ -904,6 +904,61 @@ button:disabled,
   background: rgba(29, 125, 86, 0.14);
 }
 
+.editor-smart-fixes {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(180, 83, 9, 0.16);
+  border-radius: 0.5rem;
+  background: rgba(255, 251, 235, 0.7);
+}
+
+.editor-smart-fixes-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #92400e;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.editor-smart-fix-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.editor-smart-fix {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: start;
+  width: 100%;
+  padding: 0.65rem;
+  border: 1px solid rgba(180, 83, 9, 0.14);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--fw-ink);
+  text-align: left;
+}
+
+.editor-smart-fix:hover {
+  border-color: rgba(180, 83, 9, 0.34);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.editor-smart-fix span:last-child {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  font-size: 0.84rem;
+}
+
+.editor-smart-fix strong {
+  color: var(--fw-ink);
+}
+
 .cost-input {
   min-width: 110px;
 }
@@ -2113,6 +2168,30 @@ button:disabled,
 .editor-dark .editor-layout-action:hover {
   background: rgba(74, 222, 128, 0.16);
   border-color: rgba(74, 222, 128, 0.28);
+}
+
+.editor-dark .editor-smart-fixes {
+  background: rgba(180, 83, 9, 0.11);
+  border-color: rgba(251, 191, 36, 0.18);
+}
+
+.editor-dark .editor-smart-fixes-header {
+  color: rgba(253, 230, 138, 0.95);
+}
+
+.editor-dark .editor-smart-fix {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.editor-dark .editor-smart-fix:hover {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.24);
+}
+
+.editor-dark .editor-smart-fix strong {
+  color: white;
 }
 
 /* ── Toolbar labels ── */

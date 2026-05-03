@@ -1,5 +1,5 @@
 import { FURNITURE_BY_ID } from "@/lib/furniture-library"
-import { pointOnWall, roomTouchesWall } from "@/lib/geometry"
+import { pointOnWall, polygonCentroid, roomTouchesWall } from "@/lib/geometry"
 import { furnitureCenter, getFurnitureForRoom, getRoomBounds, pointInPolygon } from "@/lib/room-layout-assistant"
 import type { Door, FloorPlanData, Furniture, Point, Room } from "@/lib/types"
 
@@ -21,6 +21,15 @@ export type FurnitureConflict = {
   subject: string
   message: string
   recommendation: string
+}
+
+export type FurnitureFixSuggestion = {
+  id: string
+  conflictId: string
+  label: string
+  detail: string
+  furnitureId: string
+  patch: Partial<Pick<Furniture, "x" | "y" | "rotation">>
 }
 
 function roundTo(value: number, digits = 1) {
@@ -81,6 +90,23 @@ function pointInsideBounds(point: Point, bounds: FurnitureBounds) {
 
 function getFurnitureLabel(furniture: Furniture) {
   return FURNITURE_BY_ID[furniture.type]?.label ?? furniture.type
+}
+
+function getHostRoom(data: FloorPlanData, furniture: Furniture) {
+  return data.rooms.find((room) => pointInPolygon(furnitureCenter(furniture), room.polygon))
+}
+
+function normalizeVector(vector: Point): Point {
+  const length = Math.hypot(vector.x, vector.y)
+
+  if (length <= 0.001) {
+    return { x: 1, y: 0 }
+  }
+
+  return {
+    x: vector.x / length,
+    y: vector.y / length
+  }
 }
 
 function getDoorRooms(data: FloorPlanData, door: Door) {
@@ -206,4 +232,132 @@ export function getFurnitureClearanceConflicts(data: FloorPlanData): FurnitureCo
   }
 
   return [...new Map(conflicts.map((conflict) => [conflict.id, conflict])).values()]
+}
+
+function getMoveAwayPatch(furniture: Furniture, otherPoint: Point, distancePx: number) {
+  const center = furnitureCenter(furniture)
+  const vector = normalizeVector({
+    x: center.x - otherPoint.x,
+    y: center.y - otherPoint.y
+  })
+
+  return {
+    x: furniture.x + vector.x * distancePx,
+    y: furniture.y + vector.y * distancePx
+  }
+}
+
+function getMoveTowardPatch(furniture: Furniture, point: Point, distancePx: number) {
+  const center = furnitureCenter(furniture)
+  const vector = normalizeVector({
+    x: point.x - center.x,
+    y: point.y - center.y
+  })
+
+  return {
+    x: furniture.x + vector.x * distancePx,
+    y: furniture.y + vector.y * distancePx
+  }
+}
+
+function getMovePastFurniturePatch(furniture: Furniture, other: Furniture, scale: number) {
+  const currentBounds = getFurnitureBounds(furniture, scale)
+  const otherBounds = getFurnitureBounds(other, scale)
+  const currentCenter = furnitureCenter(furniture)
+  const otherCenter = furnitureCenter(other)
+  const clearancePx = (18 / 12) * scale
+  const requiredXMove =
+    currentBounds.widthPx / 2 +
+    otherBounds.widthPx / 2 +
+    clearancePx -
+    Math.abs(currentCenter.x - otherCenter.x)
+  const requiredYMove =
+    currentBounds.depthPx / 2 +
+    otherBounds.depthPx / 2 +
+    clearancePx -
+    Math.abs(currentCenter.y - otherCenter.y)
+
+  if (requiredXMove <= requiredYMove) {
+    const direction = currentCenter.x >= otherCenter.x ? 1 : -1
+    return {
+      x: furniture.x + direction * Math.max(clearancePx, requiredXMove),
+      y: furniture.y
+    }
+  }
+
+  const direction = currentCenter.y >= otherCenter.y ? 1 : -1
+  return {
+    x: furniture.x,
+    y: furniture.y + direction * Math.max(clearancePx, requiredYMove)
+  }
+}
+
+export function getFurnitureFixSuggestions(data: FloorPlanData): FurnitureFixSuggestion[] {
+  const scale = data.scale || 1
+  const suggestions: FurnitureFixSuggestion[] = []
+  const conflicts = getFurnitureClearanceConflicts(data)
+
+  for (const conflict of conflicts) {
+    const furniture = data.furniture.find((item) => item.id === conflict.furnitureId)
+    if (!furniture) continue
+
+    const label = getFurnitureLabel(furniture)
+
+    if (conflict.relatedFurnitureId) {
+      const other = data.furniture.find((item) => item.id === conflict.relatedFurnitureId)
+
+      if (other) {
+        suggestions.push({
+          id: `move-${conflict.id}`,
+          conflictId: conflict.id,
+          label: `Move ${label}`,
+          detail: `Separate it from ${getFurnitureLabel(other)}.`,
+          furnitureId: furniture.id,
+          patch: getMovePastFurniturePatch(furniture, other, scale)
+        })
+      }
+    } else if (conflict.doorId) {
+      const door = data.doors.find((entry) => entry.id === conflict.doorId)
+      const wall = door ? data.walls.find((entry) => entry.id === door.wallId) : null
+
+      if (door && wall) {
+        suggestions.push({
+          id: `move-${conflict.id}`,
+          conflictId: conflict.id,
+          label: `Move ${label}`,
+          detail: "Clear the door operating zone.",
+          furnitureId: furniture.id,
+          patch: getMoveAwayPatch(furniture, pointOnWall(wall, door.position), (24 / 12) * scale)
+        })
+      }
+    } else {
+      const hostRoom = getHostRoom(data, furniture)
+
+      if (hostRoom) {
+        suggestions.push({
+          id: `move-${conflict.id}`,
+          conflictId: conflict.id,
+          label: `Move ${label}`,
+          detail: "Pull it inward from the wall pinch point.",
+          furnitureId: furniture.id,
+          patch: getMoveTowardPatch(furniture, polygonCentroid(hostRoom.polygon), (18 / 12) * scale)
+        })
+      }
+    }
+
+    if (furniture.width !== furniture.depth) {
+      suggestions.push({
+        id: `rotate-${conflict.id}`,
+        conflictId: conflict.id,
+        label: `Rotate ${label}`,
+        detail: "Turn it 90 degrees to test a tighter footprint.",
+        furnitureId: furniture.id,
+        patch: {
+          rotation: (furniture.rotation + 90) % 360
+        }
+      })
+    }
+  }
+
+  return [...new Map(suggestions.map((suggestion) => [suggestion.id, suggestion])).values()].slice(0, 6)
 }

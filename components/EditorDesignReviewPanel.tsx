@@ -1,8 +1,23 @@
 "use client"
 
-import { AlertTriangle, BedDouble, CheckCircle2, ChefHat, Crosshair, DoorOpen, Info, Sparkles } from "lucide-react"
+import {
+  AlertTriangle,
+  BedDouble,
+  CheckCircle2,
+  ChefHat,
+  Crosshair,
+  DoorOpen,
+  Info,
+  Move,
+  RotateCw,
+  Sparkles
+} from "lucide-react"
 import { useCallback, useMemo } from "react"
 
+import {
+  getFurnitureFixSuggestions,
+  type FurnitureFixSuggestion
+} from "@/lib/furniture-clearance"
 import {
   getDesignReview,
   type DesignReviewItem,
@@ -91,6 +106,7 @@ export default function EditorDesignReviewPanel() {
   )
   const scoreLabel = getScoreLabel(review.score)
   const layoutPlans = useMemo(() => getRoomLayoutPlans(floorPlanData).slice(0, 5), [floorPlanData])
+  const smartFixes = useMemo(() => getFurnitureFixSuggestions(floorPlanData).slice(0, 4), [floorPlanData])
 
   const focusRoom = useCallback((room: Room) => {
     const center = polygonCentroid(room.polygon)
@@ -124,6 +140,40 @@ export default function EditorDesignReviewPanel() {
     )
     focusRoom(plan.room)
   }, [floorPlanData, focusRoom, setFloorPlanData])
+
+  const applySmartFix = useCallback((fix: FurnitureFixSuggestion) => {
+    const nextFurniture = floorPlanData.furniture.map((item) =>
+      item.id === fix.furnitureId
+        ? { ...item, ...fix.patch }
+        : item
+    )
+    const fixedFurniture = nextFurniture.find((item) => item.id === fix.furnitureId)
+
+    setFloorPlanData(
+      {
+        ...floorPlanData,
+        furniture: nextFurniture
+      },
+      false,
+      fix.label
+    )
+
+    if (fixedFurniture) {
+      const focusPoint = {
+        x: fix.patch.x ?? fixedFurniture.x,
+        y: fix.patch.y ?? fixedFurniture.y
+      }
+      const nextZoom = 1.35
+
+      setTool("select")
+      setSelectedIds([fix.furnitureId])
+      setZoom(nextZoom)
+      setPan({
+        x: 320 - focusPoint.x * nextZoom,
+        y: 320 - focusPoint.y * nextZoom
+      })
+    }
+  }, [floorPlanData, setFloorPlanData, setPan, setSelectedIds, setTool, setZoom])
 
   const fixActions = useMemo<FixAssistAction[]>(() => {
     const actions: FixAssistAction[] = []
@@ -337,6 +387,37 @@ export default function EditorDesignReviewPanel() {
                     {plan.items.length > 0 ? `Apply ${plan.category} layout` : "Focus room"}
                   </button>
                 </article>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {smartFixes.length > 0 ? (
+        <div className="editor-smart-fixes">
+          <div className="editor-smart-fixes-header">
+            <Sparkles size={15} />
+            <span>Smart Fix Suggestions</span>
+          </div>
+          <div className="editor-smart-fix-list">
+            {smartFixes.map((fix) => {
+              const FixIcon = fix.patch.rotation === undefined ? Move : RotateCw
+
+              return (
+                <button
+                  key={fix.id}
+                  type="button"
+                  className="editor-smart-fix"
+                  onClick={() => applySmartFix(fix)}
+                >
+                  <span className="compliance-icon-shell is-warning">
+                    <FixIcon size={15} />
+                  </span>
+                  <span>
+                    <strong>{fix.label}</strong>
+                    <span>{fix.detail}</span>
+                  </span>
+                </button>
               )
             })}
           </div>
