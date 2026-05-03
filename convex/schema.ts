@@ -101,8 +101,8 @@ export default defineSchema({
     scale: v.optional(v.number()),
     gridSize: v.optional(v.number()),
     childDataUpdatedAt: v.optional(v.number()),
-    // Deprecated after child-table migration. Kept for dual-read fallback and saved versions.
-    data: floorPlanData,
+    // Deprecated after child-table migration. Kept optional until legacy dev docs are backfilled.
+    data: v.optional(floorPlanData),
     version: v.number()
   })
     .index("by_projectId", ["projectId"])

@@ -11,7 +11,6 @@ import {
 } from "./members";
 import {
   deleteFloorPlanChildData,
-  emptyLegacyFloorPlanData,
   hydrateFloorPlansData,
   saveFloorPlanChildData
 } from "./floorPlanChildData";
@@ -137,7 +136,6 @@ export const createWithInitialFloorPlan = mutationGeneric({
       scale: args.data.scale,
       gridSize: args.data.gridSize,
       childDataUpdatedAt: now,
-      data: emptyLegacyFloorPlanData(args.data),
       version: 1
     });
     await saveFloorPlanChildData(ctx, floorPlanId, args.data);

@@ -12,6 +12,7 @@ import type {
 } from "../lib/types";
 
 type FloorPlanDoc = Doc<"floorPlans">;
+export type HydratedFloorPlanDoc = FloorPlanDoc & { data: FloorPlanData };
 type ChildCtx = QueryCtx | MutationCtx;
 type FloorPlanDataInput = Omit<FloorPlanData, "annotations"> & {
   annotations?: Annotation[];
@@ -25,7 +26,7 @@ type ChildTableName =
   | "floorPlanAnnotations"
   | "floorPlanFurniture";
 
-const EMPTY_LEGACY_DATA: FloorPlanData = {
+const EMPTY_FLOOR_PLAN_DATA: FloorPlanData = {
   walls: [],
   rooms: [],
   doors: [],
@@ -37,7 +38,7 @@ const EMPTY_LEGACY_DATA: FloorPlanData = {
   gridSize: 20
 };
 
-function normalizeData(data: FloorPlanDataInput): FloorPlanData {
+function normalizeData(data: FloorPlanDataInput = EMPTY_FLOOR_PLAN_DATA): FloorPlanData {
   return {
     ...data,
     annotations: data.annotations ?? []
@@ -119,7 +120,7 @@ async function replaceChildRows<
 export async function hydrateFloorPlanData(
   ctx: QueryCtx | MutationCtx,
   floorPlan: FloorPlanDoc
-): Promise<FloorPlanDoc> {
+): Promise<HydratedFloorPlanDoc> {
   if (!childDataIsCurrent(floorPlan)) {
     return {
       ...floorPlan,
@@ -198,8 +199,8 @@ export async function hydrateFloorPlanData(
         depth: item.depth,
         rotation: item.rotation
       })),
-      scale: floorPlan.scale ?? floorPlan.data.scale,
-      gridSize: floorPlan.gridSize ?? floorPlan.data.gridSize
+      scale: floorPlan.scale ?? floorPlan.data?.scale ?? EMPTY_FLOOR_PLAN_DATA.scale,
+      gridSize: floorPlan.gridSize ?? floorPlan.data?.gridSize ?? EMPTY_FLOOR_PLAN_DATA.gridSize
     }
   };
 }
@@ -288,14 +289,6 @@ export async function saveFloorPlanChildData(
     depth: item.depth,
     rotation: item.rotation
   }));
-}
-
-export function emptyLegacyFloorPlanData(data: FloorPlanDataInput = EMPTY_LEGACY_DATA): FloorPlanData {
-  return {
-    ...EMPTY_LEGACY_DATA,
-    scale: data.scale,
-    gridSize: data.gridSize
-  };
 }
 
 export async function deleteFloorPlanChildData(

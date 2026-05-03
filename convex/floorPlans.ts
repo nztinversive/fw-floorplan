@@ -3,7 +3,6 @@ import { v } from "convex/values";
 import { floorPlanDataValidator } from "./validators";
 import { requireIdentityEmail, requireProjectEditor, requireProjectViewer } from "./members";
 import {
-  emptyLegacyFloorPlanData,
   hydrateFloorPlanData,
   saveFloorPlanChildData
 } from "./floorPlanChildData";
@@ -78,7 +77,6 @@ export const save = mutationGeneric({
         scale: args.data.scale,
         gridSize: args.data.gridSize,
         childDataUpdatedAt: Date.now(),
-        data: emptyLegacyFloorPlanData(args.data),
         version: 1
       });
       await saveFloorPlanChildData(ctx, floorPlanId, args.data);
@@ -118,7 +116,7 @@ export const backfillProjectChildData = mutationGeneric({
       .withIndex("by_projectId", (query) => query.eq("projectId", args.projectId))
       .take(args.limit ?? 50);
     const legacyFloorPlans = floorPlans.filter(
-      (floorPlan) => floorPlan.childDataUpdatedAt === undefined
+      (floorPlan) => floorPlan.childDataUpdatedAt === undefined && floorPlan.data !== undefined
     );
 
     if (args.dryRun) {

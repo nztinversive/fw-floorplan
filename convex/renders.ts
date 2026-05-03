@@ -11,10 +11,10 @@ import {
 import { STYLE_PRESET_MAP, type StylePresetId } from "../lib/style-presets";
 import { requireProjectEditor, requireProjectViewer } from "./members";
 import { renderSettingsValidator, renderViewAngleValidator } from "./validators";
+import type { HydratedFloorPlanDoc } from "./floorPlanChildData";
 
-type FloorPlanDoc = Doc<"floorPlans">;
 type ProjectWithFloorPlans = Doc<"projects"> & {
-  floorPlans: FloorPlanDoc[];
+  floorPlans: HydratedFloorPlanDoc[];
 };
 
 type PlanBounds = {
@@ -44,7 +44,7 @@ function roundToNearestFive(value: number) {
   return Math.max(5, Math.round(value / 5) * 5);
 }
 
-function getPlanBounds(floorPlan: FloorPlanDoc): PlanBounds | null {
+function getPlanBounds(floorPlan: HydratedFloorPlanDoc): PlanBounds | null {
   const points = [
     ...floorPlan.data.walls.flatMap((wall) => [
       { x: wall.x1, y: wall.y1 },
@@ -65,7 +65,7 @@ function getPlanBounds(floorPlan: FloorPlanDoc): PlanBounds | null {
   };
 }
 
-function inferSqFtFromGeometry(floorPlans: FloorPlanDoc[]) {
+function inferSqFtFromGeometry(floorPlans: HydratedFloorPlanDoc[]) {
   return floorPlans.reduce((total, floorPlan) => {
     const bounds = getPlanBounds(floorPlan);
     if (!bounds) {
@@ -91,7 +91,7 @@ function inferSqFtFromGeometry(floorPlans: FloorPlanDoc[]) {
   }, 0);
 }
 
-function getTotalSqFt(floorPlans: FloorPlanDoc[]) {
+function getTotalSqFt(floorPlans: HydratedFloorPlanDoc[]) {
   const roomAreaTotal = floorPlans.reduce(
     (total, floorPlan) =>
       total +
@@ -111,7 +111,7 @@ function getTotalSqFt(floorPlans: FloorPlanDoc[]) {
   return null;
 }
 
-function countRoomsByLabel(floorPlans: FloorPlanDoc[], matcher: (label: string) => boolean) {
+function countRoomsByLabel(floorPlans: HydratedFloorPlanDoc[], matcher: (label: string) => boolean) {
   return floorPlans.reduce(
     (count, floorPlan) =>
       count + floorPlan.data.rooms.filter((room) => matcher(room.label.toLowerCase())).length,
@@ -119,7 +119,7 @@ function countRoomsByLabel(floorPlans: FloorPlanDoc[], matcher: (label: string) 
   );
 }
 
-function summarizeLayout(floorPlans: FloorPlanDoc[]) {
+function summarizeLayout(floorPlans: HydratedFloorPlanDoc[]) {
   const allLabels = floorPlans.flatMap((floorPlan) =>
     floorPlan.data.rooms.map((room) => room.label.toLowerCase())
   );
@@ -170,7 +170,7 @@ function summarizeLayout(floorPlans: FloorPlanDoc[]) {
   return `The home uses a clear residential layout with shared living spaces at its core and private rooms arranged around them.`;
 }
 
-function summarizeFeatures(floorPlans: FloorPlanDoc[]) {
+function summarizeFeatures(floorPlans: HydratedFloorPlanDoc[]) {
   const labels = floorPlans.flatMap((floorPlan) =>
     floorPlan.data.rooms.map((room) => room.label.toLowerCase())
   );
@@ -208,7 +208,7 @@ function summarizeFeatures(floorPlans: FloorPlanDoc[]) {
   return `Key features include ${selected.join(", ")}.`;
 }
 
-function estimateFootprint(floorPlans: FloorPlanDoc[], totalSqFt: number | null) {
+function estimateFootprint(floorPlans: HydratedFloorPlanDoc[], totalSqFt: number | null) {
   const primaryFloor = floorPlans[0];
   if (!primaryFloor) {
     return null;
@@ -250,7 +250,7 @@ function estimateFootprint(floorPlans: FloorPlanDoc[], totalSqFt: number | null)
   return `The footprint is approximately ${Math.round(widthFeet)} feet wide by ${Math.round(depthFeet)} feet deep.`;
 }
 
-function describeFloorPlans(floorPlans: FloorPlanDoc[]) {
+function describeFloorPlans(floorPlans: HydratedFloorPlanDoc[]) {
   const orderedFloorPlans = [...floorPlans].sort((left, right) => left.floor - right.floor);
   const totalSqFt = getTotalSqFt(orderedFloorPlans);
   const bedrooms = countRoomsByLabel(
