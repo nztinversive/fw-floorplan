@@ -149,7 +149,7 @@ export const listMembers = query({
     projectId: v.id("projects")
   },
   handler: async (ctx, args) => {
-    await requireProjectViewer(ctx, args.projectId);
+    await requireProjectOwner(ctx, args.projectId);
     const members = await getProjectMembers(ctx, args.projectId);
 
     return members.sort((left, right) => {
@@ -170,6 +170,15 @@ export const listMembers = query({
       }
       return left.email.localeCompare(right.email);
     });
+  }
+});
+
+export const currentMember = query({
+  args: {
+    projectId: v.id("projects")
+  },
+  handler: async (ctx, args) => {
+    return await requireProjectViewer(ctx, args.projectId);
   }
 });
 
