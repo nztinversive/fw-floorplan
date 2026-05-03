@@ -6,6 +6,7 @@ import type { RefObject } from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { FURNITURE_BY_ID } from "@/lib/furniture-library"
+import { getDesignReview } from "@/lib/floor-plan-analysis"
 import {
   calculateRoomAreaSqFt,
   clamp,
@@ -51,6 +52,16 @@ const ORTHOGONAL_SNAP_THRESHOLD = 15
 const SNAP_GUIDE_THRESHOLD = 4
 const WALL_PLACEMENT_THRESHOLD = 40
 const ROOM_CLOSE_THRESHOLD = 15
+
+function getFurnitureClearanceInches(type: string): number {
+  if (type.startsWith("dining-table")) return 36
+  if (["refrigerator", "stove", "dishwasher", "kitchen-island"].includes(type)) return 36
+  if (["queen-bed", "king-bed", "twin-bed"].includes(type)) return 24
+  if (["toilet", "sink-vanity", "bathtub", "shower"].includes(type)) return 24
+  if (["couch", "loveseat", "armchair", "office-chair", "dining-chair"].includes(type)) return 24
+
+  return 18
+}
 
 function findAlignedCoordinate(
   value: number,
@@ -142,6 +153,55 @@ export default function FloorPlanCanvas({
   const addAnnotation = useEditorStore((state) => state.addAnnotation)
   const moveElement = useEditorStore((state) => state.moveElement)
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds])
+  const designReview = useMemo(() => getDesignReview(floorPlanData), [floorPlanData])
+  const designWarningRoomIds = useMemo(
+    () =>
+      new Set(
+        designReview.roomAssessments
+          .filter((room) => room.items.some((item) => item.severity === "warning"))
+          .map((room) => room.roomId)
+      ),
+    [designReview.roomAssessments]
+  )
+  const designInfoRoomIds = useMemo(
+    () =>
+      new Set(
+        designReview.roomAssessments
+          .filter((room) =>
+            !designWarningRoomIds.has(room.roomId) &&
+            room.items.some((item) => item.severity === "info")
+          )
+          .map((room) => room.roomId)
+      ),
+    [designReview.roomAssessments, designWarningRoomIds]
+  )
+  const designWarningFurnitureIds = useMemo(
+    () =>
+      new Set(
+        designReview.furnitureItems
+          .filter((item) => item.targetId && item.severity === "warning")
+          .map((item) => item.targetId!)
+      ),
+    [designReview.furnitureItems]
+  )
+  const designInfoFurnitureIds = useMemo(
+    () =>
+      new Set(
+        designReview.furnitureItems
+          .filter((item) => item.targetId && item.severity === "info")
+          .map((item) => item.targetId!)
+      ),
+    [designReview.furnitureItems]
+  )
+  const designWarningDoorIds = useMemo(
+    () =>
+      new Set(
+        designReview.circulationItems
+          .filter((item) => item.targetId && item.targetKind === "door" && item.severity === "warning")
+          .map((item) => item.targetId!)
+      ),
+    [designReview.circulationItems]
+  )
   const wallEndpoints = useMemo(
     () =>
       floorPlanData.walls.flatMap((wall) => [
@@ -673,6 +733,20 @@ export default function FloorPlanCanvas({
           <Layer>
             {floorPlanData.rooms.map((room, index) => {
               const labelPosition = polygonCentroid(room.polygon)
+              const hasDesignWarning = designWarningRoomIds.has(room.id)
+              const hasDesignInfo = designInfoRoomIds.has(room.id)
+              const roomFill = hasDesignWarning
+                ? "rgba(245, 158, 11, 0.22)"
+                : hasDesignInfo
+                  ? "rgba(37, 99, 235, 0.12)"
+                  : ROOM_COLORS[index % ROOM_COLORS.length]
+              const roomStroke = selectedIdSet.has(room.id)
+                ? "#d4a84b"
+                : hasDesignWarning
+                  ? "#d97706"
+                  : hasDesignInfo
+                    ? "#2563eb"
+                    : "rgba(27, 42, 74, 0.24)"
 
               return (
                 <Group
@@ -687,10 +761,29 @@ export default function FloorPlanCanvas({
                   <Line
                     closed
                     points={room.polygon.flatMap((point) => [point.x, point.y])}
-                    fill={ROOM_COLORS[index % ROOM_COLORS.length]}
-                    stroke={selectedIdSet.has(room.id) ? "#d4a84b" : "rgba(27, 42, 74, 0.24)"}
-                    strokeWidth={selectedIdSet.has(room.id) ? 3 : 1.5}
+                    fill={roomFill}
+                    stroke={roomStroke}
+                    strokeWidth={selectedIdSet.has(room.id) || hasDesignWarning ? 3 : 1.5}
                   />
+                  {hasDesignWarning || hasDesignInfo ? (
+                    <Group x={labelPosition.x + 48} y={labelPosition.y - 34} listening={false}>
+                      <Circle
+                        radius={10 / zoom}
+                        fill={hasDesignWarning ? "#d97706" : "#2563eb"}
+                        opacity={0.95}
+                      />
+                      <Text
+                        x={-4 / zoom}
+                        y={-7 / zoom}
+                        width={8 / zoom}
+                        align="center"
+                        fontSize={13 / zoom}
+                        fontStyle="bold"
+                        fill="#ffffff"
+                        text={hasDesignWarning ? "!" : "i"}
+                      />
+                    </Group>
+                  ) : null}
                   <Text
                     x={labelPosition.x}
                     y={labelPosition.y}
@@ -733,6 +826,7 @@ export default function FloorPlanCanvas({
 
               const center = pointOnWall(wall, door.position)
               const radius = (door.width / 12) * floorPlanData.scale * 0.5
+              const hasDesignWarning = designWarningDoorIds.has(door.id)
               return (
                 <Group
                   key={door.id}
@@ -750,9 +844,20 @@ export default function FloorPlanCanvas({
                     outerRadius={radius + 1.5}
                     angle={90}
                     rotation={getWallAngle(wall) - 45}
-                    fill={selectedIdSet.has(door.id) ? "#d4a84b" : "#B58B31"}
+                    fill={selectedIdSet.has(door.id) ? "#d4a84b" : hasDesignWarning ? "#dc2626" : "#B58B31"}
                     opacity={0.85}
                   />
+                  {hasDesignWarning ? (
+                    <Circle
+                      x={center.x}
+                      y={center.y}
+                      radius={6 / zoom}
+                      fill="#dc2626"
+                      stroke="#fee2e2"
+                      strokeWidth={1.5 / zoom}
+                      listening={false}
+                    />
+                  ) : null}
                 </Group>
               )
             })}
@@ -797,6 +902,9 @@ export default function FloorPlanCanvas({
               const depthPx = (item.depth / 12) * floorPlanData.scale
               const furnitureLabel = FURNITURE_BY_ID[item.type]?.label ?? item.type
               const isSelected = selectedIdSet.has(item.id)
+              const hasDesignWarning = designWarningFurnitureIds.has(item.id)
+              const hasDesignInfo = designInfoFurnitureIds.has(item.id)
+              const clearancePx = (getFurnitureClearanceInches(item.type) / 12) * floorPlanData.scale
 
               return (
                 <Group
@@ -812,14 +920,38 @@ export default function FloorPlanCanvas({
                   onDragEnd={(event) => handleElementDragEnd(item.id, event)}
                 >
                   <Rect
+                    x={-widthPx / 2 - clearancePx}
+                    y={-depthPx / 2 - clearancePx}
+                    width={widthPx + clearancePx * 2}
+                    height={depthPx + clearancePx * 2}
+                    cornerRadius={Math.min(widthPx, depthPx) * 0.16}
+                    fill={
+                      hasDesignWarning
+                        ? "rgba(220, 38, 38, 0.08)"
+                        : hasDesignInfo
+                          ? "rgba(37, 99, 235, 0.06)"
+                          : "rgba(29, 125, 86, 0.05)"
+                    }
+                    stroke={hasDesignWarning ? "#dc2626" : hasDesignInfo ? "#2563eb" : "#1d7d56"}
+                    strokeWidth={1.25 / zoom}
+                    dash={[8 / zoom, 7 / zoom]}
+                    listening={false}
+                  />
+                  <Rect
                     x={-widthPx / 2}
                     y={-depthPx / 2}
                     width={widthPx}
                     height={depthPx}
                     cornerRadius={Math.min(widthPx, depthPx) * 0.12}
-                    fill={isSelected ? "rgba(212, 168, 75, 0.42)" : "rgba(148, 163, 184, 0.26)"}
-                    stroke={isSelected ? "#d4a84b" : "#475569"}
-                    strokeWidth={isSelected ? 3 : 1.5}
+                    fill={
+                      isSelected
+                        ? "rgba(212, 168, 75, 0.42)"
+                        : hasDesignWarning
+                          ? "rgba(248, 113, 113, 0.24)"
+                          : "rgba(148, 163, 184, 0.26)"
+                    }
+                    stroke={isSelected ? "#d4a84b" : hasDesignWarning ? "#dc2626" : "#475569"}
+                    strokeWidth={isSelected || hasDesignWarning ? 3 : 1.5}
                   />
                   <Text
                     x={-widthPx / 2}

@@ -688,6 +688,91 @@ button:disabled,
   min-width: 8rem;
 }
 
+.editor-design-review {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.editor-design-score {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.9rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.5rem;
+  background: rgba(27, 42, 74, 0.04);
+}
+
+.editor-design-score-value {
+  font-size: 2rem;
+  line-height: 0.95;
+  font-weight: 700;
+  color: var(--fw-navy);
+}
+
+.editor-design-issue-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.editor-design-issue {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.7rem;
+  align-items: start;
+  padding: 0.75rem;
+  border: 1px solid var(--fw-border);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--fw-ink);
+  text-align: left;
+}
+
+.editor-design-issue:disabled {
+  opacity: 0.75;
+  cursor: default;
+}
+
+.editor-design-issue:not(:disabled):hover {
+  border-color: rgba(212, 168, 75, 0.42);
+  background: rgba(255, 251, 235, 0.88);
+}
+
+.editor-design-issue.is-warning {
+  border-color: rgba(180, 83, 9, 0.18);
+}
+
+.editor-design-issue-copy {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  font-size: 0.86rem;
+}
+
+.editor-design-issue-copy strong {
+  color: var(--fw-ink);
+}
+
+.editor-design-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  border-radius: 0.5rem;
+  background: rgba(29, 125, 86, 0.08);
+  color: var(--fw-success);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.editor-design-footnote {
+  color: var(--fw-slate);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .cost-input {
   min-width: 110px;
 }
@@ -1810,6 +1895,32 @@ button:disabled,
   background: transparent;
   border: none;
   box-shadow: none;
+}
+
+.editor-dark .editor-design-score,
+.editor-dark .editor-design-issue {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.editor-dark .editor-design-score-value,
+.editor-dark .editor-design-issue-copy strong {
+  color: white;
+}
+
+.editor-dark .editor-design-issue:not(:disabled):hover {
+  border-color: rgba(212, 168, 75, 0.34);
+  background: rgba(212, 168, 75, 0.08);
+}
+
+.editor-dark .editor-design-empty {
+  background: rgba(29, 125, 86, 0.14);
+  color: rgba(134, 239, 172, 0.92);
+}
+
+.editor-dark .editor-design-footnote {
+  color: rgba(255, 255, 255, 0.46);
 }
 
 /* ── Toolbar labels ── */

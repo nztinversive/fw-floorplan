@@ -13,7 +13,9 @@ import type { Id } from "@/convex/_generated/dataModel"
 import Breadcrumb from "@/components/Breadcrumb"
 import CanvasGuidance from "@/components/CanvasGuidance"
 import CommentsPanel from "@/components/CommentsPanel"
+import EditorDesignReviewPanel from "@/components/EditorDesignReviewPanel"
 import FloorPlanCanvas from "@/components/FloorPlanCanvas"
+import FurnitureLibrary from "@/components/FurnitureLibrary"
 import HistoryPanel from "@/components/HistoryPanel"
 import OnboardingTour from "@/components/OnboardingTour"
 import PropertiesPanel from "@/components/PropertiesPanel"
@@ -724,6 +726,8 @@ export default function ProjectEditorPage() {
                 onRestore={handleRestoreVersion}
               />
             ) : null}
+            <FurnitureLibrary isOpen={tool === "furniture"} onClose={() => setTool("select")} />
+            <EditorDesignReviewPanel />
             {isCommentsOpen ? (
               <CommentsPanel
                 comments={comments}

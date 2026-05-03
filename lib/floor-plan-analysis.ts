@@ -77,6 +77,8 @@ export type DesignReviewItem = {
   subject: string
   message: string
   recommendation: string
+  targetId?: string
+  targetKind?: "room" | "door" | "furniture" | "general"
 }
 
 export type RoomDesignAssessment = {
@@ -133,6 +135,15 @@ function getRoomCategory(room: Room): RoomDesignAssessment["category"] {
 }
 
 function getRoomBounds(room: Room) {
+  if (room.polygon.length === 0) {
+    return {
+      minX: 0,
+      maxX: 0,
+      minY: 0,
+      maxY: 0
+    }
+  }
+
   const xs = room.polygon.map((point) => point.x)
   const ys = room.polygon.map((point) => point.y)
 
@@ -145,6 +156,10 @@ function getRoomBounds(room: Room) {
 }
 
 function pointInPolygon(point: Point, polygon: Point[]) {
+  if (polygon.length < 3) {
+    return false
+  }
+
   let inside = false
 
   for (let index = 0, previousIndex = polygon.length - 1; index < polygon.length; previousIndex = index, index += 1) {
@@ -178,9 +193,10 @@ function makeDesignItem(
   severity: DesignReviewSeverity,
   subject: string,
   message: string,
-  recommendation: string
+  recommendation: string,
+  target?: Pick<DesignReviewItem, "targetId" | "targetKind">
 ): DesignReviewItem {
-  return { id, severity, subject, message, recommendation }
+  return { id, severity, subject, message, recommendation, ...target }
 }
 
 function getWallEndpointPairs(wall: Wall) {
@@ -449,7 +465,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
           "warning",
           label,
           `${label} is ${roundTo(room.areaSqFt, 1)} sq ft with a ${widthFt} ft by ${depthFt} ft envelope.`,
-          "Target at least 90 sq ft and a 9 ft minimum dimension for a more comfortable bedroom."
+          "Target at least 90 sq ft and a 9 ft minimum dimension for a more comfortable bedroom.",
+          { targetId: room.id, targetKind: "room" }
         ))
       } else {
         items.push(makeDesignItem(
@@ -457,7 +474,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
           "good",
           label,
           `${label} has workable bedroom proportions.`,
-          "Keep bed placement and closet access clear as furniture is added."
+          "Keep bed placement and closet access clear as furniture is added.",
+          { targetId: room.id, targetKind: "room" }
         ))
       }
 
@@ -467,7 +485,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
           "warning",
           label,
           `${label} has no detected window.`,
-          "Add or verify a window for daylight, ventilation, and egress review."
+          "Add or verify a window for daylight, ventilation, and egress review.",
+          { targetId: room.id, targetKind: "room" }
         ))
       }
     }
@@ -483,7 +502,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
           "warning",
           label,
           `${label} is ${roundTo(room.areaSqFt, 1)} sq ft.`,
-          "Consider increasing kitchen area or using a compact galley layout with clear appliance landing zones."
+          "Consider increasing kitchen area or using a compact galley layout with clear appliance landing zones.",
+          { targetId: room.id, targetKind: "room" }
         ))
       }
 
@@ -493,7 +513,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
           "info",
           label,
           "The kitchen work zone is not fully represented with refrigerator and stove furniture.",
-          "Place refrigerator, stove, sink or island references to review appliance clearances and work-triangle quality."
+          "Place refrigerator, stove, sink or island references to review appliance clearances and work-triangle quality.",
+          { targetId: room.id, targetKind: "room" }
         ))
       } else {
         items.push(makeDesignItem(
@@ -501,7 +522,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
           "good",
           label,
           "Core kitchen appliances are represented.",
-          "Use the furniture layout to confirm aisle widths and appliance door swings."
+          "Use the furniture layout to confirm aisle widths and appliance door swings.",
+          { targetId: room.id, targetKind: "room" }
         ))
       }
     }
@@ -513,7 +535,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
           "warning",
           label,
           `${label} is ${roundTo(room.areaSqFt, 1)} sq ft.`,
-          "Verify fixture clearances carefully; compact baths usually need very deliberate door and vanity placement."
+          "Verify fixture clearances carefully; compact baths usually need very deliberate door and vanity placement.",
+          { targetId: room.id, targetKind: "room" }
         ))
       }
 
@@ -527,7 +550,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
           "info",
           label,
           "No bathroom fixtures are placed in this room.",
-          "Add toilet, vanity, shower or tub furniture to validate fixture clearances."
+          "Add toilet, vanity, shower or tub furniture to validate fixture clearances.",
+          { targetId: room.id, targetKind: "room" }
         ))
       }
     }
@@ -538,7 +562,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
         "warning",
         label,
         `${label} is ${roundTo(room.areaSqFt, 1)} sq ft.`,
-        "A main living space often benefits from at least 120 sq ft plus clear circulation around seating."
+        "A main living space often benefits from at least 120 sq ft plus clear circulation around seating.",
+        { targetId: room.id, targetKind: "room" }
       ))
     }
 
@@ -548,7 +573,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
         "warning",
         label,
         "No door is associated with this room.",
-        "Add or verify door placement so circulation and privacy are clear."
+        "Add or verify door placement so circulation and privacy are clear.",
+        { targetId: room.id, targetKind: "room" }
       ))
     }
 
@@ -558,7 +584,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
         "good",
         label,
         `${label} has ${metric.windowCount} detected window${metric.windowCount === 1 ? "" : "s"}.`,
-        "Use window placement to guide furniture orientation and daylight-sensitive uses."
+        "Use window placement to guide furniture orientation and daylight-sensitive uses.",
+        { targetId: room.id, targetKind: "room" }
       ))
     }
 
@@ -593,7 +620,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
         "warning",
         "Door clearance",
         `A ${door.type} door is ${widthInches} inches wide.`,
-        "Use 30 inches or wider for a more comfortable interior passage; 32 to 36 inches is better for accessibility."
+        "Use 30 inches or wider for a more comfortable interior passage; 32 to 36 inches is better for accessibility.",
+        { targetId: door.id, targetKind: "door" }
       ))
     }
   }
@@ -604,7 +632,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
       "warning",
       "Circulation",
       "Rooms exist but no doors are placed.",
-      "Add doors to clarify circulation, privacy, and furniture move-in paths."
+      "Add doors to clarify circulation, privacy, and furniture move-in paths.",
+      { targetKind: "general" }
     ))
   }
 
@@ -620,7 +649,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
         "info",
         catalogItem?.label ?? "Furniture",
         `${catalogItem?.label ?? item.type} is not inside a detected room.`,
-        "Move the furniture reference into a room polygon so room-level clearance checks can include it."
+        "Move the furniture reference into a room polygon so room-level clearance checks can include it.",
+        { targetId: item.id, targetKind: "furniture" }
       ))
       continue
     }
@@ -637,7 +667,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
           "warning",
           catalogItem?.label ?? "Bed",
           `${catalogItem?.label ?? item.type} is in a room with a ${roundTo(minimumRoomDimension, 1)} ft minimum dimension.`,
-          "Verify at least 24 inches of walking clearance beside the bed and consider a smaller bed if needed."
+          "Verify at least 24 inches of walking clearance beside the bed and consider a smaller bed if needed.",
+          { targetId: item.id, targetKind: "furniture" }
         ))
       }
     }
@@ -648,7 +679,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
         "info",
         catalogItem?.label ?? "Dining table",
         `${catalogItem?.label ?? item.type} footprint is ${itemWidthFt} ft by ${itemDepthFt} ft.`,
-        "Confirm roughly 36 inches around the table for chairs and circulation."
+        "Confirm roughly 36 inches around the table for chairs and circulation.",
+        { targetId: item.id, targetKind: "furniture" }
       ))
     }
   }
@@ -664,7 +696,8 @@ export function getDesignReview(data: FloorPlanData): DesignReview {
       "good",
       "Design review",
       "No major layout warnings were found.",
-      "Continue adding furniture and fixtures to make the review more precise."
+      "Continue adding furniture and fixtures to make the review more precise.",
+      { targetKind: "general" }
     ))
   }
 
