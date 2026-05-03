@@ -51,9 +51,10 @@ export default function ProjectOverviewPage() {
     | Id<"projects">
     | undefined
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
-  const commentsQuery = useQuery(api.comments.listComments, projectId ? { projectId } : "skip")
-  const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip")
-  const versionsQuery = useQuery(api.versions.listProjectVersions, projectId ? { projectId } : "skip")
+  const childQueryArgs = projectId && project ? { projectId } : "skip"
+  const commentsQuery = useQuery(api.comments.listComments, childQueryArgs)
+  const rendersQuery = useQuery(api.renders.list, childQueryArgs)
+  const versionsQuery = useQuery(api.versions.listProjectVersions, childQueryArgs)
   const saveFloorPlan = useMutation(api.floorPlans.save)
   const updateProject = useMutation(api.projects.update)
   const removeProject = useMutation(api.projects.remove)
