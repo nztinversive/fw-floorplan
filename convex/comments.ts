@@ -3,6 +3,15 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireProjectEditor, requireProjectViewer } from "./members";
 
+function displayNameFromEmail(email: string) {
+  const localPart = email.split("@")[0] ?? email;
+  return localPart
+    .split(/[._-]+/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || email;
+}
+
 export const listComments = query({
   args: {
     projectId: v.id("projects")
@@ -12,9 +21,10 @@ export const listComments = query({
     const comments = await ctx.db
       .query("comments")
       .withIndex("by_projectId", (query) => query.eq("projectId", args.projectId))
-      .collect();
+      .order("desc")
+      .take(200);
 
-    return comments.sort((left, right) => right.createdAt - left.createdAt);
+    return comments;
   }
 });
 
@@ -24,7 +34,6 @@ export const addComment = mutation({
     floorPlanId: v.optional(v.id("floorPlans")),
     x: v.number(),
     y: v.number(),
-    authorName: v.string(),
     text: v.string(),
     status: v.optional(v.union(v.literal("open"), v.literal("resolved")))
   },
@@ -33,7 +42,7 @@ export const addComment = mutation({
     if (!project) {
       throw new Error("Project not found");
     }
-    await requireProjectEditor(ctx, args.projectId);
+    const member = await requireProjectEditor(ctx, args.projectId);
 
     if (args.floorPlanId) {
       const floorPlan = await ctx.db.get(args.floorPlanId);
@@ -42,11 +51,7 @@ export const addComment = mutation({
       }
     }
 
-    const authorName = args.authorName.trim();
     const text = args.text.trim();
-    if (!authorName) {
-      throw new Error("Author name is required");
-    }
     if (!text) {
       throw new Error("Comment text is required");
     }
@@ -57,7 +62,7 @@ export const addComment = mutation({
       floorPlanId: args.floorPlanId,
       x: args.x,
       y: args.y,
-      authorName,
+      authorName: displayNameFromEmail(member.email),
       text,
       status: args.status ?? "open",
       createdAt: now,
@@ -80,6 +85,26 @@ export const resolveComment = mutation({
     await ctx.db.patch(args.commentId, {
       status: "resolved",
       resolvedAt: Date.now()
+    });
+
+    return args.commentId;
+  }
+});
+
+export const reopenComment = mutation({
+  args: {
+    commentId: v.id("comments")
+  },
+  handler: async (ctx, args) => {
+    const comment = await ctx.db.get(args.commentId);
+    if (!comment) {
+      throw new Error("Comment not found");
+    }
+    await requireProjectEditor(ctx, comment.projectId);
+
+    await ctx.db.patch(args.commentId, {
+      status: "open",
+      resolvedAt: undefined
     });
 
     return args.commentId;

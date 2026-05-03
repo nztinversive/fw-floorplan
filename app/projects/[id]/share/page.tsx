@@ -19,7 +19,7 @@ import { DEFAULT_RENDER_VIEW_ANGLE, RENDER_VIEW_ANGLE_LABELS } from "@/lib/rende
 import { formatRelativeTime } from "@/lib/file-utils"
 import { STYLE_PRESET_MAP } from "@/lib/style-presets"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
-import type { PersistedFloorPlan, ProjectMemberRole } from "@/lib/types"
+import type { PersistedFloorPlan, ProjectComment, ProjectMemberRole } from "@/lib/types"
 
 function getStyleLabel(style: string) {
   return STYLE_PRESET_MAP[style as keyof typeof STYLE_PRESET_MAP]?.name ?? style
@@ -36,6 +36,7 @@ export default function ProjectSharePage() {
     projectId && currentMember?.role === "owner" ? { projectId } : "skip"
   )
   const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip")
+  const commentsQuery = useQuery(api.comments.listComments, projectId ? { projectId } : "skip")
   const inviteMember = useMutation(api.members.inviteMember)
   const removeMember = useMutation(api.members.removeMember)
   const updateRole = useMutation(api.members.updateRole)
@@ -45,6 +46,11 @@ export default function ProjectSharePage() {
   const floorPlans = project?.floorPlans
     ? sortFloors(project.floorPlans as PersistedFloorPlan[])
     : []
+  const comments = useMemo(() => (commentsQuery ?? []) as ProjectComment[], [commentsQuery])
+  const openCommentCount = useMemo(
+    () => comments.filter((comment) => comment.status === "open").length,
+    [comments]
+  )
   const renders = useMemo(
     () =>
       (rendersQuery ?? []).map((render) => ({
@@ -157,7 +163,11 @@ export default function ProjectSharePage() {
     }
   }
 
-  if ((projectId && project === undefined) || (projectId && rendersQuery === undefined)) {
+  if (
+    (projectId && project === undefined) ||
+    (projectId && rendersQuery === undefined) ||
+    (projectId && commentsQuery === undefined)
+  ) {
     return (
       <main className="page-shell">
         <SkeletonPanel height="300px" />
@@ -226,8 +236,8 @@ export default function ProjectSharePage() {
           </div>
           <div className="stat-card stat-card-v2">
             <div className="stat-card-icon stat-card-icon-purple"><ImageIcon size={18} /></div>
-            <div className="stat-label">Renders shown</div>
-            <div className="stat-value share-stat">{visibleRenders.length}</div>
+            <div className="stat-label">Open comments</div>
+            <div className="stat-value share-stat">{openCommentCount}</div>
           </div>
         </div>
       </section>
@@ -262,7 +272,10 @@ export default function ProjectSharePage() {
                     <div className="section-title">{formatFloorLabel(floorPlan.floor)}</div>
                     <span className="badge">Version {floorPlan.version}</span>
                   </div>
-                  <ReadOnlyFloorPlanCanvas data={floorPlan.data} />
+                  <ReadOnlyFloorPlanCanvas
+                    data={floorPlan.data}
+                    comments={comments.filter((comment) => comment.floorPlanId === floorPlan._id)}
+                  />
                 </article>
               ))}
             </div>

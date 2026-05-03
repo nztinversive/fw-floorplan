@@ -4,11 +4,13 @@ import type Konva from "konva";
 import { Arc, Group, Layer, Line, Stage, Text } from "react-konva";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import CommentPin from "@/components/CommentPin";
 import { clamp, getWallAngle, pointOnWall, polygonCentroid } from "@/lib/geometry";
-import type { FloorPlanData, Point } from "@/lib/types";
+import type { FloorPlanData, Point, ProjectComment } from "@/lib/types";
 
 type ReadOnlyFloorPlanCanvasProps = {
   data: FloorPlanData;
+  comments?: ProjectComment[];
 };
 
 type CanvasSize = {
@@ -42,7 +44,7 @@ function getContentBounds(data: FloorPlanData) {
   };
 }
 
-export default function ReadOnlyFloorPlanCanvas({ data }: ReadOnlyFloorPlanCanvasProps) {
+export default function ReadOnlyFloorPlanCanvas({ data, comments = [] }: ReadOnlyFloorPlanCanvasProps) {
   const stageRef = useRef<Konva.Stage>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<CanvasSize>({ width: 960, height: 640 });
@@ -242,6 +244,16 @@ export default function ReadOnlyFloorPlanCanvas({ data }: ReadOnlyFloorPlanCanva
                 </Group>
               );
             })}
+
+            {comments.map((comment) => (
+              <CommentPin
+                key={comment._id}
+                x={comment.x}
+                y={comment.y}
+                zoom={zoom}
+                status={comment.status}
+              />
+            ))}
           </Layer>
         </Stage>
       </div>
@@ -250,6 +262,7 @@ export default function ReadOnlyFloorPlanCanvas({ data }: ReadOnlyFloorPlanCanva
         <span>Read-only floor plan view with zoom and pan enabled.</span>
         <span>
           {data.walls.length} walls • {data.rooms.length} rooms • {data.doors.length} doors • {data.windows.length} windows
+          {comments.length > 0 ? ` • ${comments.length} comments` : ""}
         </span>
       </div>
     </section>

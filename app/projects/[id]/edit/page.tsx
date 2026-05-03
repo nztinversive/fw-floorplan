@@ -71,7 +71,6 @@ export default function ProjectEditorPage() {
   const [calibrationFeetInput, setCalibrationFeetInput] = useState("")
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null)
   const [pendingCommentPoint, setPendingCommentPoint] = useState<Point | null>(null)
-  const [commentAuthorName, setCommentAuthorName] = useState("")
   const [commentText, setCommentText] = useState("")
   const [commentStatus, setCommentStatus] = useState<CommentStatus>("open")
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
@@ -85,6 +84,7 @@ export default function ProjectEditorPage() {
   const uploadSource = useMutation(api.floorPlans.uploadSource)
   const addComment = useMutation(api.comments.addComment)
   const resolveComment = useMutation(api.comments.resolveComment)
+  const reopenComment = useMutation(api.comments.reopenComment)
   const deleteComment = useMutation(api.comments.deleteComment)
   const actionError = useEditorStore((state) => state.actionError)
   const calibrationPoints = useEditorStore((state) => state.calibrationPoints)
@@ -121,6 +121,10 @@ export default function ProjectEditorPage() {
   )
   const activeSourceImageUrl = activeFloorPlan?.sourceImageUrl ?? null
   const comments = useMemo(() => (commentsQuery ?? []) as ProjectComment[], [commentsQuery])
+  const openCommentCount = useMemo(
+    () => comments.filter((comment) => comment.status === "open").length,
+    [comments]
+  )
   const floorLabelById = useMemo(
     () =>
       Object.fromEntries(
@@ -500,7 +504,6 @@ export default function ProjectEditorPage() {
         floorPlanId: activeFloorPlan._id as Id<"floorPlans">,
         x: pendingCommentPoint.x,
         y: pendingCommentPoint.y,
-        authorName: commentAuthorName,
         text: commentText,
         status: commentStatus
       })
@@ -525,6 +528,16 @@ export default function ProjectEditorPage() {
     } catch (error) {
       console.error("Unable to resolve comment.", error)
       toast("Unable to resolve comment", "error")
+    }
+  }
+
+  async function handleReopenComment(commentId: string) {
+    try {
+      await reopenComment({ commentId: commentId as Id<"comments"> })
+      toast("Comment reopened", "success")
+    } catch (error) {
+      console.error("Unable to reopen comment.", error)
+      toast("Unable to reopen comment", "error")
     }
   }
 
@@ -572,7 +585,7 @@ export default function ProjectEditorPage() {
           >
             <MessageSquare size={16} />
             {isCommentsOpen ? "Hide comments" : "Comments"}
-            <span className="badge">{comments.length}</span>
+            <span className="badge">{openCommentCount}</span>
           </button>
           <button
             type="button"
@@ -681,12 +694,11 @@ export default function ProjectEditorPage() {
                 selectedCommentId={selectedCommentId}
                 onSelectComment={handleSelectComment}
                 onResolveComment={handleResolveComment}
+                onReopenComment={handleReopenComment}
                 onDeleteComment={handleDeleteComment}
-                authorName={commentAuthorName}
                 draftText={commentText}
                 draftStatus={commentStatus}
                 pendingPlacement={pendingCommentPoint}
-                onAuthorNameChange={setCommentAuthorName}
                 onDraftTextChange={setCommentText}
                 onDraftStatusChange={setCommentStatus}
                 onSubmitComment={handleSubmitComment}

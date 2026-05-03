@@ -1,6 +1,5 @@
 "use client"
 
-import Image from "next/image"
 import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useMutation, useQuery } from "convex/react"
@@ -13,6 +12,7 @@ import ComplianceChecker from "@/components/ComplianceChecker"
 import ConfirmDialog from "@/components/ConfirmDialog"
 import CostEstimator from "@/components/CostEstimator"
 import FloorPlanComparison from "@/components/FloorPlanComparison"
+import ReadOnlyFloorPlanCanvas from "@/components/ReadOnlyFloorPlanCanvas"
 import RoomAreaSummaryDashboard from "@/components/RoomAreaSummaryDashboard"
 import RoomSchedule from "@/components/RoomSchedule"
 import ShareLinkCard from "@/components/ShareLinkCard"
@@ -115,11 +115,15 @@ export default function ProjectOverviewPage() {
     () => orderedFloorPlans.find((floorPlan) => floorPlan.floor === selectedFloor) ?? null,
     [orderedFloorPlans, selectedFloor]
   )
-  const activeFloorPreview = useMemo(
-    () => (activeFloorPlan ? generateFloorPlanPreview(activeFloorPlan.data) : null),
-    [activeFloorPlan]
-  )
   const comments = useMemo(() => (commentsQuery ?? []) as ProjectComment[], [commentsQuery])
+  const openCommentCount = useMemo(
+    () => comments.filter((comment) => comment.status === "open").length,
+    [comments]
+  )
+  const activeFloorComments = useMemo(
+    () => comments.filter((comment) => comment.floorPlanId === activeFloorPlan?._id),
+    [activeFloorPlan?._id, comments]
+  )
   const floorLabelById = useMemo(
     () =>
       Object.fromEntries(
@@ -359,7 +363,7 @@ export default function ProjectOverviewPage() {
             >
               <MessageSquare size={16} />
               {showCommentsSection ? "Hide comments" : "Comments"}
-              <span className="badge">{comments.length}</span>
+              <span className="badge">{openCommentCount}</span>
             </button>
             <button type="button" className="button-ghost" onClick={startEditing} title="Edit project details">
               <Pencil size={16} />
@@ -448,25 +452,20 @@ export default function ProjectOverviewPage() {
                 ))}
               </div>
 
-              <div className="overview-thumb overview-thumb-v2" style={{ position: "relative" }}>
-                {activeFloorPreview ? (
-                  <Image
-                    key={selectedFloor}
-                    src={activeFloorPreview.dataUrl}
-                    alt={`${project.name} ${formatFloorLabel(selectedFloor).toLowerCase()} preview`}
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 70vw"
-                    unoptimized
-                    className="floor-preview-image"
-                  />
-                ) : (
+              {activeFloorPlan ? (
+                <ReadOnlyFloorPlanCanvas
+                  data={activeFloorPlan.data}
+                  comments={activeFloorComments}
+                />
+              ) : (
+                <div className="overview-thumb overview-thumb-v2" style={{ position: "relative" }}>
                   <div className="floor-preview-empty">
                     <DraftingCompass size={28} />
                     <div>No floor preview available</div>
                     <div className="muted" style={{ fontSize: "0.82rem" }}>Open the editor to start drawing walls and rooms</div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               <div className="button-row" style={{ marginTop: "1rem" }}>
                 <Link href={`/projects/${projectId}/edit?floor=${selectedFloor}`} className="button-secondary">

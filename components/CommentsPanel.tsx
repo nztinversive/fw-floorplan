@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, MessageSquare, Trash2, X } from "lucide-react";
+import { CheckCircle2, MessageSquare, RotateCcw, Trash2, X } from "lucide-react";
 
 import { formatRelativeTime } from "@/lib/file-utils";
 import type { CommentStatus, Point, ProjectComment } from "@/lib/types";
@@ -11,12 +11,11 @@ type CommentsPanelProps = {
   selectedCommentId?: string | null;
   onSelectComment?: (comment: ProjectComment) => void;
   onResolveComment?: (commentId: string) => void;
+  onReopenComment?: (commentId: string) => void;
   onDeleteComment?: (commentId: string) => void;
-  authorName?: string;
   draftText?: string;
   draftStatus?: CommentStatus;
   pendingPlacement?: Point | null;
-  onAuthorNameChange?: (value: string) => void;
   onDraftTextChange?: (value: string) => void;
   onDraftStatusChange?: (value: CommentStatus) => void;
   onSubmitComment?: () => void;
@@ -33,12 +32,11 @@ export default function CommentsPanel({
   selectedCommentId = null,
   onSelectComment,
   onResolveComment,
+  onReopenComment,
   onDeleteComment,
-  authorName = "",
   draftText = "",
   draftStatus = "open",
   pendingPlacement = null,
-  onAuthorNameChange,
   onDraftTextChange,
   onDraftStatusChange,
   onSubmitComment,
@@ -79,16 +77,6 @@ export default function CommentsPanel({
           </div>
 
           <label className="field">
-            <span className="field-label">Author</span>
-            <input
-              className="field-input"
-              value={authorName}
-              onChange={(event) => onAuthorNameChange?.(event.target.value)}
-              placeholder="Taylor"
-            />
-          </label>
-
-          <label className="field">
             <span className="field-label">Comment</span>
             <textarea
               className="field-input"
@@ -116,7 +104,7 @@ export default function CommentsPanel({
             type="button"
             className="button-secondary"
             onClick={onSubmitComment}
-            disabled={isSubmitting || !pendingPlacement || !authorName.trim() || !draftText.trim()}
+            disabled={isSubmitting || !pendingPlacement || !draftText.trim()}
           >
             <MessageSquare size={16} />
             {isSubmitting ? "Saving..." : "Save comment"}
@@ -171,6 +159,20 @@ export default function CommentsPanel({
                     >
                       <CheckCircle2 size={14} />
                       Resolve
+                    </button>
+                  ) : null}
+
+                  {comment.status === "resolved" && onReopenComment ? (
+                    <button
+                      type="button"
+                      className="button-ghost"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onReopenComment(comment._id);
+                      }}
+                    >
+                      <RotateCcw size={14} />
+                      Reopen
                     </button>
                   ) : null}
 
