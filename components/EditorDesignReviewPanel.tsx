@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertTriangle, CheckCircle2, Crosshair, Info } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Crosshair, DoorOpen, Info, Sparkles } from "lucide-react"
 import { useMemo } from "react"
 
 import {
@@ -8,9 +8,10 @@ import {
   type DesignReviewItem,
   type DesignReviewSeverity
 } from "@/lib/floor-plan-analysis"
-import { pointOnWall, polygonCentroid } from "@/lib/geometry"
+import { FURNITURE_BY_ID } from "@/lib/furniture-library"
+import { getWallLength, pointOnWall, polygonCentroid, roomTouchesWall } from "@/lib/geometry"
 import { useEditorStore } from "@/lib/editor-store"
-import type { FloorPlanData, Point } from "@/lib/types"
+import type { FloorPlanData, Furniture, Point, Room } from "@/lib/types"
 
 type TargetKind = NonNullable<DesignReviewItem["targetKind"]>
 
@@ -18,6 +19,13 @@ type FocusTarget = {
   id?: string
   kind?: TargetKind
   point?: Point
+}
+
+type FixAssistAction = {
+  id: string
+  label: string
+  detail: string
+  apply: () => void
 }
 
 const SCORE_LABELS = [
@@ -34,6 +42,47 @@ function getItemIcon(severity: DesignReviewSeverity) {
 
 function getScoreLabel(score: number) {
   return SCORE_LABELS.find((entry) => score >= entry.threshold)?.label ?? "Needs review"
+}
+
+function pointInPolygon(point: Point, polygon: Point[]) {
+  if (polygon.length < 3) return false
+
+  let inside = false
+
+  for (let index = 0, previousIndex = polygon.length - 1; index < polygon.length; previousIndex = index, index += 1) {
+    const current = polygon[index]
+    const previous = polygon[previousIndex]
+    const crosses =
+      current.y > point.y !== previous.y > point.y &&
+      point.x < ((previous.x - current.x) * (point.y - current.y)) / (previous.y - current.y || 1) + current.x
+
+    if (crosses) {
+      inside = !inside
+    }
+  }
+
+  return inside
+}
+
+function furnitureCenter(furniture: Furniture): Point {
+  return {
+    x: furniture.x + furniture.width / 2,
+    y: furniture.y + furniture.depth / 2
+  }
+}
+
+function getFurnitureForRoom(room: Room, furniture: Furniture[]) {
+  return furniture.filter((item) => pointInPolygon(furnitureCenter(item), room.polygon))
+}
+
+function getRoomCategory(room: Room) {
+  const label = room.label.trim().toLowerCase()
+
+  if (/(bed|primary|suite|guest|kid|nursery)/.test(label)) return "bedroom"
+  if (/(kitchen|pantry)/.test(label)) return "kitchen"
+  if (/(living|family|great)/.test(label)) return "living"
+
+  return "general"
 }
 
 function getTargetPoint(data: FloorPlanData, item: DesignReviewItem): FocusTarget {
@@ -66,6 +115,8 @@ export default function EditorDesignReviewPanel() {
   const setTool = useEditorStore((state) => state.setTool)
   const setZoom = useEditorStore((state) => state.setZoom)
   const setPan = useEditorStore((state) => state.setPan)
+  const addDoor = useEditorStore((state) => state.addDoor)
+  const addFurniture = useEditorStore((state) => state.addFurniture)
 
   const review = useMemo(() => getDesignReview(floorPlanData), [floorPlanData])
   const priorityItems = useMemo(
@@ -73,6 +124,135 @@ export default function EditorDesignReviewPanel() {
     [review.warnings]
   )
   const scoreLabel = getScoreLabel(review.score)
+
+  const fixActions = useMemo<FixAssistAction[]>(() => {
+    const actions: FixAssistAction[] = []
+    const roomById = new Map(floorPlanData.rooms.map((room) => [room.id, room]))
+
+    const placeFurniture = (room: Room, type: string, offset: Point = { x: 0, y: 0 }, rotation = 0) => {
+      const catalogItem = FURNITURE_BY_ID[type]
+      if (!catalogItem) return
+
+      const center = polygonCentroid(room.polygon)
+      addFurniture({
+        type,
+        x: center.x + offset.x * floorPlanData.scale,
+        y: center.y + offset.y * floorPlanData.scale,
+        width: catalogItem.width,
+        depth: catalogItem.depth,
+        rotation
+      })
+    }
+
+    const focusRoom = (room: Room) => {
+      const center = polygonCentroid(room.polygon)
+      setTool("select")
+      setSelectedIds([room.id])
+      setZoom(1.35)
+      setPan({
+        x: 320 - center.x * 1.35,
+        y: 320 - center.y * 1.35
+      })
+    }
+
+    const accessWarning = review.warnings.find(
+      (item) => item.id.startsWith("room-access-") && item.targetId
+    )
+    const accessRoom = accessWarning?.targetId ? roomById.get(accessWarning.targetId) : null
+    const accessWall = accessRoom
+      ? floorPlanData.walls
+          .filter((wall) => roomTouchesWall(accessRoom, wall))
+          .sort((left, right) => getWallLength(right) - getWallLength(left))[0]
+      : null
+
+    if (accessRoom && accessWall) {
+      actions.push({
+        id: `add-door-${accessRoom.id}`,
+        label: "Add door",
+        detail: `Place a 36 in standard door on ${accessRoom.label}.`,
+        apply: () => {
+          addDoor({
+            wallId: accessWall.id,
+            position: 0.5,
+            width: 36,
+            type: "standard",
+            rotation: 0
+          })
+          focusRoom(accessRoom)
+        }
+      })
+    }
+
+    const bedroom = floorPlanData.rooms.find((room) => {
+      if (getRoomCategory(room) !== "bedroom") return false
+      const roomFurniture = getFurnitureForRoom(room, floorPlanData.furniture)
+      return !roomFurniture.some((item) => ["queen-bed", "king-bed", "twin-bed"].includes(item.type))
+    })
+
+    if (bedroom) {
+      actions.push({
+        id: `bedroom-set-${bedroom.id}`,
+        label: "Add bedroom set",
+        detail: `Place a bed and nightstand in ${bedroom.label}.`,
+        apply: () => {
+          placeFurniture(bedroom, bedroom.areaSqFt < 75 ? "twin-bed" : "queen-bed")
+          placeFurniture(bedroom, "nightstand", { x: 3, y: -2 })
+          focusRoom(bedroom)
+        }
+      })
+    }
+
+    const kitchen = floorPlanData.rooms.find((room) => {
+      if (getRoomCategory(room) !== "kitchen") return false
+      const roomFurnitureTypes = getFurnitureForRoom(room, floorPlanData.furniture).map((item) => item.type)
+      return !roomFurnitureTypes.includes("refrigerator") || !roomFurnitureTypes.includes("stove")
+    })
+
+    if (kitchen) {
+      actions.push({
+        id: `kitchen-basics-${kitchen.id}`,
+        label: "Add kitchen basics",
+        detail: `Place refrigerator and stove references in ${kitchen.label}.`,
+        apply: () => {
+          placeFurniture(kitchen, "refrigerator", { x: -1.4, y: 0 })
+          placeFurniture(kitchen, "stove", { x: 1.4, y: 0 })
+          focusRoom(kitchen)
+        }
+      })
+    }
+
+    const living = floorPlanData.rooms.find((room) => {
+      if (getRoomCategory(room) !== "living") return false
+      return getFurnitureForRoom(room, floorPlanData.furniture).length === 0
+    })
+
+    if (living) {
+      actions.push({
+        id: `living-set-${living.id}`,
+        label: "Add living set",
+        detail: `Place couch and coffee table references in ${living.label}.`,
+        apply: () => {
+          placeFurniture(living, "couch", { x: -2, y: 0 })
+          placeFurniture(living, "coffee-table", { x: 2, y: 0 })
+          focusRoom(living)
+        }
+      })
+    }
+
+    return actions.slice(0, 4)
+  }, [
+    addDoor,
+    addFurniture,
+    floorPlanData.furniture,
+    floorPlanData.rooms,
+    floorPlanData.scale,
+    floorPlanData.walls,
+    review.warnings,
+    setPan,
+    setSelectedIds,
+    setTool,
+    setZoom
+  ])
 
   function focusItem(item: DesignReviewItem) {
     const target = getTargetPoint(floorPlanData, item)
@@ -111,6 +291,33 @@ export default function EditorDesignReviewPanel() {
         </div>
         <div className="muted">{review.summary}</div>
       </div>
+
+      {fixActions.length > 0 ? (
+        <div className="editor-fix-assist">
+          <div className="editor-fix-assist-header">
+            <Sparkles size={15} />
+            <span>Fix Assist</span>
+          </div>
+          <div className="editor-fix-assist-list">
+            {fixActions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                className="editor-fix-action"
+                onClick={action.apply}
+              >
+                <span className="compliance-icon-shell is-info">
+                  {action.label === "Add door" ? <DoorOpen size={15} /> : <Sparkles size={15} />}
+                </span>
+                <span>
+                  <strong>{action.label}</strong>
+                  <span>{action.detail}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {priorityItems.length > 0 ? (
         <div className="editor-design-issue-list">
