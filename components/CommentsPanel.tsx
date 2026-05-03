@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, MessageSquare, RotateCcw, Trash2, X } from "lucide-react";
+import { CheckCircle2, MessageSquare, PlayCircle, RotateCcw, Send, Trash2, X } from "lucide-react";
 
 import { formatRelativeTime } from "@/lib/file-utils";
 import type { CommentStatus, Point, ProjectComment } from "@/lib/types";
@@ -12,12 +12,17 @@ type CommentsPanelProps = {
   onSelectComment?: (comment: ProjectComment) => void;
   onResolveComment?: (commentId: string) => void;
   onReopenComment?: (commentId: string) => void;
+  onUpdateCommentStatus?: (commentId: string, status: CommentStatus) => void;
   onDeleteComment?: (commentId: string) => void;
+  onReplyComment?: (commentId: string) => void;
   draftText?: string;
   draftStatus?: CommentStatus;
+  replyDrafts?: Record<string, string>;
+  replyingCommentId?: string | null;
   pendingPlacement?: Point | null;
   onDraftTextChange?: (value: string) => void;
   onDraftStatusChange?: (value: CommentStatus) => void;
+  onReplyDraftChange?: (commentId: string, value: string) => void;
   onSubmitComment?: () => void;
   onCancelPlacement?: () => void;
   isSubmitting?: boolean;
@@ -33,12 +38,17 @@ export default function CommentsPanel({
   onSelectComment,
   onResolveComment,
   onReopenComment,
+  onUpdateCommentStatus,
   onDeleteComment,
+  onReplyComment,
   draftText = "",
   draftStatus = "open",
+  replyDrafts = {},
+  replyingCommentId = null,
   pendingPlacement = null,
   onDraftTextChange,
   onDraftStatusChange,
+  onReplyDraftChange,
   onSubmitComment,
   onCancelPlacement,
   isSubmitting = false,
@@ -96,6 +106,7 @@ export default function CommentsPanel({
               onChange={(event) => onDraftStatusChange?.(event.target.value as CommentStatus)}
             >
               <option value="open">Open</option>
+              <option value="in_progress">In progress</option>
               <option value="resolved">Resolved</option>
             </select>
           </label>
@@ -116,6 +127,21 @@ export default function CommentsPanel({
         {comments.length > 0 ? (
           comments.map((comment) => {
             const floorLabel = comment.floorPlanId ? floorLabelById?.[comment.floorPlanId] ?? "Pinned floor" : "Project";
+            const replyDraft = replyDrafts[comment._id] ?? "";
+            const statusStyle = {
+              open: {
+                background: "rgba(212, 168, 75, 0.16)",
+                color: "#8a640e"
+              },
+              in_progress: {
+                background: "rgba(59, 130, 246, 0.14)",
+                color: "#1d4ed8"
+              },
+              resolved: {
+                background: "rgba(22, 163, 74, 0.14)",
+                color: "#166534"
+              }
+            }[comment.status];
 
             return (
               <article
@@ -136,19 +162,44 @@ export default function CommentsPanel({
                   </div>
                   <span
                     className="badge"
-                    style={{
-                      background: comment.status === "resolved" ? "rgba(22, 163, 74, 0.14)" : "rgba(212, 168, 75, 0.16)",
-                      color: comment.status === "resolved" ? "#166534" : "#8a640e"
-                    }}
+                    style={statusStyle}
                   >
-                    {comment.status}
+                    {comment.status === "in_progress" ? "in progress" : comment.status}
                   </span>
                 </div>
 
                 <div style={{ color: "var(--slate-900, #0f172a)", lineHeight: 1.55 }}>{comment.text}</div>
 
                 <div className="button-row" style={{ marginTop: "0.85rem" }}>
+                  {comment.status === "open" && onUpdateCommentStatus ? (
+                    <button
+                      type="button"
+                      className="button-ghost"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onUpdateCommentStatus(comment._id, "in_progress");
+                      }}
+                    >
+                      <PlayCircle size={14} />
+                      Start
+                    </button>
+                  ) : null}
+
                   {comment.status === "open" && onResolveComment ? (
+                    <button
+                      type="button"
+                      className="button-ghost"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onResolveComment(comment._id);
+                      }}
+                    >
+                      <CheckCircle2 size={14} />
+                      Resolve
+                    </button>
+                  ) : null}
+
+                  {comment.status === "in_progress" && onResolveComment ? (
                     <button
                       type="button"
                       className="button-ghost"
@@ -191,6 +242,50 @@ export default function CommentsPanel({
                     </button>
                   ) : null}
                 </div>
+
+                {(comment.replies?.length ?? 0) > 0 ? (
+                  <div style={{ display: "grid", gap: "0.65rem", marginTop: "0.85rem" }}>
+                    {comment.replies?.map((reply) => (
+                      <div
+                        key={reply._id}
+                        style={{
+                          borderLeft: "2px solid rgba(100, 116, 139, 0.22)",
+                          paddingLeft: "0.75rem"
+                        }}
+                      >
+                        <div className="muted" style={{ fontSize: "0.76rem", marginBottom: "0.2rem" }}>
+                          <strong>{reply.authorName}</strong> • {formatRelativeTime(reply.createdAt)}
+                        </div>
+                        <div style={{ color: "var(--slate-900, #0f172a)", lineHeight: 1.5 }}>{reply.text}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {onReplyComment ? (
+                  <div
+                    style={{ display: "grid", gap: "0.5rem", marginTop: "0.85rem" }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <textarea
+                      className="field-input"
+                      value={replyDraft}
+                      onChange={(event) => onReplyDraftChange?.(comment._id, event.target.value)}
+                      placeholder="Reply with review context."
+                      rows={2}
+                      style={{ resize: "vertical", minHeight: "68px" }}
+                    />
+                    <button
+                      type="button"
+                      className="button-secondary"
+                      onClick={() => onReplyComment(comment._id)}
+                      disabled={!replyDraft.trim() || replyingCommentId === comment._id}
+                    >
+                      <Send size={14} />
+                      {replyingCommentId === comment._id ? "Replying..." : "Reply"}
+                    </button>
+                  </div>
+                ) : null}
               </article>
             );
           })

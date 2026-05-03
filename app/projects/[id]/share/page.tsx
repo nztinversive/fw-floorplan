@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react"
 import { Download, Expand, MapPin, User, Layers, Image as ImageIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 
+import CommentsPanel from "@/components/CommentsPanel"
 import Lightbox from "@/components/Lightbox"
 import ProgressiveImage from "@/components/ProgressiveImage"
 import ReadOnlyFloorPlanCanvas from "@/components/ReadOnlyFloorPlanCanvas"
@@ -43,12 +44,20 @@ export default function ProjectSharePage() {
   const [isExporting, setIsExporting] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
-  const floorPlans = project?.floorPlans
-    ? sortFloors(project.floorPlans as PersistedFloorPlan[])
-    : []
+  const floorPlans = useMemo(
+    () => (project?.floorPlans ? sortFloors(project.floorPlans as PersistedFloorPlan[]) : []),
+    [project?.floorPlans]
+  )
+  const floorLabelById = useMemo(
+    () =>
+      Object.fromEntries(
+        floorPlans.map((floorPlan) => [floorPlan._id, formatFloorLabel(floorPlan.floor)])
+      ),
+    [floorPlans]
+  )
   const comments = useMemo(() => (commentsQuery ?? []) as ProjectComment[], [commentsQuery])
-  const openCommentCount = useMemo(
-    () => comments.filter((comment) => comment.status === "open").length,
+  const activeCommentCount = useMemo(
+    () => comments.filter((comment) => comment.status !== "resolved").length,
     [comments]
   )
   const renders = useMemo(
@@ -236,8 +245,8 @@ export default function ProjectSharePage() {
           </div>
           <div className="stat-card stat-card-v2">
             <div className="stat-card-icon stat-card-icon-purple"><ImageIcon size={18} /></div>
-            <div className="stat-label">Open comments</div>
-            <div className="stat-value share-stat">{openCommentCount}</div>
+            <div className="stat-label">Active comments</div>
+            <div className="stat-value share-stat">{activeCommentCount}</div>
           </div>
         </div>
       </section>
@@ -349,6 +358,16 @@ export default function ProjectSharePage() {
           )}
         </section>
       </div>
+
+      <section className="panel" style={{ marginTop: "1.5rem" }}>
+        <CommentsPanel
+          comments={comments}
+          floorLabelById={floorLabelById}
+          showComposer={false}
+          title="Review comments"
+          subtitle="Pinned floor-plan feedback and reply history for this shared package."
+        />
+      </section>
 
       <Lightbox
         images={lightboxImages}

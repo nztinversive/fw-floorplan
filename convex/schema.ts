@@ -223,12 +223,21 @@ export default defineSchema({
     y: v.number(),
     authorName: v.string(),
     text: v.string(),
-    status: v.union(v.literal("open"), v.literal("resolved")),
+    status: v.union(v.literal("open"), v.literal("in_progress"), v.literal("resolved")),
     createdAt: v.number(),
     resolvedAt: v.optional(v.number())
   })
     .index("by_projectId", ["projectId"])
     .index("by_projectId_floorPlanId", ["projectId", "floorPlanId"]),
+  commentReplies: defineTable({
+    projectId: v.id("projects"),
+    commentId: v.id("comments"),
+    authorName: v.string(),
+    text: v.string(),
+    createdAt: v.number()
+  })
+    .index("by_projectId", ["projectId"])
+    .index("by_commentId", ["commentId"]),
   members: defineTable({
     projectId: v.id("projects"),
     email: v.string(),

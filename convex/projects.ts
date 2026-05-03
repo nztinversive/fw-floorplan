@@ -202,6 +202,10 @@ export const remove = mutationGeneric({
       .query("comments")
       .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
       .collect();
+    const commentReplies = await ctx.db
+      .query("commentReplies")
+      .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
+      .collect();
     const members = await ctx.db
       .query("members")
       .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
@@ -241,6 +245,10 @@ export const remove = mutationGeneric({
 
     for (const comment of comments) {
       await ctx.db.delete(comment._id);
+    }
+
+    for (const commentReply of commentReplies) {
+      await ctx.db.delete(commentReply._id);
     }
 
     for (const member of members) {

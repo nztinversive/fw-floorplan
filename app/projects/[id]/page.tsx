@@ -116,8 +116,8 @@ export default function ProjectOverviewPage() {
     [orderedFloorPlans, selectedFloor]
   )
   const comments = useMemo(() => (commentsQuery ?? []) as ProjectComment[], [commentsQuery])
-  const openCommentCount = useMemo(
-    () => comments.filter((comment) => comment.status === "open").length,
+  const activeCommentCount = useMemo(
+    () => comments.filter((comment) => comment.status !== "resolved").length,
     [comments]
   )
   const activeFloorComments = useMemo(
@@ -363,7 +363,7 @@ export default function ProjectOverviewPage() {
             >
               <MessageSquare size={16} />
               {showCommentsSection ? "Hide comments" : "Comments"}
-              <span className="badge">{openCommentCount}</span>
+              <span className="badge">{activeCommentCount}</span>
             </button>
             <button type="button" className="button-ghost" onClick={startEditing} title="Edit project details">
               <Pencil size={16} />

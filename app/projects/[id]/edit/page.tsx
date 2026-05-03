@@ -73,7 +73,9 @@ export default function ProjectEditorPage() {
   const [pendingCommentPoint, setPendingCommentPoint] = useState<Point | null>(null)
   const [commentText, setCommentText] = useState("")
   const [commentStatus, setCommentStatus] = useState<CommentStatus>("open")
+  const [commentReplyDrafts, setCommentReplyDrafts] = useState<Record<string, string>>({})
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+  const [replyingCommentId, setReplyingCommentId] = useState<string | null>(null)
   const hydratedFloorPlanIdRef = useRef<string | null>(null)
   const lastSavedSnapshotsRef = useRef<Record<number, string>>({})
   const sourceImageByFloorRef = useRef<Record<number, Id<"_storage"> | undefined>>({})
@@ -83,6 +85,8 @@ export default function ProjectEditorPage() {
   const saveFloorPlan = useMutation(api.floorPlans.save)
   const uploadSource = useMutation(api.floorPlans.uploadSource)
   const addComment = useMutation(api.comments.addComment)
+  const addCommentReply = useMutation(api.comments.addReply)
+  const updateCommentStatus = useMutation(api.comments.updateCommentStatus)
   const resolveComment = useMutation(api.comments.resolveComment)
   const reopenComment = useMutation(api.comments.reopenComment)
   const deleteComment = useMutation(api.comments.deleteComment)
@@ -121,8 +125,8 @@ export default function ProjectEditorPage() {
   )
   const activeSourceImageUrl = activeFloorPlan?.sourceImageUrl ?? null
   const comments = useMemo(() => (commentsQuery ?? []) as ProjectComment[], [commentsQuery])
-  const openCommentCount = useMemo(
-    () => comments.filter((comment) => comment.status === "open").length,
+  const activeCommentCount = useMemo(
+    () => comments.filter((comment) => comment.status !== "resolved").length,
     [comments]
   )
   const floorLabelById = useMemo(
@@ -531,6 +535,16 @@ export default function ProjectEditorPage() {
     }
   }
 
+  async function handleUpdateCommentStatus(commentId: string, status: CommentStatus) {
+    try {
+      await updateCommentStatus({ commentId: commentId as Id<"comments">, status })
+      toast(status === "in_progress" ? "Comment moved to in progress" : "Comment status updated", "success")
+    } catch (error) {
+      console.error("Unable to update comment status.", error)
+      toast("Unable to update comment status", "error")
+    }
+  }
+
   async function handleReopenComment(commentId: string) {
     try {
       await reopenComment({ commentId: commentId as Id<"comments"> })
@@ -538,6 +552,29 @@ export default function ProjectEditorPage() {
     } catch (error) {
       console.error("Unable to reopen comment.", error)
       toast("Unable to reopen comment", "error")
+    }
+  }
+
+  function handleReplyDraftChange(commentId: string, value: string) {
+    setCommentReplyDrafts((drafts) => ({ ...drafts, [commentId]: value }))
+  }
+
+  async function handleReplyComment(commentId: string) {
+    const text = commentReplyDrafts[commentId]?.trim() ?? ""
+    if (!text || replyingCommentId) {
+      return
+    }
+
+    setReplyingCommentId(commentId)
+    try {
+      await addCommentReply({ commentId: commentId as Id<"comments">, text })
+      setCommentReplyDrafts((drafts) => ({ ...drafts, [commentId]: "" }))
+      toast("Reply added", "success")
+    } catch (error) {
+      console.error("Unable to add comment reply.", error)
+      toast("Unable to add reply", "error")
+    } finally {
+      setReplyingCommentId(null)
     }
   }
 
@@ -585,7 +622,7 @@ export default function ProjectEditorPage() {
           >
             <MessageSquare size={16} />
             {isCommentsOpen ? "Hide comments" : "Comments"}
-            <span className="badge">{openCommentCount}</span>
+            <span className="badge">{activeCommentCount}</span>
           </button>
           <button
             type="button"
@@ -695,12 +732,17 @@ export default function ProjectEditorPage() {
                 onSelectComment={handleSelectComment}
                 onResolveComment={handleResolveComment}
                 onReopenComment={handleReopenComment}
+                onUpdateCommentStatus={handleUpdateCommentStatus}
                 onDeleteComment={handleDeleteComment}
+                onReplyComment={handleReplyComment}
                 draftText={commentText}
                 draftStatus={commentStatus}
+                replyDrafts={commentReplyDrafts}
+                replyingCommentId={replyingCommentId}
                 pendingPlacement={pendingCommentPoint}
                 onDraftTextChange={setCommentText}
                 onDraftStatusChange={setCommentStatus}
+                onReplyDraftChange={handleReplyDraftChange}
                 onSubmitComment={handleSubmitComment}
                 onCancelPlacement={handleCancelCommentPlacement}
                 isSubmitting={isSubmittingComment}

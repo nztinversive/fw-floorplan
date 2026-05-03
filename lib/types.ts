@@ -83,7 +83,16 @@ export type FloorPlanData = {
   gridSize: number;
 };
 
-export type CommentStatus = "open" | "resolved";
+export type CommentStatus = "open" | "in_progress" | "resolved";
+
+export type ProjectCommentReply = {
+  _id: string;
+  projectId: string;
+  commentId: string;
+  authorName: string;
+  text: string;
+  createdAt: number;
+};
 
 export type ProjectComment = {
   _id: string;
@@ -96,6 +105,7 @@ export type ProjectComment = {
   status: CommentStatus;
   createdAt: number;
   resolvedAt?: number;
+  replies?: ProjectCommentReply[];
 };
 
 export type ProjectMemberRole = "owner" | "editor" | "viewer";

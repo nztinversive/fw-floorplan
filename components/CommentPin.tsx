@@ -6,7 +6,7 @@ type CommentPinProps = {
   x: number;
   y: number;
   zoom: number;
-  status: "open" | "resolved";
+  status: "open" | "in_progress" | "resolved";
   selected?: boolean;
   pending?: boolean;
   onClick?: () => void;
@@ -21,7 +21,7 @@ export default function CommentPin({
   pending = false,
   onClick
 }: CommentPinProps) {
-  const pinColor = pending ? "#3b82f6" : status === "resolved" ? "#16a34a" : "#d4a84b";
+  const pinColor = pending ? "#3b82f6" : status === "resolved" ? "#16a34a" : status === "in_progress" ? "#3b82f6" : "#d4a84b";
   const stemHeight = 16 / zoom;
   const radius = 5 / zoom;
   const haloRadius = selected ? 9 / zoom : 0;
