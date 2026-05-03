@@ -98,11 +98,98 @@ export default defineSchema({
     projectId: v.id("projects"),
     floor: v.number(),
     sourceImage: v.optional(v.id("_storage")),
+    scale: v.optional(v.number()),
+    gridSize: v.optional(v.number()),
+    childDataUpdatedAt: v.optional(v.number()),
+    // Deprecated after child-table migration. Kept for dual-read fallback and saved versions.
     data: floorPlanData,
     version: v.number()
   })
     .index("by_projectId", ["projectId"])
     .index("by_projectId_floor", ["projectId", "floor"]),
+  floorPlanWalls: defineTable({
+    floorPlanId: v.id("floorPlans"),
+    itemId: v.string(),
+    order: v.number(),
+    x1: v.number(),
+    y1: v.number(),
+    x2: v.number(),
+    y2: v.number(),
+    thickness: v.number()
+  })
+    .index("by_floorPlanId", ["floorPlanId"])
+    .index("by_floorPlanId_itemId", ["floorPlanId", "itemId"]),
+  floorPlanRooms: defineTable({
+    floorPlanId: v.id("floorPlans"),
+    itemId: v.string(),
+    order: v.number(),
+    label: v.string(),
+    polygon: v.array(point),
+    areaSqFt: v.number()
+  })
+    .index("by_floorPlanId", ["floorPlanId"])
+    .index("by_floorPlanId_itemId", ["floorPlanId", "itemId"]),
+  floorPlanDoors: defineTable({
+    floorPlanId: v.id("floorPlans"),
+    itemId: v.string(),
+    order: v.number(),
+    wallId: v.string(),
+    position: v.number(),
+    width: v.number(),
+    type: v.union(
+      v.literal("standard"),
+      v.literal("sliding"),
+      v.literal("double"),
+      v.literal("garage")
+    ),
+    rotation: v.number()
+  })
+    .index("by_floorPlanId", ["floorPlanId"])
+    .index("by_floorPlanId_itemId", ["floorPlanId", "itemId"]),
+  floorPlanWindows: defineTable({
+    floorPlanId: v.id("floorPlans"),
+    itemId: v.string(),
+    order: v.number(),
+    wallId: v.string(),
+    position: v.number(),
+    width: v.number(),
+    height: v.number()
+  })
+    .index("by_floorPlanId", ["floorPlanId"])
+    .index("by_floorPlanId_itemId", ["floorPlanId", "itemId"]),
+  floorPlanDimensions: defineTable({
+    floorPlanId: v.id("floorPlans"),
+    itemId: v.string(),
+    order: v.number(),
+    from: point,
+    to: point,
+    valueFt: v.number()
+  })
+    .index("by_floorPlanId", ["floorPlanId"])
+    .index("by_floorPlanId_itemId", ["floorPlanId", "itemId"]),
+  floorPlanAnnotations: defineTable({
+    floorPlanId: v.id("floorPlans"),
+    itemId: v.string(),
+    order: v.number(),
+    from: point,
+    to: point,
+    label: v.string()
+  })
+    .index("by_floorPlanId", ["floorPlanId"])
+    .index("by_floorPlanId_itemId", ["floorPlanId", "itemId"]),
+  floorPlanFurniture: defineTable({
+    floorPlanId: v.id("floorPlans"),
+    itemId: v.string(),
+    order: v.number(),
+    type: v.string(),
+    x: v.number(),
+    y: v.number(),
+    width: v.number(),
+    depth: v.number(),
+    rotation: v.number()
+  })
+    .index("by_floorPlanId", ["floorPlanId"])
+    .index("by_floorPlanId_itemId", ["floorPlanId", "itemId"]),
   versions: defineTable({
     projectId: v.id("projects"),
     floor: v.number(),

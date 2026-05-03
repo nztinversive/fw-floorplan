@@ -2,6 +2,11 @@ import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 import { floorPlanDataValidator } from "./validators";
 import { requireIdentityEmail, requireProjectEditor, requireProjectViewer } from "./members";
+import {
+  emptyLegacyFloorPlanData,
+  hydrateFloorPlanData,
+  saveFloorPlanChildData
+} from "./floorPlanChildData";
 
 export const get = queryGeneric({
   args: {
@@ -11,12 +16,13 @@ export const get = queryGeneric({
   handler: async (ctx, args) => {
     await requireProjectViewer(ctx, args.projectId);
     const floor = args.floor ?? 1;
-    return await ctx.db
+    const floorPlan = await ctx.db
       .query("floorPlans")
       .withIndex("by_projectId_floor", (query: any) =>
         query.eq("projectId", args.projectId).eq("floor", floor)
       )
       .unique();
+    return floorPlan ? await hydrateFloorPlanData(ctx, floorPlan) : null;
   }
 });
 
@@ -58,17 +64,24 @@ export const save = mutationGeneric({
     if (existing) {
       await ctx.db.patch(existing._id, {
         sourceImage: args.sourceImage ?? existing.sourceImage,
-        data: args.data,
+        scale: args.data.scale,
+        gridSize: args.data.gridSize,
+        childDataUpdatedAt: Date.now(),
         version: existing.version + 1
       });
+      await saveFloorPlanChildData(ctx, existing._id, args.data);
     } else {
-      await ctx.db.insert("floorPlans", {
+      const floorPlanId = await ctx.db.insert("floorPlans", {
         projectId: args.projectId,
         floor: args.floor,
         sourceImage: args.sourceImage,
-        data: args.data,
+        scale: args.data.scale,
+        gridSize: args.data.gridSize,
+        childDataUpdatedAt: Date.now(),
+        data: emptyLegacyFloorPlanData(args.data),
         version: 1
       });
+      await saveFloorPlanChildData(ctx, floorPlanId, args.data);
     }
 
     await ctx.db.patch(args.projectId, {
@@ -88,5 +101,46 @@ export const uploadSource = mutationGeneric({
   handler: async (ctx) => {
     await requireIdentityEmail(ctx);
     return await ctx.storage.generateUploadUrl();
+  }
+});
+
+export const backfillProjectChildData = mutationGeneric({
+  args: {
+    projectId: v.id("projects"),
+    dryRun: v.optional(v.boolean()),
+    limit: v.optional(v.number())
+  },
+  handler: async (ctx, args) => {
+    await requireProjectEditor(ctx, args.projectId);
+
+    const floorPlans = await ctx.db
+      .query("floorPlans")
+      .withIndex("by_projectId", (query) => query.eq("projectId", args.projectId))
+      .take(args.limit ?? 50);
+    const legacyFloorPlans = floorPlans.filter(
+      (floorPlan) => floorPlan.childDataUpdatedAt === undefined
+    );
+
+    if (args.dryRun) {
+      return {
+        checked: floorPlans.length,
+        wouldBackfill: legacyFloorPlans.length
+      };
+    }
+
+    const now = Date.now();
+    for (const floorPlan of legacyFloorPlans) {
+      await saveFloorPlanChildData(ctx, floorPlan._id, floorPlan.data);
+      await ctx.db.patch(floorPlan._id, {
+        scale: floorPlan.data.scale,
+        gridSize: floorPlan.data.gridSize,
+        childDataUpdatedAt: now
+      });
+    }
+
+    return {
+      checked: floorPlans.length,
+      backfilled: legacyFloorPlans.length
+    };
   }
 });

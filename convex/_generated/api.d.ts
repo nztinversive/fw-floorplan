@@ -11,6 +11,7 @@
 import type * as ai from "../ai.js";
 import type * as auth from "../auth.js";
 import type * as comments from "../comments.js";
+import type * as floorPlanChildData from "../floorPlanChildData.js";
 import type * as floorPlans from "../floorPlans.js";
 import type * as http from "../http.js";
 import type * as members from "../members.js";
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   ai: typeof ai;
   auth: typeof auth;
   comments: typeof comments;
+  floorPlanChildData: typeof floorPlanChildData;
   floorPlans: typeof floorPlans;
   http: typeof http;
   members: typeof members;

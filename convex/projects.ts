@@ -9,6 +9,12 @@ import {
   requireProjectOwner,
   requireProjectViewer
 } from "./members";
+import {
+  deleteFloorPlanChildData,
+  emptyLegacyFloorPlanData,
+  hydrateFloorPlansData,
+  saveFloorPlanChildData
+} from "./floorPlanChildData";
 
 function hasArg<T extends object, K extends PropertyKey>(
   args: T,
@@ -60,8 +66,9 @@ export const get = queryGeneric({
       .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
       .collect();
 
+    const hydratedFloorPlans = await hydrateFloorPlansData(ctx, floorPlans);
     const floorPlansWithSourceImageUrls = await Promise.all(
-      floorPlans.map(async (floorPlan) => ({
+      hydratedFloorPlans.map(async (floorPlan) => ({
         ...floorPlan,
         sourceImageUrl: floorPlan.sourceImage ? await ctx.storage.getUrl(floorPlan.sourceImage) : null
       }))
@@ -123,13 +130,17 @@ export const createWithInitialFloorPlan = mutationGeneric({
     });
     await ensureProjectOwnerMember(ctx, projectId, ownerEmail);
 
-    await ctx.db.insert("floorPlans", {
+    const floorPlanId = await ctx.db.insert("floorPlans", {
       projectId,
       floor: args.floor,
       sourceImage: args.sourceImage,
-      data: args.data,
+      scale: args.data.scale,
+      gridSize: args.data.gridSize,
+      childDataUpdatedAt: now,
+      data: emptyLegacyFloorPlanData(args.data),
       version: 1
     });
+    await saveFloorPlanChildData(ctx, floorPlanId, args.data);
 
     return projectId;
   }
@@ -214,6 +225,7 @@ export const remove = mutationGeneric({
     }
 
     for (const floorPlan of floorPlans) {
+      await deleteFloorPlanChildData(ctx, floorPlan._id);
       await ctx.db.delete(floorPlan._id);
     }
 
