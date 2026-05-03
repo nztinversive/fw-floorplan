@@ -98,11 +98,9 @@ export default defineSchema({
     projectId: v.id("projects"),
     floor: v.number(),
     sourceImage: v.optional(v.id("_storage")),
-    scale: v.optional(v.number()),
-    gridSize: v.optional(v.number()),
-    childDataUpdatedAt: v.optional(v.number()),
-    // Deprecated after child-table migration. Kept optional until legacy dev docs are backfilled.
-    data: v.optional(floorPlanData),
+    scale: v.number(),
+    gridSize: v.number(),
+    childDataUpdatedAt: v.number(),
     version: v.number()
   })
     .index("by_projectId", ["projectId"])

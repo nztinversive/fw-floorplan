@@ -26,27 +26,11 @@ type ChildTableName =
   | "floorPlanAnnotations"
   | "floorPlanFurniture";
 
-const EMPTY_FLOOR_PLAN_DATA: FloorPlanData = {
-  walls: [],
-  rooms: [],
-  doors: [],
-  windows: [],
-  dimensions: [],
-  annotations: [],
-  furniture: [],
-  scale: 20,
-  gridSize: 20
-};
-
-function normalizeData(data: FloorPlanDataInput = EMPTY_FLOOR_PLAN_DATA): FloorPlanData {
+function normalizeData(data: FloorPlanDataInput): FloorPlanData {
   return {
     ...data,
     annotations: data.annotations ?? []
   };
-}
-
-function childDataIsCurrent(floorPlan: FloorPlanDoc) {
-  return floorPlan.childDataUpdatedAt !== undefined;
 }
 
 async function listChildren(
@@ -121,13 +105,6 @@ export async function hydrateFloorPlanData(
   ctx: QueryCtx | MutationCtx,
   floorPlan: FloorPlanDoc
 ): Promise<HydratedFloorPlanDoc> {
-  if (!childDataIsCurrent(floorPlan)) {
-    return {
-      ...floorPlan,
-      data: normalizeData(floorPlan.data)
-    };
-  }
-
   const [
     walls,
     rooms,
@@ -199,8 +176,8 @@ export async function hydrateFloorPlanData(
         depth: item.depth,
         rotation: item.rotation
       })),
-      scale: floorPlan.scale ?? floorPlan.data?.scale ?? EMPTY_FLOOR_PLAN_DATA.scale,
-      gridSize: floorPlan.gridSize ?? floorPlan.data?.gridSize ?? EMPTY_FLOOR_PLAN_DATA.gridSize
+      scale: floorPlan.scale,
+      gridSize: floorPlan.gridSize
     }
   };
 }
