@@ -9,7 +9,6 @@ import Lightbox from "@/components/Lightbox"
 import ProgressiveImage from "@/components/ProgressiveImage"
 import ReadOnlyFloorPlanCanvas from "@/components/ReadOnlyFloorPlanCanvas"
 import ShareLinkCard from "@/components/ShareLinkCard"
-import SharePermissionsPanel from "@/components/SharePermissionsPanel"
 import { SkeletonPanel } from "@/components/Skeleton"
 import { useToast } from "@/components/Toast"
 import { api } from "@/convex/_generated/api"
@@ -19,7 +18,7 @@ import { DEFAULT_RENDER_VIEW_ANGLE, RENDER_VIEW_ANGLE_LABELS } from "@/lib/rende
 import { formatRelativeTime } from "@/lib/file-utils"
 import { STYLE_PRESET_MAP } from "@/lib/style-presets"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
-import type { PersistedFloorPlan, ProjectMemberRole } from "@/lib/types"
+import type { PersistedFloorPlan } from "@/lib/types"
 
 function getStyleLabel(style: string) {
   return STYLE_PRESET_MAP[style as keyof typeof STYLE_PRESET_MAP]?.name ?? style
@@ -30,11 +29,7 @@ export default function ProjectSharePage() {
   const { toast } = useToast()
   const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as Id<"projects"> | undefined
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
-  const membersQuery = useQuery(api.members.listMembers, projectId ? { projectId } : "skip")
   const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip")
-  const inviteMember = useMutation(api.members.inviteMember)
-  const removeMember = useMutation(api.members.removeMember)
-  const updateRole = useMutation(api.members.updateRole)
   const [isExporting, setIsExporting] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
@@ -74,43 +69,6 @@ export default function ProjectSharePage() {
     const favs = renders.filter((r) => r.isFavorite && r.imageUrl)
     return favs.length > 0 ? favs : renders.filter((r) => r.imageUrl)
   }, [renders])
-
-  async function handleInvite(email: string, role: ProjectMemberRole) {
-    if (!projectId) {
-      return
-    }
-
-    try {
-      await inviteMember({ projectId, email, role })
-      toast("Member invited", "success")
-    } catch (error) {
-      console.error("Unable to invite member.", error)
-      toast("Unable to invite member", "error")
-      throw error
-    }
-  }
-
-  async function handleRemove(memberId: string) {
-    try {
-      await removeMember({ memberId: memberId as Id<"members"> })
-      toast("Member removed", "success")
-    } catch (error) {
-      console.error("Unable to remove member.", error)
-      toast("Unable to remove member", "error")
-      throw error
-    }
-  }
-
-  async function handleUpdateRole(memberId: string, role: ProjectMemberRole) {
-    try {
-      await updateRole({ memberId: memberId as Id<"members">, role })
-      toast("Member role updated", "success")
-    } catch (error) {
-      console.error("Unable to update member role.", error)
-      toast("Unable to update member role", "error")
-      throw error
-    }
-  }
 
   async function handleExportPdf() {
     if (!project || isExporting) return
@@ -193,7 +151,7 @@ export default function ProjectSharePage() {
               <Download size={16} />
               {isExporting ? "Exporting..." : "Download PDF"}
             </button>
-            <div className="badge">Public link</div>
+            <div className="badge">Shared link</div>
           </div>
         </div>
 
@@ -230,13 +188,6 @@ export default function ProjectSharePage() {
 
       <ShareLinkCard
         url={typeof window !== "undefined" ? window.location.href : `/projects/${projectId}/share`}
-      />
-
-      <SharePermissionsPanel
-        members={membersQuery ?? []}
-        onInvite={handleInvite}
-        onRemove={handleRemove}
-        onUpdateRole={handleUpdateRole}
       />
 
       <div className="share-grid">

@@ -86,7 +86,7 @@ export default function ShareLinkCard({ url }: ShareLinkCardProps) {
       <div className="share-link-header">
         <div>
           <div className="section-title">Share link</div>
-          <div className="muted">Send this link to your client for a read-only presentation view.</div>
+          <div className="muted">Send this link to signed-in project members for a read-only presentation view.</div>
         </div>
         <button
           type="button"

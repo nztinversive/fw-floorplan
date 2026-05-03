@@ -9,6 +9,7 @@ import {
   type RenderViewAngle
 } from "../lib/render-angles";
 import { STYLE_PRESET_MAP, type StylePresetId } from "../lib/style-presets";
+import { requireProjectEditor, requireProjectViewer } from "./members";
 import { renderSettingsValidator, renderViewAngleValidator } from "./validators";
 
 type FloorPlanDoc = Doc<"floorPlans">;
@@ -362,6 +363,7 @@ export const storeGeneratedRender = internalMutation({
     if (!project) {
       throw new Error("Project not found");
     }
+    await requireProjectEditor(ctx, args.projectId);
 
     const now = Date.now();
     const renderId = await ctx.db.insert("renders", {
@@ -390,6 +392,10 @@ export const generateRender = action({
     viewAngle: renderViewAngleValidator
   },
   handler: async (ctx, args) => {
+    await ctx.runQuery(internal.members.requireCurrentUserProjectEditor, {
+      projectId: args.projectId
+    });
+
     const project = (await ctx.runQuery(api.projects.get, {
       id: args.projectId
     })) as ProjectWithFloorPlans | null;
@@ -449,6 +455,7 @@ export const list = query({
     projectId: v.id("projects")
   },
   handler: async (ctx, args) => {
+    await requireProjectViewer(ctx, args.projectId);
     const renders = await ctx.db
       .query("renders")
       .withIndex("by_projectId_and_createdAt", (query) => query.eq("projectId", args.projectId))
@@ -480,6 +487,7 @@ export const toggleFavorite = mutation({
     if (!render) {
       throw new Error("Render not found");
     }
+    await requireProjectEditor(ctx, render.projectId);
 
     const nextValue = !render.isFavorite;
     await ctx.db.patch(args.renderId, {
@@ -499,6 +507,7 @@ export const remove = mutation({
     if (!render) {
       throw new Error("Render not found");
     }
+    await requireProjectEditor(ctx, render.projectId);
 
     await ctx.storage.delete(render.imageUrl);
     await ctx.db.delete(args.renderId);

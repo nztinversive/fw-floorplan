@@ -2,6 +2,7 @@ import { v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
 import { renderSettingsValidator, renderViewAngleValidator } from "./validators";
+import { requireProjectEditor, requireProjectViewer } from "./members";
 
 export const savePreset = mutation({
   args: {
@@ -16,6 +17,7 @@ export const savePreset = mutation({
     if (!project) {
       throw new Error("Project not found");
     }
+    await requireProjectEditor(ctx, args.projectId);
 
     const now = Date.now();
     const presetId = await ctx.db.insert("renderPresets", {
@@ -44,6 +46,7 @@ export const listPresets = query({
     projectId: v.id("projects")
   },
   handler: async (ctx, args) => {
+    await requireProjectViewer(ctx, args.projectId);
     const presets = await ctx.db
       .query("renderPresets")
       .withIndex("by_projectId", (query) => query.eq("projectId", args.projectId))
@@ -72,6 +75,7 @@ export const deletePreset = mutation({
     if (!preset) {
       throw new Error("Render preset not found");
     }
+    await requireProjectEditor(ctx, preset.projectId);
 
     await ctx.db.delete(args.presetId);
     await ctx.db.patch(preset.projectId, {

@@ -3324,6 +3324,18 @@ button:disabled,
   color: #1d4ed8;
 }
 
+.auth-panel {
+  max-width: 460px;
+  margin: 1.5rem auto 0;
+}
+
+.auth-error {
+  margin-top: 1rem;
+  background: rgba(180, 35, 24, 0.08);
+  border-color: rgba(180, 35, 24, 0.18);
+  color: #b42318;
+}
+
 /* ── Detail List (sidebar) ── */
 .detail-list {
   display: grid;
@@ -3501,6 +3513,13 @@ button:disabled,
   font-weight: 500;
   color: var(--fw-slate);
   transition: background 140ms ease, color 140ms ease;
+}
+
+.header-nav-button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
 }
 
 .header-nav-link:hover {

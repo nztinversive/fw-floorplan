@@ -1,6 +1,7 @@
 import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 import { floorPlanDataValidator } from "./validators";
+import { requireIdentityEmail, requireProjectEditor, requireProjectViewer } from "./members";
 
 export const get = queryGeneric({
   args: {
@@ -8,6 +9,7 @@ export const get = queryGeneric({
     floor: v.optional(v.number())
   },
   handler: async (ctx, args) => {
+    await requireProjectViewer(ctx, args.projectId);
     const floor = args.floor ?? 1;
     return await ctx.db
       .query("floorPlans")
@@ -23,6 +25,7 @@ export const getSourceImageUrl = queryGeneric({
     sourceImageId: v.optional(v.id("_storage"))
   },
   handler: async (ctx, args) => {
+    await requireIdentityEmail(ctx);
     if (!args.sourceImageId) {
       return null;
     }
@@ -43,6 +46,7 @@ export const save = mutationGeneric({
     if (!project) {
       throw new Error("Project not found");
     }
+    await requireProjectEditor(ctx, args.projectId);
 
     const existing = await ctx.db
       .query("floorPlans")
@@ -82,7 +86,7 @@ export const save = mutationGeneric({
 export const uploadSource = mutationGeneric({
   args: {},
   handler: async (ctx) => {
+    await requireIdentityEmail(ctx);
     return await ctx.storage.generateUploadUrl();
   }
 });
-

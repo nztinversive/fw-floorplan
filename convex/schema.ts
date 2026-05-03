@@ -1,4 +1,5 @@
 import { defineSchema, defineTable } from "convex/server";
+import { authTables } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 
 import { legacyRenderSettingsValidator, renderSettingsValidator } from "./validators";
@@ -83,6 +84,7 @@ const floorPlanData = v.object({
 });
 
 export default defineSchema({
+  ...authTables,
   projects: defineTable({
     name: v.string(),
     address: v.optional(v.string()),
@@ -149,6 +151,7 @@ export default defineSchema({
     invitedAt: v.number(),
     acceptedAt: v.optional(v.number())
   })
+    .index("by_email", ["email"])
     .index("by_projectId", ["projectId"])
     .index("by_projectId_email", ["projectId", "email"])
 });

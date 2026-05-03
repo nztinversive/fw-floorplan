@@ -1,9 +1,11 @@
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
 
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { internalQuery, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 
 export type MemberRole = Doc<"members">["role"];
+type RoleRequirement = "viewer" | "editor" | "owner";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -29,12 +31,72 @@ async function getProjectMembers(ctx: QueryCtx | MutationCtx, projectId: Id<"pro
     .collect();
 }
 
+function roleCan(role: MemberRole, requirement: RoleRequirement) {
+  if (requirement === "viewer") {
+    return true;
+  }
+  if (requirement === "editor") {
+    return role === "owner" || role === "editor";
+  }
+  return role === "owner";
+}
+
+export async function requireIdentityEmail(ctx: QueryCtx | MutationCtx) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) {
+    throw new Error("Not authenticated");
+  }
+
+  const user = await ctx.db.get(userId);
+  const email = user?.email?.trim().toLowerCase();
+  if (!email) {
+    throw new Error("Not authenticated");
+  }
+  return email;
+}
+
+export async function requireProjectRole(
+  ctx: QueryCtx | MutationCtx,
+  projectId: Id<"projects">,
+  requirement: RoleRequirement
+) {
+  const email = await requireIdentityEmail(ctx);
+  const member = await getMemberByProjectAndEmail(ctx, projectId, email);
+  if (!member || !roleCan(member.role, requirement)) {
+    throw new Error("Unauthorized");
+  }
+  return member;
+}
+
+export async function requireProjectViewer(ctx: QueryCtx | MutationCtx, projectId: Id<"projects">) {
+  return await requireProjectRole(ctx, projectId, "viewer");
+}
+
+export async function requireProjectEditor(ctx: QueryCtx | MutationCtx, projectId: Id<"projects">) {
+  return await requireProjectRole(ctx, projectId, "editor");
+}
+
+export async function requireProjectOwner(ctx: QueryCtx | MutationCtx, projectId: Id<"projects">) {
+  return await requireProjectRole(ctx, projectId, "owner");
+}
+
+export async function listProjectMembershipsForCurrentUser(ctx: QueryCtx | MutationCtx) {
+  const email = await requireIdentityEmail(ctx);
+  return await ctx.db
+    .query("members")
+    .withIndex("by_email", (query) => query.eq("email", email))
+    .take(200);
+}
+
 export async function ensureProjectOwnerMember(
   ctx: MutationCtx,
   projectId: Id<"projects">,
-  email?: string
+  email: string
 ) {
-  const normalizedEmail = normalizeEmail(email || "owner@local.dev");
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    throw new Error("Owner email is required");
+  }
   const existing = await getMemberByProjectAndEmail(ctx, projectId, normalizedEmail);
   const now = Date.now();
 
@@ -64,6 +126,16 @@ export async function canEdit(
   return member?.role === "owner" || member?.role === "editor";
 }
 
+export const requireCurrentUserProjectEditor = internalQuery({
+  args: {
+    projectId: v.id("projects")
+  },
+  handler: async (ctx, args) => {
+    await requireProjectEditor(ctx, args.projectId);
+    return true;
+  }
+});
+
 export async function canView(
   ctx: QueryCtx | MutationCtx,
   projectId: Id<"projects">,
@@ -77,6 +149,7 @@ export const listMembers = query({
     projectId: v.id("projects")
   },
   handler: async (ctx, args) => {
+    await requireProjectViewer(ctx, args.projectId);
     const members = await getProjectMembers(ctx, args.projectId);
 
     return members.sort((left, right) => {
@@ -111,6 +184,7 @@ export const inviteMember = mutation({
     if (!project) {
       throw new Error("Project not found");
     }
+    await requireProjectOwner(ctx, args.projectId);
 
     const email = normalizeEmail(args.email);
     if (!email) {
@@ -146,6 +220,7 @@ export const updateRole = mutation({
     if (!member) {
       throw new Error("Member not found");
     }
+    await requireProjectOwner(ctx, member.projectId);
 
     if (member.role === "owner" && args.role !== "owner") {
       const owners = (await getProjectMembers(ctx, member.projectId)).filter(
@@ -175,6 +250,7 @@ export const removeMember = mutation({
     if (!member) {
       throw new Error("Member not found");
     }
+    await requireProjectOwner(ctx, member.projectId);
 
     if (member.role === "owner") {
       const owners = (await getProjectMembers(ctx, member.projectId)).filter(

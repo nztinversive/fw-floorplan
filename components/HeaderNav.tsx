@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useParams, usePathname } from "next/navigation"
+import { useAuthActions } from "@convex-dev/auth/react"
 import { useQuery } from "convex/react"
 import { CircleHelp, DraftingCompass, Eye, Image as ImageIcon, Link2 } from "lucide-react"
 
@@ -9,6 +10,7 @@ import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 
 export default function HeaderNav() {
+  const { signOut } = useAuthActions()
   const pathname = usePathname()
   const params = useParams<{ id: string }>()
   const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as
@@ -29,6 +31,9 @@ export default function HeaderNav() {
           <CircleHelp size={14} />
           Help
         </Link>
+        <button type="button" className="header-nav-link header-nav-button" onClick={() => void signOut()}>
+          Sign out
+        </button>
       </nav>
     )
   }
@@ -63,6 +68,9 @@ export default function HeaderNav() {
         <CircleHelp size={14} />
         Help
       </Link>
+      <button type="button" className="header-nav-link header-nav-button" onClick={() => void signOut()}>
+        Sign out
+      </button>
     </nav>
   )
 }

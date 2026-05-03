@@ -1,12 +1,14 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
+import { requireProjectEditor, requireProjectViewer } from "./members";
 
 export const listComments = query({
   args: {
     projectId: v.id("projects")
   },
   handler: async (ctx, args) => {
+    await requireProjectViewer(ctx, args.projectId);
     const comments = await ctx.db
       .query("comments")
       .withIndex("by_projectId", (query) => query.eq("projectId", args.projectId))
@@ -31,6 +33,7 @@ export const addComment = mutation({
     if (!project) {
       throw new Error("Project not found");
     }
+    await requireProjectEditor(ctx, args.projectId);
 
     if (args.floorPlanId) {
       const floorPlan = await ctx.db.get(args.floorPlanId);
@@ -72,6 +75,7 @@ export const resolveComment = mutation({
     if (!comment) {
       throw new Error("Comment not found");
     }
+    await requireProjectEditor(ctx, comment.projectId);
 
     await ctx.db.patch(args.commentId, {
       status: "resolved",
@@ -91,6 +95,7 @@ export const deleteComment = mutation({
     if (!comment) {
       throw new Error("Comment not found");
     }
+    await requireProjectEditor(ctx, comment.projectId);
 
     await ctx.db.delete(args.commentId);
     return args.commentId;

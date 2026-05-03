@@ -2,12 +2,29 @@ import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { floorPlanDataValidator } from "./validators";
-import { ensureProjectOwnerMember } from "./members";
+import {
+  ensureProjectOwnerMember,
+  listProjectMembershipsForCurrentUser,
+  requireIdentityEmail,
+  requireProjectOwner,
+  requireProjectViewer
+} from "./members";
+
+function hasArg<T extends object, K extends PropertyKey>(
+  args: T,
+  key: K
+): args is T & Record<K, unknown> {
+  return Object.prototype.hasOwnProperty.call(args, key);
+}
 
 export const list = queryGeneric({
   args: {},
   handler: async (ctx) => {
-    const projects = await ctx.db.query("projects").collect();
+    const memberships = await listProjectMembershipsForCurrentUser(ctx);
+    const projects = (
+      await Promise.all(memberships.map((member) => ctx.db.get(member.projectId)))
+    ).filter((project) => project !== null);
+
     return await Promise.all(
       projects
         .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -36,6 +53,7 @@ export const get = queryGeneric({
     if (!project) {
       return null;
     }
+    await requireProjectViewer(ctx, args.id);
 
     const floorPlans = await ctx.db
       .query("floorPlans")
@@ -62,21 +80,21 @@ export const create = mutationGeneric({
     name: v.string(),
     address: v.optional(v.string()),
     clientName: v.optional(v.string()),
-    ownerEmail: v.optional(v.string()),
     thumbnail: v.optional(v.id("_storage"))
   },
   handler: async (ctx, args) => {
+    const ownerEmail = await requireIdentityEmail(ctx);
     const now = Date.now();
     const projectId = await ctx.db.insert("projects", {
       name: args.name,
       address: args.address,
       clientName: args.clientName,
-      ownerEmail: args.ownerEmail,
+      ownerEmail,
       createdAt: now,
       updatedAt: now,
       thumbnail: args.thumbnail
     });
-    await ensureProjectOwnerMember(ctx, projectId, args.ownerEmail);
+    await ensureProjectOwnerMember(ctx, projectId, ownerEmail);
     return projectId;
   }
 });
@@ -86,24 +104,24 @@ export const createWithInitialFloorPlan = mutationGeneric({
     name: v.string(),
     address: v.optional(v.string()),
     clientName: v.optional(v.string()),
-    ownerEmail: v.optional(v.string()),
     thumbnail: v.optional(v.id("_storage")),
     sourceImage: v.optional(v.id("_storage")),
     floor: v.number(),
     data: floorPlanDataValidator
   },
   handler: async (ctx, args) => {
+    const ownerEmail = await requireIdentityEmail(ctx);
     const now = Date.now();
     const projectId = await ctx.db.insert("projects", {
       name: args.name,
       address: args.address,
       clientName: args.clientName,
-      ownerEmail: args.ownerEmail,
+      ownerEmail,
       createdAt: now,
       updatedAt: now,
       thumbnail: args.thumbnail
     });
-    await ensureProjectOwnerMember(ctx, projectId, args.ownerEmail);
+    await ensureProjectOwnerMember(ctx, projectId, ownerEmail);
 
     await ctx.db.insert("floorPlans", {
       projectId,
@@ -123,7 +141,6 @@ export const update = mutationGeneric({
     name: v.optional(v.string()),
     address: v.optional(v.string()),
     clientName: v.optional(v.string()),
-    ownerEmail: v.optional(v.string()),
     thumbnail: v.optional(v.id("_storage"))
   },
   handler: async (ctx, args) => {
@@ -131,12 +148,12 @@ export const update = mutationGeneric({
     if (!project) {
       throw new Error("Project not found");
     }
+    await requireProjectOwner(ctx, args.id);
 
     await ctx.db.patch(args.id, {
       name: args.name ?? project.name,
-      address: args.address ?? project.address,
-      clientName: args.clientName ?? project.clientName,
-      ownerEmail: args.ownerEmail ?? project.ownerEmail,
+      address: hasArg(args, "address") ? args.address || undefined : project.address,
+      clientName: hasArg(args, "clientName") ? args.clientName || undefined : project.clientName,
       thumbnail: args.thumbnail ?? project.thumbnail,
       updatedAt: Date.now()
     });
@@ -154,6 +171,7 @@ export const remove = mutationGeneric({
     if (!project) {
       throw new Error("Project not found");
     }
+    await requireProjectOwner(ctx, args.id);
 
     const floorPlans = await ctx.db
       .query("floorPlans")
@@ -227,4 +245,3 @@ export const remove = mutationGeneric({
     return args.id;
   }
 });
-

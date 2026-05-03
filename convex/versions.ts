@@ -2,6 +2,7 @@ import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 
 import { floorPlanDataValidator } from "./validators";
+import { requireProjectEditor, requireProjectViewer } from "./members";
 
 export const saveVersion = mutationGeneric({
   args: {
@@ -15,6 +16,7 @@ export const saveVersion = mutationGeneric({
     if (!project) {
       throw new Error("Project not found");
     }
+    await requireProjectEditor(ctx, args.projectId);
 
     const now = Date.now();
     const versionId = await ctx.db.insert("versions", {
@@ -39,6 +41,7 @@ export const listVersions = queryGeneric({
     floor: v.number()
   },
   handler: async (ctx, args) => {
+    await requireProjectViewer(ctx, args.projectId);
     const versions = await ctx.db
       .query("versions")
       .withIndex("by_projectId_floor", (query: any) =>
@@ -64,7 +67,12 @@ export const getVersion = queryGeneric({
     versionId: v.id("versions")
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.versionId);
+    const version = await ctx.db.get(args.versionId);
+    if (!version) {
+      return null;
+    }
+    await requireProjectViewer(ctx, version.projectId);
+    return version;
   }
 });
 
@@ -73,6 +81,7 @@ export const listProjectVersions = queryGeneric({
     projectId: v.id("projects")
   },
   handler: async (ctx, args) => {
+    await requireProjectViewer(ctx, args.projectId);
     const versions = await ctx.db
       .query("versions")
       .withIndex("by_projectId", (query: any) => query.eq("projectId", args.projectId))
@@ -101,6 +110,7 @@ export const deleteVersion = mutationGeneric({
     if (!version) {
       throw new Error("Version not found");
     }
+    await requireProjectEditor(ctx, version.projectId);
 
     await ctx.db.delete(args.versionId);
     await ctx.db.patch(version.projectId, {
