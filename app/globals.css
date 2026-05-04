@@ -1453,6 +1453,37 @@ button:disabled,
   gap: 0.9rem;
 }
 
+.render-feedback {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.render-feedback-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.render-feedback-chip {
+  border: 1px solid rgba(27, 42, 74, 0.12);
+  background: rgba(250, 247, 242, 0.7);
+  color: var(--fw-navy);
+  border-radius: 999px;
+  padding: 0.42rem 0.68rem;
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.render-feedback-chip:hover {
+  border-color: rgba(212, 168, 75, 0.5);
+  background: rgba(212, 168, 75, 0.12);
+}
+
+.render-feedback-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .render-meta {
   display: grid;
   gap: 0.35rem;

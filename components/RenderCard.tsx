@@ -16,11 +16,39 @@ type RenderCardProps = {
   onToggleFavorite: (renderId: string) => Promise<void> | void;
   onDelete: (renderId: string) => Promise<void> | void;
   onRegenerate: (render: StoredRender) => Promise<void> | void;
+  onApplyFeedback?: (render: StoredRender, feedback: string) => void;
   comparisonMode?: boolean;
   isSelectedForComparison?: boolean;
   onSelectForComparison?: (renderId: string) => void;
   onImageClick?: (renderId: string) => void;
 };
+
+const FEEDBACK_OPTIONS = [
+  {
+    label: "Too plain",
+    feedback: "add more architectural character, depth, trim detail, and intentional material contrast"
+  },
+  {
+    label: "Too modern",
+    feedback: "make the next version warmer, softer, and more traditional"
+  },
+  {
+    label: "More porch",
+    feedback: "emphasize a deeper covered porch with a stronger, more inviting entry sequence"
+  },
+  {
+    label: "Warmer",
+    feedback: "use warmer exterior tones, softer lighting, and a more welcoming residential feel"
+  },
+  {
+    label: "Simpler roof",
+    feedback: "simplify the roof geometry while keeping the home realistic and well-proportioned"
+  },
+  {
+    label: "Better landscape",
+    feedback: "improve the landscaping with native plantings, cleaner beds, and stronger curb appeal"
+  }
+];
 
 function getStyleLabel(style: string) {
   return STYLE_PRESET_MAP[style as keyof typeof STYLE_PRESET_MAP]?.name ?? style;
@@ -34,6 +62,7 @@ export default function RenderCard({
   onToggleFavorite,
   onDelete,
   onRegenerate,
+  onApplyFeedback,
   comparisonMode = false,
   isSelectedForComparison = false,
   onSelectForComparison,
@@ -183,6 +212,28 @@ export default function RenderCard({
           <RefreshCw size={18} />
           {isRegenerating ? "Generating..." : "Regenerate"}
         </button>
+
+        {onApplyFeedback ? (
+          <div className="render-feedback">
+            <div className="field-label">Quick tweaks</div>
+            <div className="render-feedback-options">
+              {FEEDBACK_OPTIONS.map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  className="render-feedback-chip"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onApplyFeedback(render, option.feedback);
+                  }}
+                  disabled={comparisonMode || isDeleting || isRegenerating}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </article>
   );

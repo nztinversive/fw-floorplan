@@ -563,6 +563,29 @@ export default function ProjectRendersPage() {
     })
   }
 
+  function handleApplyRenderFeedback(render: StoredRender, feedback: string) {
+    const styleLabel = getStyleLabel(render.style)
+    const viewLabel = RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle]
+    const nextLine = `${styleLabel} ${viewLabel}: ${feedback}.`
+
+    setRenderBrief((current) => {
+      const existingLines = current.revisionNotes
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+
+      if (existingLines.includes(nextLine)) {
+        return current
+      }
+
+      return {
+        ...current,
+        revisionNotes: [...existingLines, nextLine].join("\n")
+      }
+    })
+    toast("Tweak added to the render brief", "info")
+  }
+
   if ((projectId && project === undefined) || (projectId && rendersQuery === undefined)) {
     return (
       <main className="page-shell">
@@ -1008,6 +1031,7 @@ export default function ProjectRendersPage() {
                   onToggleFavorite={handleToggleFavorite}
                   onDelete={handleDeleteRender}
                   onRegenerate={handleRegenerate}
+                  onApplyFeedback={handleApplyRenderFeedback}
                   comparisonMode={comparisonMode}
                   isSelectedForComparison={selectedRenderIds.includes(render.id)}
                   onSelectForComparison={handleComparisonSelect}
