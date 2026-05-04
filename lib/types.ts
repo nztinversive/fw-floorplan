@@ -157,6 +157,9 @@ export type StoredRender = {
   prompt: string;
   isFavorite: boolean;
   createdAt: number;
+  parentRenderId?: string;
+  sourceReviewId?: string;
+  sourceReview?: StoredRenderReview | null;
   reviewHistory: StoredRenderReview[];
 };
 

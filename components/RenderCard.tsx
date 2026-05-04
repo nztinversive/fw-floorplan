@@ -21,9 +21,12 @@ type RenderCardProps = {
   onApplyFeedback?: (render: StoredRender, feedback: string) => void;
   onCopyPrompt?: (prompt: string) => Promise<void> | void;
   onUsePromptAsBaseline?: (render: StoredRender) => void;
-  onSaveReview?: (render: StoredRender, review: { issueKeys: string[]; notes: string }) => Promise<void> | void;
+  onSaveReview?: (render: StoredRender, review: { issueKeys: string[]; notes: string }) => Promise<unknown> | void;
   onRegenerateWithReview?: (render: StoredRender, review: { issueKeys: string[]; notes: string }) => Promise<void> | void;
   isSavingReview?: boolean;
+  parentRender?: StoredRender;
+  childRenders?: StoredRender[];
+  onCompareLineage?: (parentRenderId: string, childRenderId: string) => void;
   comparisonMode?: boolean;
   isSelectedForComparison?: boolean;
   onSelectForComparison?: (renderId: string) => void;
@@ -75,6 +78,9 @@ export default function RenderCard({
   onSaveReview,
   onRegenerateWithReview,
   isSavingReview = false,
+  parentRender,
+  childRenders = [],
+  onCompareLineage,
   comparisonMode = false,
   isSelectedForComparison = false,
   onSelectForComparison,
@@ -85,6 +91,7 @@ export default function RenderCard({
   const hasReviewDraft = selectedReviewIssues.length > 0 || reviewNotes.trim().length > 0;
   const isReviewBusy = comparisonMode || isDeleting || isRegenerating || isSavingReview;
   const reviewHistory = render.reviewHistory ?? [];
+  const sourceReview = render.sourceReview ?? null;
   const reviewSummary = useMemo(
     () =>
       selectedReviewIssues
@@ -255,6 +262,70 @@ export default function RenderCard({
           <div className="section-title">{getStyleLabel(render.style)}</div>
           <div className="render-meta-time">Generated {formatRelativeTime(render.createdAt)}</div>
         </div>
+
+        {parentRender || childRenders.length > 0 ? (
+          <div className="render-lineage-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="field-label">Version lineage</div>
+            {parentRender ? (
+              <div className="render-lineage-item">
+                <span className="badge">Created from</span>
+                <div>
+                  <div className="render-lineage-title">
+                    {getStyleLabel(parentRender.style)} | {RENDER_VIEW_ANGLE_LABELS[parentRender.settings.viewAngle]}
+                  </div>
+                  <div className="render-lineage-meta">Parent generated {formatRelativeTime(parentRender.createdAt)}</div>
+                </div>
+                {onCompareLineage ? (
+                  <button
+                    type="button"
+                    className="render-lineage-action"
+                    onClick={() => onCompareLineage(parentRender.id, render.id)}
+                    disabled={isDeleting || isRegenerating}
+                  >
+                    Compare parent
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {sourceReview ? (
+              <div className="render-lineage-review">
+                <div className="render-lineage-meta">Review that produced this version</div>
+                {sourceReview.issueKeys.length > 0 ? (
+                  <div className="render-review-history-chips">
+                    {sourceReview.issueKeys.map((issueKey) => (
+                      <span key={issueKey} className="badge">
+                        {getRenderReviewIssueLabel(issueKey)}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {sourceReview.notes ? <div className="render-lineage-notes">{sourceReview.notes}</div> : null}
+              </div>
+            ) : null}
+
+            {childRenders.length > 0 ? (
+              <div className="render-lineage-children">
+                <div className="render-lineage-meta">
+                  {childRenders.length} regenerated version{childRenders.length === 1 ? "" : "s"} from this render
+                </div>
+                <div className="render-lineage-child-list">
+                  {childRenders.slice(0, 3).map((childRender) => (
+                    <button
+                      key={childRender.id}
+                      type="button"
+                      className="render-lineage-child"
+                      onClick={() => onCompareLineage?.(render.id, childRender.id)}
+                      disabled={!onCompareLineage || isDeleting || isRegenerating}
+                    >
+                      {getStyleLabel(childRender.style)} | {formatRelativeTime(childRender.createdAt)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         <button
           type="button"

@@ -161,6 +161,19 @@ export default function ProjectRendersPage() {
         prompt: render.prompt,
         isFavorite: render.isFavorite,
         createdAt: render.createdAt,
+        parentRenderId: render.parentRenderId,
+        sourceReviewId: render.sourceReviewId,
+        sourceReview: render.sourceReview
+          ? {
+            id: render.sourceReview._id,
+            projectId: render.sourceReview.projectId,
+            renderId: render.sourceReview.renderId,
+            issueKeys: render.sourceReview.issueKeys,
+            notes: render.sourceReview.notes,
+            authorEmail: render.sourceReview.authorEmail,
+            createdAt: render.sourceReview.createdAt
+          }
+          : null,
         reviewHistory: render.reviewHistory.map((review) => ({
           id: review._id,
           projectId: review.projectId,
@@ -195,6 +208,18 @@ export default function ProjectRendersPage() {
     () => selectedRenderIds.map((renderId) => renders.find((render) => render.id === renderId)).filter(Boolean) as StoredRender[],
     [renders, selectedRenderIds]
   )
+  const childrenByRenderId = useMemo(() => {
+    return renders.reduce<Record<string, StoredRender[]>>((childrenById, render) => {
+      if (!render.parentRenderId) {
+        return childrenById
+      }
+
+      return {
+        ...childrenById,
+        [render.parentRenderId]: [...(childrenById[render.parentRenderId] ?? []), render]
+      }
+    }, {})
+  }, [renders])
 
   const exportRenders = useMemo(() => {
     const favoriteRenders = renders.filter((render) => render.isFavorite && render.imageUrl)
@@ -373,7 +398,12 @@ export default function ProjectRendersPage() {
   async function triggerGeneration(
     nextStyle: string,
     nextSettings: RenderSettings,
-    options: { renderBriefOverride?: RenderBrief; skipBriefSave?: boolean } = {}
+    options: {
+      renderBriefOverride?: RenderBrief;
+      skipBriefSave?: boolean;
+      parentRenderId?: string;
+      sourceReviewId?: string;
+    } = {}
   ) {
     if (!projectId || isGenerationBusy) return false
 
@@ -393,7 +423,9 @@ export default function ProjectRendersPage() {
           ...nextSettings,
           style: nextStyle
         },
-        renderBrief: renderBriefForGeneration
+        renderBrief: renderBriefForGeneration,
+        parentRenderId: options.parentRenderId as Id<"renders"> | undefined,
+        sourceReviewId: options.sourceReviewId as Id<"renderReviews"> | undefined
       })
       toast("Render generated successfully", "success")
       return true
@@ -606,7 +638,9 @@ export default function ProjectRendersPage() {
     setPendingRenderAction({ renderId: render.id, action: "regenerate" })
 
     try {
-      await triggerGeneration(render.style, render.settings)
+      await triggerGeneration(render.style, render.settings, {
+        parentRenderId: render.id
+      })
     } finally {
       setPendingRenderAction(null)
     }
@@ -624,12 +658,13 @@ export default function ProjectRendersPage() {
     setPendingReviewRenderId(render.id)
 
     try {
-      await saveRenderReview({
+      const reviewId = await saveRenderReview({
         renderId: render.id as Id<"renders">,
         issueKeys: review.issueKeys,
         notes: review.notes
       })
       toast("Render review saved", "success")
+      return reviewId
     } catch (error) {
       console.error("Unable to save render review.", error)
       toast("Unable to save this render review", "error")
@@ -649,14 +684,21 @@ export default function ProjectRendersPage() {
     setPendingRenderAction({ renderId: render.id, action: "regenerate" })
 
     try {
-      await handleSaveRenderReview(render, review)
+      const reviewId = await handleSaveRenderReview(render, review)
       await triggerGeneration(render.style, render.settings, {
         renderBriefOverride,
-        skipBriefSave: true
+        skipBriefSave: true,
+        parentRenderId: render.id,
+        sourceReviewId: reviewId
       })
     } finally {
       setPendingRenderAction(null)
     }
+  }
+
+  function handleCompareLineage(parentRenderId: string, childRenderId: string) {
+    setComparisonMode(true)
+    setSelectedRenderIds([parentRenderId, childRenderId])
   }
 
   async function handleExportClientPackage() {
@@ -1274,6 +1316,9 @@ export default function ProjectRendersPage() {
                   onSaveReview={handleSaveRenderReview}
                   onRegenerateWithReview={handleRegenerateWithReview}
                   isSavingReview={pendingReviewRenderId === render.id}
+                  parentRender={render.parentRenderId ? renders.find((candidate) => candidate.id === render.parentRenderId) : undefined}
+                  childRenders={childrenByRenderId[render.id] ?? []}
+                  onCompareLineage={handleCompareLineage}
                   comparisonMode={comparisonMode}
                   isSelectedForComparison={selectedRenderIds.includes(render.id)}
                   onSelectForComparison={handleComparisonSelect}

@@ -209,10 +209,13 @@ export default defineSchema({
     imageUrl: v.id("_storage"),
     prompt: v.string(),
     isFavorite: v.boolean(),
+    parentRenderId: v.optional(v.id("renders")),
+    sourceReviewId: v.optional(v.id("renderReviews")),
     createdAt: v.number()
   })
     .index("by_projectId", ["projectId"])
-    .index("by_projectId_and_createdAt", ["projectId", "createdAt"]),
+    .index("by_projectId_and_createdAt", ["projectId", "createdAt"])
+    .index("by_projectId_and_parentRenderId", ["projectId", "parentRenderId"]),
   renderReviews: defineTable({
     projectId: v.id("projects"),
     renderId: v.id("renders"),

@@ -465,7 +465,9 @@ export const storeGeneratedRender = internalMutation({
     style: v.string(),
     settings: renderSettingsValidator,
     prompt: v.string(),
-    imageUrl: v.id("_storage")
+    imageUrl: v.id("_storage"),
+    parentRenderId: v.optional(v.id("renders")),
+    sourceReviewId: v.optional(v.id("renderReviews"))
   },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
@@ -473,6 +475,28 @@ export const storeGeneratedRender = internalMutation({
       throw new Error("Project not found");
     }
     await requireProjectEditor(ctx, args.projectId);
+
+    if (args.parentRenderId) {
+      const parentRender = await ctx.db.get(args.parentRenderId);
+      if (!parentRender || parentRender.projectId !== args.projectId) {
+        throw new Error("Parent render not found");
+      }
+    }
+
+    if (args.sourceReviewId) {
+      if (!args.parentRenderId) {
+        throw new Error("Source review requires a parent render");
+      }
+
+      const sourceReview = await ctx.db.get(args.sourceReviewId);
+      if (
+        !sourceReview ||
+        sourceReview.projectId !== args.projectId ||
+        sourceReview.renderId !== args.parentRenderId
+      ) {
+        throw new Error("Source review not found");
+      }
+    }
 
     const now = Date.now();
     const renderId = await ctx.db.insert("renders", {
@@ -482,6 +506,8 @@ export const storeGeneratedRender = internalMutation({
       imageUrl: args.imageUrl,
       prompt: args.prompt,
       isFavorite: false,
+      parentRenderId: args.parentRenderId,
+      sourceReviewId: args.sourceReviewId,
       createdAt: now
     });
 
@@ -499,7 +525,9 @@ export const generateRender = action({
     style: v.string(),
     settings: renderSettingsValidator,
     viewAngle: renderViewAngleValidator,
-    renderBrief: v.optional(renderBriefValidator)
+    renderBrief: v.optional(renderBriefValidator),
+    parentRenderId: v.optional(v.id("renders")),
+    sourceReviewId: v.optional(v.id("renderReviews"))
   },
   handler: async (ctx, args) => {
     await ctx.runQuery(internal.members.requireCurrentUserProjectEditor, {
@@ -546,7 +574,9 @@ export const generateRender = action({
       style: promptDetails.styleId,
       settings: promptDetails.settings,
       prompt: promptDetails.prompt,
-      imageUrl: storageId
+      imageUrl: storageId,
+      parentRenderId: args.parentRenderId,
+      sourceReviewId: args.sourceReviewId
     });
 
     return renderId;
@@ -572,6 +602,7 @@ export const list = query({
           .withIndex("by_renderId_and_createdAt", (query) => query.eq("renderId", render._id))
           .order("desc")
           .take(5);
+        const sourceReview = render.sourceReviewId ? await ctx.db.get(render.sourceReviewId) : null;
 
         return {
           _id: render._id,
@@ -583,6 +614,9 @@ export const list = query({
           prompt: render.prompt,
           isFavorite: render.isFavorite,
           createdAt: render.createdAt,
+          parentRenderId: render.parentRenderId,
+          sourceReviewId: render.sourceReviewId,
+          sourceReview,
           reviewHistory
         };
       })
