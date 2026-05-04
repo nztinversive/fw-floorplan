@@ -10,11 +10,18 @@ import {
 } from "../lib/render-angles";
 import { STYLE_PRESET_MAP, type StylePresetId } from "../lib/style-presets";
 import { requireProjectEditor, requireProjectViewer } from "./members";
-import { renderSettingsValidator, renderViewAngleValidator } from "./validators";
+import { renderBriefValidator, renderSettingsValidator, renderViewAngleValidator } from "./validators";
 import type { HydratedFloorPlanDoc } from "./floorPlanChildData";
 
 type ProjectWithFloorPlans = Doc<"projects"> & {
   floorPlans: HydratedFloorPlanDoc[];
+};
+
+type RenderBrief = {
+  designNotes: string;
+  mustHave: string;
+  avoid: string;
+  revisionNotes: string;
 };
 
 type PlanBounds = {
@@ -294,6 +301,7 @@ function composePrompt(args: {
   projectName: string;
   address?: string;
   styleId: StylePresetId;
+  renderBrief?: RenderBrief;
   settings: {
     sidingMaterial: string;
     roofStyle: string;
@@ -314,11 +322,23 @@ function composePrompt(args: {
     args.architecturalDescription,
     `Style direction: ${preset.promptFragment}.`,
     `Material and form direction: ${args.settings.sidingMaterial} siding, ${args.settings.roofStyle} roof form, ${args.settings.colorPalette} color palette, ${args.settings.landscaping} landscaping.`,
+    args.renderBrief?.designNotes
+      ? `Designer brief: ${args.renderBrief.designNotes}.`
+      : null,
+    args.renderBrief?.mustHave
+      ? `Must include: ${args.renderBrief.mustHave}.`
+      : null,
+    args.renderBrief?.avoid
+      ? `Avoid or downplay: ${args.renderBrief.avoid}.`
+      : null,
+    args.renderBrief?.revisionNotes
+      ? `Revision notes for this generation: ${args.renderBrief.revisionNotes}.`
+      : null,
     `Lighting and environment: ${args.settings.timeOfDay} light in ${args.settings.season}.`,
     RENDER_VIEW_ANGLE_PROMPTS[args.settings.viewAngle],
     "Keep the image grounded in realistic residential architecture with natural materials, clean detailing, and high-end presentation quality.",
     "Do not include text, watermarks, floor plan overlays, exploded views, interior cutaways, cartoon styling, or exaggerated fantasy elements."
-  ].join(" ");
+  ].filter(Boolean).join(" ");
 }
 
 async function resolveGeneratedImageBlob(response: {
@@ -389,7 +409,8 @@ export const generateRender = action({
     projectId: v.id("projects"),
     style: v.string(),
     settings: renderSettingsValidator,
-    viewAngle: renderViewAngleValidator
+    viewAngle: renderViewAngleValidator,
+    renderBrief: v.optional(renderBriefValidator)
   },
   handler: async (ctx, args) => {
     await ctx.runQuery(internal.members.requireCurrentUserProjectEditor, {
@@ -420,6 +441,7 @@ export const generateRender = action({
       projectName: project.name,
       address: project.address,
       styleId,
+      renderBrief: args.renderBrief ?? project.renderBrief,
       settings
     });
 

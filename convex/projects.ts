@@ -2,11 +2,12 @@ import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
-import { floorPlanDataValidator } from "./validators";
+import { floorPlanDataValidator, renderBriefValidator } from "./validators";
 import {
   ensureProjectOwnerMember,
   listProjectMembershipsForCurrentUser,
   requireIdentityEmail,
+  requireProjectEditor,
   requireProjectOwner,
   requireProjectViewer
 } from "./members";
@@ -247,6 +248,35 @@ export const update = mutationGeneric({
       clientName: hasArg(args, "clientName") ? args.clientName || undefined : project.clientName,
       thumbnail: args.thumbnail ?? project.thumbnail,
       updatedAt: Date.now()
+    });
+
+    return args.id;
+  }
+});
+
+export const updateRenderBrief = mutationGeneric({
+  args: {
+    id: v.id("projects"),
+    renderBrief: renderBriefValidator
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.id);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+    await requireProjectEditor(ctx, args.id);
+
+    const trimField = (value: string) => value.trim().slice(0, 1200);
+    const now = Date.now();
+
+    await ctx.db.patch(args.id, {
+      renderBrief: {
+        designNotes: trimField(args.renderBrief.designNotes),
+        mustHave: trimField(args.renderBrief.mustHave),
+        avoid: trimField(args.renderBrief.avoid),
+        revisionNotes: trimField(args.renderBrief.revisionNotes)
+      },
+      updatedAt: now
     });
 
     return args.id;

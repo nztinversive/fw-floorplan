@@ -30,6 +30,13 @@ export const legacyRenderSettingsValidator = v.object({
   viewAngle: v.optional(renderViewAngleValidator)
 });
 
+export const renderBriefValidator = v.object({
+  designNotes: v.string(),
+  mustHave: v.string(),
+  avoid: v.string(),
+  revisionNotes: v.string()
+});
+
 export const floorPlanDataValidator = v.object({
   walls: v.array(
     v.object({

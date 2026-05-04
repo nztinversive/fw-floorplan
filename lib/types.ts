@@ -130,6 +130,13 @@ export type RenderSettings = {
   viewAngle: RenderViewAngle;
 };
 
+export type RenderBrief = {
+  designNotes: string;
+  mustHave: string;
+  avoid: string;
+  revisionNotes: string;
+};
+
 export type StoredRender = {
   id: string;
   projectId: string;
@@ -190,6 +197,7 @@ export type StoredProject = {
   address?: string;
   clientName?: string;
   ownerEmail?: string;
+  renderBrief?: RenderBrief;
   createdAt: number;
   updatedAt: number;
   thumbnail?: string;

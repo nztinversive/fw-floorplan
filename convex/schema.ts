@@ -2,7 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { authTables } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 
-import { legacyRenderSettingsValidator, renderSettingsValidator } from "./validators";
+import { legacyRenderSettingsValidator, renderBriefValidator, renderSettingsValidator } from "./validators";
 
 const point = v.object({
   x: v.number(),
@@ -94,6 +94,7 @@ export default defineSchema({
     publicShareToken: v.optional(v.string()),
     publicShareCreatedAt: v.optional(v.number()),
     publicShareUpdatedAt: v.optional(v.number()),
+    renderBrief: v.optional(renderBriefValidator),
     createdAt: v.number(),
     updatedAt: v.number(),
     thumbnail: v.optional(v.id("_storage"))

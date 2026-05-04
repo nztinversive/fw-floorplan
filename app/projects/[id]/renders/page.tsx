@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useAction, useMutation, useQuery } from "convex/react"
 import { AlertTriangle, Download, ImagePlus, Palette, Sparkles, Trash2, X } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import Breadcrumb from "@/components/Breadcrumb"
 import ConfirmDialog from "@/components/ConfirmDialog"
@@ -33,7 +33,7 @@ import {
 } from "@/lib/style-presets"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
 import { sortFloors } from "@/lib/floor-utils"
-import type { PersistedFloorPlan, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
+import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
 type PendingRenderAction = "favorite" | "delete" | "regenerate"
 type SettingKey = keyof StylePresetDefaults
@@ -48,6 +48,12 @@ const EMPTY_BATCH_PROGRESS: BatchProgress = {
   completed: 0,
   total: 0,
   failed: 0
+}
+const EMPTY_RENDER_BRIEF: RenderBrief = {
+  designNotes: "",
+  mustHave: "",
+  avoid: "",
+  revisionNotes: ""
 }
 
 function getDefaultSettings(
@@ -84,12 +90,15 @@ export default function ProjectRendersPage() {
   const removeRender = useMutation(api.renders.remove)
   const savePreset = useMutation(api.renderPresets.savePreset)
   const deletePreset = useMutation(api.renderPresets.deletePreset)
+  const updateRenderBrief = useMutation(api.projects.updateRenderBrief)
 
   const [selectedStyle, setSelectedStyle] = useState<StylePresetId>(INITIAL_STYLE)
   const [settings, setSettings] = useState<RenderSettings>(() => getDefaultSettings(INITIAL_STYLE))
+  const [renderBrief, setRenderBrief] = useState<RenderBrief>(EMPTY_RENDER_BRIEF)
   const [presetName, setPresetName] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
   const [isBatchGenerating, setIsBatchGenerating] = useState(false)
+  const [isSavingBrief, setIsSavingBrief] = useState(false)
   const [isSavingPreset, setIsSavingPreset] = useState(false)
   const [deletingPresetId, setDeletingPresetId] = useState<string | null>(null)
   const [batchProgress, setBatchProgress] = useState<BatchProgress>(EMPTY_BATCH_PROGRESS)
@@ -173,6 +182,51 @@ export default function ProjectRendersPage() {
     batchProgress.total > 0
       ? `Generating ${Math.min(batchProgress.completed + 1, batchProgress.total)} of ${batchProgress.total}...`
       : null
+  const loadedProjectId = project?._id
+  const loadedRenderBrief = project?.renderBrief
+  const persistedRenderBrief = project?.renderBrief ?? EMPTY_RENDER_BRIEF
+  const isRenderBriefDirty = useMemo(
+    () => JSON.stringify(renderBrief) !== JSON.stringify(persistedRenderBrief),
+    [persistedRenderBrief, renderBrief]
+  )
+  const hasRenderBriefContent = Object.values(renderBrief).some((value) => value.trim().length > 0)
+
+  useEffect(() => {
+    if (loadedProjectId) {
+      setRenderBrief(loadedRenderBrief ?? EMPTY_RENDER_BRIEF)
+    }
+  }, [loadedProjectId, loadedRenderBrief])
+
+  function updateRenderBriefField(key: keyof RenderBrief, value: string) {
+    setRenderBrief((current) => ({
+      ...current,
+      [key]: value
+    }))
+  }
+
+  async function saveRenderBrief(options: { silent?: boolean } = {}) {
+    if (!projectId || isSavingBrief) {
+      return
+    }
+
+    setIsSavingBrief(true)
+
+    try {
+      await updateRenderBrief({
+        id: projectId,
+        renderBrief
+      })
+      if (!options.silent) {
+        toast("Render brief saved", "success")
+      }
+    } catch (error) {
+      console.error("Unable to save render brief.", error)
+      toast("Unable to save the render brief", "error")
+      throw error
+    } finally {
+      setIsSavingBrief(false)
+    }
+  }
 
   function handleOpenLightbox(renderId: string) {
     const renderIndex = renders.filter((r) => r.imageUrl).findIndex((r) => r.id === renderId)
@@ -219,6 +273,9 @@ export default function ProjectRendersPage() {
     setIsGenerating(true)
 
     try {
+      if (isRenderBriefDirty) {
+        await saveRenderBrief({ silent: true })
+      }
       await generateRender({
         projectId,
         style: nextStyle,
@@ -226,7 +283,8 @@ export default function ProjectRendersPage() {
         settings: {
           ...nextSettings,
           style: nextStyle
-        }
+        },
+        renderBrief
       })
       toast("Render generated successfully", "success")
     } catch (error) {
@@ -345,6 +403,16 @@ export default function ProjectRendersPage() {
 
     let failed = 0
 
+    if (isRenderBriefDirty) {
+      try {
+        await saveRenderBrief({ silent: true })
+      } catch {
+        setIsBatchGenerating(false)
+        setBatchProgress(EMPTY_BATCH_PROGRESS)
+        return
+      }
+    }
+
     for (const [index, combination] of combinations.entries()) {
       try {
         await generateRender({
@@ -355,7 +423,8 @@ export default function ProjectRendersPage() {
             ...settings,
             style: combination.styleId,
             viewAngle: combination.viewAngle
-          }
+          },
+          renderBrief
         })
       } catch (error) {
         failed += 1
@@ -575,6 +644,81 @@ export default function ProjectRendersPage() {
       </div>
 
       <div className="render-stack">
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <div className="section-title">Render brief</div>
+              <div className="muted">
+                Capture the design intent and tweak notes that should guide every generated exterior.
+              </div>
+            </div>
+            <div className="button-row" style={{ alignItems: "center" }}>
+              {hasRenderBriefContent ? (
+                <span className={`badge${isRenderBriefDirty ? " is-warning" : " is-success"}`}>
+                  {isRenderBriefDirty ? "unsaved changes" : "saved"}
+                </span>
+              ) : (
+                <span className="badge">optional</span>
+              )}
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => saveRenderBrief()}
+                disabled={!isRenderBriefDirty || isSavingBrief || isGenerationBusy}
+              >
+                {isSavingBrief ? "Saving..." : "Save brief"}
+              </button>
+            </div>
+          </div>
+
+          <div className="render-brief-grid">
+            <label className="field">
+              <span className="field-label">Design direction</span>
+              <textarea
+                className="field-textarea render-brief-textarea"
+                value={renderBrief.designNotes}
+                onChange={(event) => updateRenderBriefField("designNotes", event.target.value)}
+                placeholder="Example: modern farmhouse with clean massing, warm entry lighting, generous front porch, black-framed windows."
+                disabled={isGenerationBusy || isSavingBrief}
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Must include</span>
+              <textarea
+                className="field-textarea render-brief-textarea"
+                value={renderBrief.mustHave}
+                onChange={(event) => updateRenderBriefField("mustHave", event.target.value)}
+                placeholder="Example: covered porch, board-and-batten siding, simple gable roof, native landscaping."
+                disabled={isGenerationBusy || isSavingBrief}
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Avoid</span>
+              <textarea
+                className="field-textarea render-brief-textarea"
+                value={renderBrief.avoid}
+                onChange={(event) => updateRenderBriefField("avoid", event.target.value)}
+                placeholder="Example: ornate trim, fantasy architecture, oversized windows, tropical landscaping."
+                disabled={isGenerationBusy || isSavingBrief}
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">Regeneration tweaks</span>
+              <textarea
+                className="field-textarea render-brief-textarea"
+                value={renderBrief.revisionNotes}
+                onChange={(event) => updateRenderBriefField("revisionNotes", event.target.value)}
+                placeholder="Example: make the porch deeper, reduce roof complexity, use warmer siding, keep the same camera angle."
+                disabled={isGenerationBusy || isSavingBrief}
+              />
+            </label>
+          </div>
+
+          <div className="field-hint">
+            Generate and batch generate automatically use the current brief. Unsaved brief edits are saved before generation starts.
+          </div>
+        </section>
+
         <div className="render-controls">
           <section className="panel">
             <div className="panel-header">

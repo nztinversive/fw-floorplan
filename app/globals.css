@@ -373,6 +373,16 @@ button:disabled,
   color: white;
 }
 
+.badge.is-success {
+  background: rgba(29, 125, 86, 0.12);
+  color: var(--fw-success);
+}
+
+.badge.is-warning {
+  background: rgba(180, 83, 9, 0.12);
+  color: #9a3412;
+}
+
 .form-grid {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
@@ -1282,6 +1292,17 @@ button:disabled,
 
 .render-stack {
   margin-top: 1.5rem;
+}
+
+.render-brief-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 1rem;
+}
+
+.render-brief-textarea {
+  min-height: 8rem;
 }
 
 .style-grid {
