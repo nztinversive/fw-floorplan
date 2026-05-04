@@ -40,6 +40,7 @@ import {
   type RenderConsistencyCheck,
   type RenderConsistencyStatus
 } from "@/lib/render-consistency"
+import { analyzeRenderQuality } from "@/lib/render-quality"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
 type PendingRenderAction = "favorite" | "delete" | "regenerate"
@@ -220,6 +221,21 @@ export default function ProjectRendersPage() {
       }
     }, {})
   }, [renders])
+  const renderQualityById = useMemo(() => {
+    if (!project) {
+      return {}
+    }
+
+    return renders.reduce<Record<string, ReturnType<typeof analyzeRenderQuality>>>((qualityById, render) => {
+      qualityById[render.id] = analyzeRenderQuality({
+        render,
+        floorPlans: project.floorPlans,
+        renderBrief: project.renderBrief ?? EMPTY_RENDER_BRIEF,
+        childRenders: childrenByRenderId[render.id] ?? []
+      })
+      return qualityById
+    }, {})
+  }, [childrenByRenderId, project, renders])
 
   const exportRenders = useMemo(() => {
     const favoriteRenders = renders.filter((render) => render.isFavorite && render.imageUrl)
@@ -1319,6 +1335,7 @@ export default function ProjectRendersPage() {
                   parentRender={render.parentRenderId ? renders.find((candidate) => candidate.id === render.parentRenderId) : undefined}
                   childRenders={childrenByRenderId[render.id] ?? []}
                   onCompareLineage={handleCompareLineage}
+                  qualityReport={renderQualityById[render.id]}
                   comparisonMode={comparisonMode}
                   isSelectedForComparison={selectedRenderIds.includes(render.id)}
                   onSelectForComparison={handleComparisonSelect}

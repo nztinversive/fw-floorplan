@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 
 import ProgressiveImage from "@/components/ProgressiveImage";
 import { RENDER_VIEW_ANGLE_LABELS } from "@/lib/render-angles";
+import type { RenderQualityReport } from "@/lib/render-quality";
 import { RENDER_REVIEW_ISSUES, getRenderReviewIssueLabel } from "@/lib/render-review";
 import { STYLE_PRESET_MAP } from "@/lib/style-presets";
 import { formatRelativeTime } from "@/lib/file-utils";
@@ -27,6 +28,7 @@ type RenderCardProps = {
   parentRender?: StoredRender;
   childRenders?: StoredRender[];
   onCompareLineage?: (parentRenderId: string, childRenderId: string) => void;
+  qualityReport?: RenderQualityReport;
   comparisonMode?: boolean;
   isSelectedForComparison?: boolean;
   onSelectForComparison?: (renderId: string) => void;
@@ -81,6 +83,7 @@ export default function RenderCard({
   parentRender,
   childRenders = [],
   onCompareLineage,
+  qualityReport,
   comparisonMode = false,
   isSelectedForComparison = false,
   onSelectForComparison,
@@ -262,6 +265,53 @@ export default function RenderCard({
           <div className="section-title">{getStyleLabel(render.style)}</div>
           <div className="render-meta-time">Generated {formatRelativeTime(render.createdAt)}</div>
         </div>
+
+        {qualityReport ? (
+          <div className={`render-quality-panel is-${qualityReport.status}`} onClick={(event) => event.stopPropagation()}>
+            <div className="render-quality-summary">
+              <div>
+                <div className="render-quality-score">{qualityReport.score}</div>
+                <div className="render-quality-score-label">quality</div>
+              </div>
+              <div>
+                <div className="render-quality-heading">
+                  <span className={`badge render-quality-badge is-${qualityReport.status}`}>
+                    {qualityReport.label}
+                  </span>
+                  <span>Render quality</span>
+                </div>
+                <div className="render-quality-copy">{qualityReport.summary}</div>
+              </div>
+            </div>
+
+            <div className="render-quality-checks">
+              {qualityReport.checks.map((check) => (
+                <div key={check.id} className="render-quality-check">
+                  <div className="render-quality-check-main">
+                    <span className={`badge render-quality-badge is-${check.status}`}>
+                      {check.score}
+                    </span>
+                    <div>
+                      <div className="render-quality-title">{check.title}</div>
+                      <div className="render-quality-detail">{check.detail}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {qualityReport.suggestion && onApplyFeedback ? (
+              <button
+                type="button"
+                className="render-quality-action"
+                onClick={() => onApplyFeedback(render, qualityReport.suggestion)}
+                disabled={comparisonMode || isDeleting || isRegenerating}
+              >
+                Add suggested fixes
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         {parentRender || childRenders.length > 0 ? (
           <div className="render-lineage-panel" onClick={(event) => event.stopPropagation()}>
