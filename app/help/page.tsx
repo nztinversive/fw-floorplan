@@ -73,7 +73,7 @@ const FAQS = [
   {
     question: "Where do I export a PDF client package?",
     answer:
-      "PDF export is available from the project overview page, not inside the editor toolbar. The editor handles PNG and DXF, while the overview page assembles the broader client package.",
+      "PDF export is available from the project overview page, not inside the editor toolbar. The editor handles PNG, SVG, DXF, and JSON, while the overview page assembles the broader client package.",
   },
   {
     question: "How do I save alternate layouts without losing the current one?",
@@ -127,7 +127,7 @@ export default function HelpPage() {
             <li>Start from a template or upload a floor plan image to seed the project.</li>
             <li>Open the editor to trace walls, clean up rooms, place openings, and annotate the plan.</li>
             <li>Generate renders from the Renders tab when you want presentation imagery.</li>
-            <li>Export PNG or DXF from the editor, or export a PDF client package from the overview page.</li>
+            <li>Export PNG, SVG, DXF, or JSON from the editor, or export a PDF client package from the overview page.</li>
           </ol>
         </section>
 

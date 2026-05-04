@@ -27,6 +27,7 @@ import {
 import ShortcutsPanel from "@/components/ShortcutsPanel"
 import { generateDxf } from "@/lib/dxf-export"
 import { clamp } from "@/lib/geometry"
+import { downloadJson, generateFloorPlanJson } from "@/lib/json-export"
 import { downloadSvg, generateSvg } from "@/lib/svg-export"
 import { useEditorStore, type EditorTool } from "@/lib/editor-store"
 
@@ -271,6 +272,17 @@ export default function Toolbar({
     downloadSvg(svg, `${fileStem}.svg`)
   }
 
+  function handleJsonExport() {
+    const floorLabel = exportFileName?.replace(`${projectName}-`, "") ?? "Floor plan"
+    const json = generateFloorPlanJson({
+      projectName,
+      floorLabel,
+      data: floorPlanData
+    })
+    const fileStem = sanitizeFileStem(exportFileName ?? projectName)
+    downloadJson(json, `${fileStem}.json`)
+  }
+
   function handleSourceImageChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     if (!file) {
@@ -436,6 +448,14 @@ export default function Toolbar({
           >
             <Download size={18} />
             Export SVG
+          </button>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={handleJsonExport}
+          >
+            <Download size={18} />
+            Export JSON
           </button>
           <button
             type="button"

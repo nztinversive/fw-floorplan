@@ -1604,6 +1604,10 @@ button:disabled,
   display: none;
 }
 
+.mobile-readonly-workspace {
+  display: none;
+}
+
 /* ── Breadcrumbs ── */
 .breadcrumb {
   display: flex;
@@ -4457,6 +4461,16 @@ button:disabled,
   .mobile-note {
     display: grid;
     margin-bottom: 1rem;
+  }
+
+  .desktop-editor-action,
+  .desktop-editor-workspace {
+    display: none;
+  }
+
+  .mobile-readonly-workspace {
+    display: grid;
+    gap: 1rem;
   }
 
   .share-canvas-frame {

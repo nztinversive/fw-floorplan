@@ -19,6 +19,7 @@ import FurnitureLibrary from "@/components/FurnitureLibrary"
 import HistoryPanel from "@/components/HistoryPanel"
 import OnboardingTour from "@/components/OnboardingTour"
 import PropertiesPanel from "@/components/PropertiesPanel"
+import ReadOnlyFloorPlanCanvas from "@/components/ReadOnlyFloorPlanCanvas"
 import { SkeletonPanel } from "@/components/Skeleton"
 import { useToast } from "@/components/Toast"
 import Toolbar from "@/components/Toolbar"
@@ -78,6 +79,7 @@ export default function ProjectEditorPage() {
   const [commentReplyDrafts, setCommentReplyDrafts] = useState<Record<string, string>>({})
   const [isSubmittingComment, setIsSubmittingComment] = useState(false)
   const [replyingCommentId, setReplyingCommentId] = useState<string | null>(null)
+  const [isMobileReadOnly, setIsMobileReadOnly] = useState(false)
   const hydratedFloorPlanIdRef = useRef<string | null>(null)
   const lastSavedSnapshotsRef = useRef<Record<number, string>>({})
   const sourceImageByFloorRef = useRef<Record<number, Id<"_storage"> | undefined>>({})
@@ -151,6 +153,15 @@ export default function ProjectEditorPage() {
   useEffect(() => {
     currentFloorRef.current = selectedFloor
   }, [selectedFloor])
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 760px)")
+    const updateMobileMode = () => setIsMobileReadOnly(query.matches)
+
+    updateMobileMode()
+    query.addEventListener("change", updateMobileMode)
+    return () => query.removeEventListener("change", updateMobileMode)
+  }, [])
 
   useEffect(() => {
     if (
@@ -604,7 +615,7 @@ export default function ProjectEditorPage() {
 
       <div className="mobile-note">
         <div className="muted">
-          The editor is optimized for larger screens. Tablet and desktop provide the best drafting space.
+          Mobile shows a read-only plan review. Open this project on a tablet or desktop to edit.
         </div>
       </div>
 
@@ -617,30 +628,34 @@ export default function ProjectEditorPage() {
           </div>
         </div>
         <div className="button-row" style={{ alignItems: "center" }}>
-          <button
-            type="button"
-            className={`button-ghost${isCommentsOpen ? " is-active" : ""}`}
-            onClick={() => setIsCommentsOpen((open) => !open)}
-          >
-            <MessageSquare size={16} />
-            {isCommentsOpen ? "Hide comments" : "Comments"}
-            <span className="badge">{activeCommentCount}</span>
-          </button>
-          <button
-            type="button"
-            className={`button-ghost${isVersionsOpen ? " is-active" : ""}`}
-            onClick={() => setIsVersionsOpen((open) => !open)}
-          >
-            {isVersionsOpen ? "Hide versions" : "Versions"}
-          </button>
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={handleCreateFloor}
-            disabled={isCreatingFloor}
-          >
-            {isCreatingFloor ? "Creating..." : "Add floor"}
-          </button>
+          {!isMobileReadOnly ? (
+            <>
+              <button
+                type="button"
+                className={`button-ghost desktop-editor-action${isCommentsOpen ? " is-active" : ""}`}
+                onClick={() => setIsCommentsOpen((open) => !open)}
+              >
+                <MessageSquare size={16} />
+                {isCommentsOpen ? "Hide comments" : "Comments"}
+                <span className="badge">{activeCommentCount}</span>
+              </button>
+              <button
+                type="button"
+                className={`button-ghost desktop-editor-action${isVersionsOpen ? " is-active" : ""}`}
+                onClick={() => setIsVersionsOpen((open) => !open)}
+              >
+                {isVersionsOpen ? "Hide versions" : "Versions"}
+              </button>
+              <button
+                type="button"
+                className="button-secondary desktop-editor-action"
+                onClick={handleCreateFloor}
+                disabled={isCreatingFloor}
+              >
+                {isCreatingFloor ? "Creating..." : "Add floor"}
+              </button>
+            </>
+          ) : null}
           <Link href={`/projects/${projectId}`} className="button-ghost">
             Back to overview
           </Link>
@@ -678,86 +693,115 @@ export default function ProjectEditorPage() {
         </div>
       ) : null}
 
-      <div className="editor-shell editor-dark">
-        <Toolbar
-          projectName={project.name}
-          exportFileName={`${project.name}-${formatFloorLabel(selectedFloor)}`}
-          stageRef={stageRef}
-          sourceImageUrl={activeSourceImageUrl}
-          overlayVisible={isSourceImageVisible}
-          overlayOpacity={sourceImageOpacity}
-          onToggleOverlay={() => setIsSourceImageVisible((visible) => !visible)}
-          onOverlayOpacityChange={setSourceImageOpacity}
-          onSourceImageSelected={handleSourceImageSelected}
-          isUploadingSourceImage={isReplacingSourceImage}
-        />
-        <div className="editor-grid">
-          <div style={{ position: "relative", overflow: "hidden" }}>
-            <HistoryPanel open={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} />
-            <button
-              type="button"
-              className={`icon-button${isHistoryOpen ? " is-active" : ""}`}
-              aria-label={isHistoryOpen ? "Close history panel" : "Open history panel"}
-              aria-pressed={isHistoryOpen}
-              onClick={() => setIsHistoryOpen((open) => !open)}
-              style={{ position: "absolute", top: "1rem", right: "1rem", zIndex: 110 }}
-            >
-              <Clock size={16} />
-            </button>
-            <FloorPlanCanvas
-              stageRef={stageRef}
-              sourceImageUrl={activeSourceImageUrl}
-              overlayVisible={isSourceImageVisible}
-              overlayOpacity={sourceImageOpacity}
-              comments={visibleComments}
-              selectedCommentId={selectedCommentId}
-              pendingCommentPoint={pendingCommentPoint}
-              onCommentPlacement={handleCommentPlacement}
-              onSelectComment={handleSelectComment}
-            />
-            <CanvasGuidance />
+      {isMobileReadOnly ? (
+        <section className="mobile-readonly-workspace">
+          <div className="panel">
+            <div className="panel-header">
+              <div>
+                <div className="section-title">{formatFloorLabel(selectedFloor)}</div>
+                <div className="muted">Pinch, pan, and review the saved plan. Editing is available on larger screens.</div>
+              </div>
+              <span className="badge">Read-only</span>
+            </div>
+            <ReadOnlyFloorPlanCanvas data={activeFloorPlan.data} comments={visibleComments} />
           </div>
-          <div className="editor-sidebar">
-            {isVersionsOpen ? (
-              <VersionsPanel
-                projectId={projectId}
-                floor={selectedFloor}
-                floorPlanData={floorPlanData}
-                onRestore={handleRestoreVersion}
-              />
-            ) : null}
-            <FurnitureLibrary isOpen={tool === "furniture"} onClose={() => setTool("select")} />
-            <EditorDesignReviewPanel />
-            {isCommentsOpen ? (
-              <CommentsPanel
-                comments={comments}
-                floorLabelById={floorLabelById}
+
+          <div className="panel">
+            <CommentsPanel
+              comments={comments}
+              floorLabelById={floorLabelById}
+              selectedCommentId={selectedCommentId}
+              onSelectComment={handleSelectComment}
+              showComposer={false}
+              title="Project comments"
+              subtitle="Review notes across every floor from your mobile device."
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {!isMobileReadOnly ? (
+        <div className="editor-shell editor-dark desktop-editor-workspace">
+          <Toolbar
+            projectName={project.name}
+            exportFileName={`${project.name}-${formatFloorLabel(selectedFloor)}`}
+            stageRef={stageRef}
+            sourceImageUrl={activeSourceImageUrl}
+            overlayVisible={isSourceImageVisible}
+            overlayOpacity={sourceImageOpacity}
+            onToggleOverlay={() => setIsSourceImageVisible((visible) => !visible)}
+            onOverlayOpacityChange={setSourceImageOpacity}
+            onSourceImageSelected={handleSourceImageSelected}
+            isUploadingSourceImage={isReplacingSourceImage}
+          />
+          <div className="editor-grid">
+            <div style={{ position: "relative", overflow: "hidden" }}>
+              <HistoryPanel open={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} />
+              <button
+                type="button"
+                className={`icon-button${isHistoryOpen ? " is-active" : ""}`}
+                aria-label={isHistoryOpen ? "Close history panel" : "Open history panel"}
+                aria-pressed={isHistoryOpen}
+                onClick={() => setIsHistoryOpen((open) => !open)}
+                style={{ position: "absolute", top: "1rem", right: "1rem", zIndex: 110 }}
+              >
+                <Clock size={16} />
+              </button>
+              <FloorPlanCanvas
+                stageRef={stageRef}
+                sourceImageUrl={activeSourceImageUrl}
+                overlayVisible={isSourceImageVisible}
+                overlayOpacity={sourceImageOpacity}
+                comments={visibleComments}
                 selectedCommentId={selectedCommentId}
+                pendingCommentPoint={pendingCommentPoint}
+                onCommentPlacement={handleCommentPlacement}
                 onSelectComment={handleSelectComment}
-                onResolveComment={handleResolveComment}
-                onReopenComment={handleReopenComment}
-                onUpdateCommentStatus={handleUpdateCommentStatus}
-                onDeleteComment={handleDeleteComment}
-                onReplyComment={handleReplyComment}
-                draftText={commentText}
-                draftStatus={commentStatus}
-                replyDrafts={commentReplyDrafts}
-                replyingCommentId={replyingCommentId}
-                pendingPlacement={pendingCommentPoint}
-                onDraftTextChange={setCommentText}
-                onDraftStatusChange={setCommentStatus}
-                onReplyDraftChange={handleReplyDraftChange}
-                onSubmitComment={handleSubmitComment}
-                onCancelPlacement={handleCancelCommentPlacement}
-                isSubmitting={isSubmittingComment}
-                title="Project comments"
-                subtitle="Review notes across every floor and pin new items on the active plan."
               />
-            ) : null}
-            <PropertiesPanel />
+              <CanvasGuidance />
+            </div>
+            <div className="editor-sidebar">
+              {isVersionsOpen ? (
+                <VersionsPanel
+                  projectId={projectId}
+                  floor={selectedFloor}
+                  floorPlanData={floorPlanData}
+                  onRestore={handleRestoreVersion}
+                />
+              ) : null}
+              <FurnitureLibrary isOpen={tool === "furniture"} onClose={() => setTool("select")} />
+              <EditorDesignReviewPanel />
+              {isCommentsOpen ? (
+                <CommentsPanel
+                  comments={comments}
+                  floorLabelById={floorLabelById}
+                  selectedCommentId={selectedCommentId}
+                  onSelectComment={handleSelectComment}
+                  onResolveComment={handleResolveComment}
+                  onReopenComment={handleReopenComment}
+                  onUpdateCommentStatus={handleUpdateCommentStatus}
+                  onDeleteComment={handleDeleteComment}
+                  onReplyComment={handleReplyComment}
+                  draftText={commentText}
+                  draftStatus={commentStatus}
+                  replyDrafts={commentReplyDrafts}
+                  replyingCommentId={replyingCommentId}
+                  pendingPlacement={pendingCommentPoint}
+                  onDraftTextChange={setCommentText}
+                  onDraftStatusChange={setCommentStatus}
+                  onReplyDraftChange={handleReplyDraftChange}
+                  onSubmitComment={handleSubmitComment}
+                  onCancelPlacement={handleCancelCommentPlacement}
+                  isSubmitting={isSubmittingComment}
+                  title="Project comments"
+                  subtitle="Review notes across every floor and pin new items on the active plan."
+                />
+              ) : null}
+              <PropertiesPanel />
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
 
       {showCalibrationDialog ? (
         <div className="dialog-backdrop" onClick={handleCloseCalibrationDialog}>

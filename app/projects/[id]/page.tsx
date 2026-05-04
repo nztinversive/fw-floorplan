@@ -26,6 +26,7 @@ import { generateDxf } from "@/lib/dxf-export"
 import { formatDate } from "@/lib/file-utils"
 import { formatFloorLabel, getNextFloorNumber, getPrimaryFloor, sortFloors } from "@/lib/floor-utils"
 import { createSeedFloorPlan } from "@/lib/geometry"
+import { downloadJson, generateFloorPlanJson } from "@/lib/json-export"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
 import { downloadSvg, generateSvg } from "@/lib/svg-export"
 import type { PersistedFloorPlan, ProjectComment } from "@/lib/types"
@@ -362,6 +363,20 @@ export default function ProjectOverviewPage() {
     toast("SVG exported", "success")
   }
 
+  function handleExportJson() {
+    if (!project || !activeFloorPlan) return
+
+    const floorLabel = formatFloorLabel(selectedFloor)
+    const json = generateFloorPlanJson({
+      projectName: project.name,
+      floorLabel,
+      data: activeFloorPlan.data
+    })
+    const safeName = sanitizeFileStem(project.name)
+    downloadJson(json, `${safeName}-${floorLabel.toLowerCase().replace(/\s+/g, "-")}.json`)
+    toast("JSON exported", "success")
+  }
+
   if (projectId && project === undefined) {
     return (
       <main className="page-shell">
@@ -502,6 +517,15 @@ export default function ProjectOverviewPage() {
             >
               <Download size={18} />
               Export SVG
+            </button>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={handleExportJson}
+              disabled={orderedFloorPlans.length === 0}
+            >
+              <Download size={18} />
+              Export JSON
             </button>
             <button
               type="button"
