@@ -3,6 +3,7 @@
 import Link from "next/link"
 import type Konva from "konva"
 import { Clock, MessageSquare } from "lucide-react"
+import dynamic from "next/dynamic"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useMutation, useQuery } from "convex/react"
@@ -14,12 +15,10 @@ import Breadcrumb from "@/components/Breadcrumb"
 import CanvasGuidance from "@/components/CanvasGuidance"
 import CommentsPanel from "@/components/CommentsPanel"
 import EditorDesignReviewPanel from "@/components/EditorDesignReviewPanel"
-import FloorPlanCanvas from "@/components/FloorPlanCanvas"
 import FurnitureLibrary from "@/components/FurnitureLibrary"
 import HistoryPanel from "@/components/HistoryPanel"
 import OnboardingTour from "@/components/OnboardingTour"
 import PropertiesPanel from "@/components/PropertiesPanel"
-import ReadOnlyFloorPlanCanvas from "@/components/ReadOnlyFloorPlanCanvas"
 import { SkeletonPanel } from "@/components/Skeleton"
 import { useToast } from "@/components/Toast"
 import Toolbar from "@/components/Toolbar"
@@ -33,6 +32,14 @@ import type { CommentStatus, FloorPlanData, PersistedFloorPlan, Point, ProjectCo
 type UploadResponse = {
   storageId: Id<"_storage">
 }
+
+const FloorPlanCanvas = dynamic(() => import("@/components/FloorPlanCanvas"), {
+  ssr: false
+})
+
+const ReadOnlyFloorPlanCanvas = dynamic(() => import("@/components/ReadOnlyFloorPlanCanvas"), {
+  ssr: false
+})
 
 async function uploadFileToStorage(uploadUrl: string, file: File): Promise<Id<"_storage">> {
   const response = await fetch(uploadUrl, {
@@ -848,7 +855,7 @@ export default function ProjectEditorPage() {
         </div>
       ) : null}
 
-      <OnboardingTour />
+      {!isMobileReadOnly ? <OnboardingTour /> : null}
     </main>
   )
 }
