@@ -35,6 +35,11 @@ import {
 } from "@/lib/style-presets"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
 import { sortFloors } from "@/lib/floor-utils"
+import {
+  analyzeRenderConsistency,
+  type RenderConsistencyCheck,
+  type RenderConsistencyStatus
+} from "@/lib/render-consistency"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
 type PendingRenderAction = "favorite" | "delete" | "regenerate"
@@ -224,6 +229,17 @@ export default function ProjectRendersPage() {
     [persistedRenderBrief, renderBrief]
   )
   const hasRenderBriefContent = Object.values(renderBrief).some((value) => value.trim().length > 0)
+  const renderConsistency = useMemo(
+    () =>
+      project
+        ? analyzeRenderConsistency({
+          floorPlans: project.floorPlans,
+          renderBrief,
+          settings
+        })
+        : null,
+    [project, renderBrief, settings]
+  )
 
   useEffect(() => {
     if (loadedProjectId) {
@@ -236,6 +252,36 @@ export default function ProjectRendersPage() {
       ...current,
       [key]: value
     }))
+  }
+
+  function getConsistencyStatusLabel(status: RenderConsistencyStatus) {
+    if (status === "ready") return "ready"
+    if (status === "missing") return "missing"
+    return "review"
+  }
+
+  function handleApplyConsistencySuggestion(check: RenderConsistencyCheck) {
+    if (!check.briefTarget || !check.briefText) {
+      return
+    }
+
+    setRenderBrief((current) => {
+      const currentValue = current[check.briefTarget!]
+      const existingLines = currentValue
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+
+      if (existingLines.includes(check.briefText!)) {
+        return current
+      }
+
+      return {
+        ...current,
+        [check.briefTarget!]: [...existingLines, check.briefText].join("\n")
+      }
+    })
+    toast("Suggestion added to the render brief", "info")
   }
 
   async function handleCopyPrompt(prompt: string) {
@@ -1021,6 +1067,55 @@ export default function ProjectRendersPage() {
                   ))
                 )}
               </div>
+            </div>
+
+            <div className="settings-group render-consistency-panel">
+              <div className="settings-group-header">
+                <AlertTriangle size={14} />
+                <span>Plan-to-render checks</span>
+              </div>
+
+              {renderConsistency ? (
+                <>
+                  <div className="render-consistency-summary">
+                    <div>
+                      <div className="render-consistency-score">{renderConsistency.score}</div>
+                      <div className="render-consistency-score-label">readiness</div>
+                    </div>
+                    <div className="muted">{renderConsistency.summary}</div>
+                  </div>
+
+                  <div className="render-consistency-list">
+                    {renderConsistency.checks.map((check) => (
+                      <div key={check.id} className={`render-consistency-item is-${check.status}`}>
+                        <div className="render-consistency-item-main">
+                          <span className={`badge render-consistency-badge is-${check.status}`}>
+                            {getConsistencyStatusLabel(check.status)}
+                          </span>
+                          <div>
+                            <div className="render-consistency-title">{check.title}</div>
+                            <div className="render-consistency-detail">{check.detail}</div>
+                          </div>
+                        </div>
+                        {check.actionLabel && check.briefText ? (
+                          <button
+                            type="button"
+                            className="render-consistency-action"
+                            onClick={() => handleApplyConsistencySuggestion(check)}
+                            disabled={isGenerationBusy || isSavingBrief}
+                          >
+                            {check.actionLabel}
+                          </button>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="versions-empty">
+                  <div className="muted">Loading plan checks...</div>
+                </div>
+              )}
             </div>
 
             {/* Generate action */}

@@ -1612,6 +1612,114 @@ button:disabled,
   line-height: 1.45;
 }
 
+.render-consistency-panel {
+  gap: 0.85rem;
+}
+
+.render-consistency-summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-top: 1px solid rgba(27, 42, 74, 0.08);
+  border-bottom: 1px solid rgba(27, 42, 74, 0.08);
+}
+
+.render-consistency-score {
+  display: grid;
+  place-items: center;
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 50%;
+  background: rgba(27, 42, 74, 0.08);
+  color: var(--fw-navy);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.render-consistency-score-label {
+  margin-top: 0.3rem;
+  color: var(--fw-slate);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.render-consistency-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.render-consistency-item {
+  display: grid;
+  gap: 0.55rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(27, 42, 74, 0.08);
+}
+
+.render-consistency-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.render-consistency-item-main {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.55rem;
+  align-items: flex-start;
+}
+
+.render-consistency-badge.is-ready {
+  background: rgba(34, 197, 94, 0.1);
+  color: #166534;
+}
+
+.render-consistency-badge.is-review {
+  background: rgba(212, 168, 75, 0.16);
+  color: #7c5a16;
+}
+
+.render-consistency-badge.is-missing {
+  background: rgba(220, 38, 38, 0.1);
+  color: #991b1b;
+}
+
+.render-consistency-title {
+  color: var(--fw-navy);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.render-consistency-detail {
+  margin-top: 0.2rem;
+  color: var(--fw-slate);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.render-consistency-action {
+  justify-self: start;
+  border: 1px solid rgba(27, 42, 74, 0.12);
+  background: #ffffff;
+  color: var(--fw-navy);
+  border-radius: 999px;
+  padding: 0.42rem 0.68rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.render-consistency-action:hover {
+  border-color: rgba(212, 168, 75, 0.55);
+  background: rgba(212, 168, 75, 0.12);
+}
+
+.render-consistency-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .render-prompt-details {
   border-top: 1px solid rgba(27, 42, 74, 0.08);
   padding-top: 0.85rem;
