@@ -3,8 +3,9 @@ import { v } from "convex/values";
 
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { action, internalMutation, mutation, query, type QueryCtx } from "./_generated/server";
+import { action, internalMutation, internalQuery, mutation, query, type QueryCtx } from "./_generated/server";
 import {
+  DEFAULT_RENDER_VIEW_ANGLE,
   RENDER_VIEW_ANGLE_PROMPTS,
   type RenderViewAngle
 } from "../lib/render-angles";
@@ -31,6 +32,83 @@ type PlanBounds = {
   maxY: number;
 };
 
+type RenderCritiqueRecommendation = "use" | "tweak" | "regenerate";
+type RenderCritiqueIssue = {
+  category: string;
+  severity: "strength" | "minor" | "major";
+  detail: string;
+};
+type RenderCritique = {
+  score: number;
+  confidence: number;
+  recommendation: RenderCritiqueRecommendation;
+  summary: string;
+  issues: RenderCritiqueIssue[];
+  suggestedFixes: string;
+};
+
+const renderCritiqueIssueValidator = v.object({
+  category: v.string(),
+  severity: v.union(v.literal("strength"), v.literal("minor"), v.literal("major")),
+  detail: v.string()
+});
+
+const renderCritiqueSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["score", "confidence", "recommendation", "summary", "issues", "suggestedFixes"],
+  properties: {
+    score: {
+      type: "number",
+      minimum: 0,
+      maximum: 100,
+      description: "Overall render usefulness for client-ready exterior design review."
+    },
+    confidence: {
+      type: "number",
+      minimum: 0,
+      maximum: 1,
+      description: "Confidence that the critique is grounded in the visible render."
+    },
+    recommendation: {
+      type: "string",
+      enum: ["use", "tweak", "regenerate"],
+      description: "Whether this render should be used, lightly revised, or regenerated."
+    },
+    summary: {
+      type: "string",
+      description: "A concise client-facing assessment of the render quality."
+    },
+    issues: {
+      type: "array",
+      maxItems: 6,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["category", "severity", "detail"],
+        properties: {
+          category: {
+            type: "string",
+            description: "Short category such as massing, windows, materials, roof, landscaping, or fidelity."
+          },
+          severity: {
+            type: "string",
+            enum: ["strength", "minor", "major"]
+          },
+          detail: {
+            type: "string",
+            description: "One specific observation grounded in the image and design brief."
+          }
+        }
+      }
+    },
+    suggestedFixes: {
+      type: "string",
+      description: "One concise regeneration instruction that can be pasted into revision notes."
+    }
+  }
+} as const;
+
 function normalizeStyleId(style: string): StylePresetId {
   const normalized = style.trim().toLowerCase();
 
@@ -41,6 +119,10 @@ function normalizeStyleId(style: string): StylePresetId {
   }
 
   throw new Error(`Unsupported render style: ${style}`);
+}
+
+function getStyleLabelForPrompt(style: string) {
+  return STYLE_PRESET_MAP[style as StylePresetId]?.name ?? style;
 }
 
 function summarizeCount(count: number, singular: string, plural: string) {
@@ -399,6 +481,101 @@ function buildRenderPrompt(args: {
   };
 }
 
+function extractTextOutput(response: unknown): string {
+  const candidate = response as {
+    output_text?: string;
+    output?: Array<{
+      content?: Array<{ type?: string; text?: string }>;
+    }>;
+  };
+
+  if (candidate.output_text) {
+    return candidate.output_text;
+  }
+
+  const messages = candidate.output ?? [];
+  for (const message of messages) {
+    for (const item of message.content ?? []) {
+      if (item.type === "output_text" && item.text) {
+        return item.text;
+      }
+    }
+  }
+
+  throw new Error("OpenAI response did not include text output");
+}
+
+function clamp(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeCritique(parsed: Partial<RenderCritique>): RenderCritique {
+  const recommendation =
+    parsed.recommendation === "use" ||
+    parsed.recommendation === "tweak" ||
+    parsed.recommendation === "regenerate"
+      ? parsed.recommendation
+      : "tweak";
+
+  const issues = Array.isArray(parsed.issues)
+    ? parsed.issues
+        .map((issue) => ({
+          category: String(issue.category ?? "quality").trim().slice(0, 40) || "quality",
+          severity:
+            issue.severity === "strength" ||
+            issue.severity === "minor" ||
+            issue.severity === "major"
+              ? issue.severity
+              : "minor",
+          detail: String(issue.detail ?? "").trim().slice(0, 260)
+        }))
+        .filter((issue) => issue.detail.length > 0)
+        .slice(0, 6)
+    : [];
+
+  return {
+    score: Math.round(clamp(Number(parsed.score), 0, 100)),
+    confidence: Math.round(clamp(Number(parsed.confidence), 0, 1) * 100) / 100,
+    recommendation,
+    summary: String(parsed.summary ?? "AI critique completed.").trim().slice(0, 360),
+    issues,
+    suggestedFixes: String(parsed.suggestedFixes ?? "")
+      .trim()
+      .slice(0, 700)
+  };
+}
+
+function buildCritiquePrompt(args: {
+  project: ProjectWithFloorPlans;
+  render: Doc<"renders">;
+  imageUrl: string;
+}) {
+  const architecturalDescription = describeFloorPlans(args.project.floorPlans);
+  const styleLabel = getStyleLabelForPrompt(args.render.style);
+  const viewAngle = args.render.settings.viewAngle ?? DEFAULT_RENDER_VIEW_ANGLE;
+
+  return [
+    "You are an architectural design director reviewing AI-generated exterior home renders for a modular home design workflow.",
+    "Evaluate the visible render against the saved render prompt and floor-plan summary. Be practical: focus on design quality, floor-plan fidelity, buildability cues, client-readiness, material coherence, window/door logic, roof realism, and whether another generation would likely improve the output.",
+    "Do not mention that you cannot perfectly verify dimensions from a single render. Ground every issue in what is visible or in a clear mismatch with the brief.",
+    "",
+    `Project: ${args.project.name}`,
+    args.project.address ? `Address/context: ${args.project.address}` : null,
+    `Floor-plan summary: ${architecturalDescription}`,
+    `Saved render style: ${styleLabel}`,
+    `Saved camera angle: ${RENDER_VIEW_ANGLE_PROMPTS[viewAngle]}`,
+    `Saved generation prompt: ${args.render.prompt}`,
+    "",
+    "Return only the structured critique schema. Keep suggestedFixes as one regeneration-ready instruction sentence or short paragraph."
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 export const previewPrompt = query({
   args: {
     projectId: v.id("projects"),
@@ -467,7 +644,8 @@ export const storeGeneratedRender = internalMutation({
     prompt: v.string(),
     imageUrl: v.id("_storage"),
     parentRenderId: v.optional(v.id("renders")),
-    sourceReviewId: v.optional(v.id("renderReviews"))
+    sourceReviewId: v.optional(v.id("renderReviews")),
+    sourceCritiqueId: v.optional(v.id("renderCritiques"))
   },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
@@ -487,6 +665,9 @@ export const storeGeneratedRender = internalMutation({
       if (!args.parentRenderId) {
         throw new Error("Source review requires a parent render");
       }
+      if (args.sourceCritiqueId) {
+        throw new Error("Use either a source review or a source critique, not both");
+      }
 
       const sourceReview = await ctx.db.get(args.sourceReviewId);
       if (
@@ -495,6 +676,21 @@ export const storeGeneratedRender = internalMutation({
         sourceReview.renderId !== args.parentRenderId
       ) {
         throw new Error("Source review not found");
+      }
+    }
+
+    if (args.sourceCritiqueId) {
+      if (!args.parentRenderId) {
+        throw new Error("Source critique requires a parent render");
+      }
+
+      const sourceCritique = await ctx.db.get(args.sourceCritiqueId);
+      if (
+        !sourceCritique ||
+        sourceCritique.projectId !== args.projectId ||
+        sourceCritique.renderId !== args.parentRenderId
+      ) {
+        throw new Error("Source critique not found");
       }
     }
 
@@ -508,6 +704,7 @@ export const storeGeneratedRender = internalMutation({
       isFavorite: false,
       parentRenderId: args.parentRenderId,
       sourceReviewId: args.sourceReviewId,
+      sourceCritiqueId: args.sourceCritiqueId,
       createdAt: now
     });
 
@@ -527,7 +724,8 @@ export const generateRender = action({
     viewAngle: renderViewAngleValidator,
     renderBrief: v.optional(renderBriefValidator),
     parentRenderId: v.optional(v.id("renders")),
-    sourceReviewId: v.optional(v.id("renderReviews"))
+    sourceReviewId: v.optional(v.id("renderReviews")),
+    sourceCritiqueId: v.optional(v.id("renderCritiques"))
   },
   handler: async (ctx, args) => {
     await ctx.runQuery(internal.members.requireCurrentUserProjectEditor, {
@@ -559,9 +757,10 @@ export const generateRender = action({
       throw new Error("OPENAI_API_KEY is not configured");
     }
 
+    const imageModel = process.env.OPENAI_IMAGE_MODEL ?? "gpt-image-2";
     const client = new OpenAI({ apiKey });
     const response = await client.images.generate({
-      model: "gpt-image-1",
+      model: imageModel,
       prompt: promptDetails.prompt,
       size: "1536x1024",
       quality: "high"
@@ -576,10 +775,168 @@ export const generateRender = action({
       prompt: promptDetails.prompt,
       imageUrl: storageId,
       parentRenderId: args.parentRenderId,
-      sourceReviewId: args.sourceReviewId
+      sourceReviewId: args.sourceReviewId,
+      sourceCritiqueId: args.sourceCritiqueId
     });
 
     return renderId;
+  }
+});
+
+export const getRenderCritiqueInput = internalQuery({
+  args: {
+    renderId: v.id("renders")
+  },
+  handler: async (ctx, args) => {
+    const render = await ctx.db.get(args.renderId);
+    if (!render) {
+      throw new Error("Render not found");
+    }
+
+    await requireProjectEditor(ctx, render.projectId);
+
+    const project = await getProjectWithFloorPlans(ctx, render.projectId);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    const imageUrl = await ctx.storage.getUrl(render.imageUrl);
+    if (!imageUrl) {
+      throw new Error("Render image is unavailable");
+    }
+
+    return {
+      project,
+      render,
+      imageUrl
+    };
+  }
+});
+
+export const storeRenderCritique = internalMutation({
+  args: {
+    renderId: v.id("renders"),
+    model: v.string(),
+    score: v.number(),
+    confidence: v.number(),
+    recommendation: v.union(v.literal("use"), v.literal("tweak"), v.literal("regenerate")),
+    summary: v.string(),
+    issues: v.array(renderCritiqueIssueValidator),
+    suggestedFixes: v.string(),
+    authorEmail: v.optional(v.string())
+  },
+  handler: async (ctx, args) => {
+    const render = await ctx.db.get(args.renderId);
+    if (!render) {
+      throw new Error("Render not found");
+    }
+
+    await requireProjectEditor(ctx, render.projectId);
+
+    const now = Date.now();
+    const critiqueId = await ctx.db.insert("renderCritiques", {
+      projectId: render.projectId,
+      renderId: args.renderId,
+      model: args.model,
+      score: args.score,
+      confidence: args.confidence,
+      recommendation: args.recommendation,
+      summary: args.summary,
+      issues: args.issues,
+      suggestedFixes: args.suggestedFixes,
+      authorEmail: args.authorEmail,
+      createdAt: now
+    });
+
+    await ctx.db.patch(render.projectId, {
+      updatedAt: now
+    });
+
+    return critiqueId;
+  }
+});
+
+export const critiqueRender = action({
+  args: {
+    renderId: v.id("renders")
+  },
+  handler: async (ctx, args) => {
+    const input: {
+      project: ProjectWithFloorPlans;
+      render: Doc<"renders">;
+      imageUrl: string;
+    } = await ctx.runQuery(internal.renders.getRenderCritiqueInput, {
+      renderId: args.renderId
+    });
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENAI_API_KEY is not configured");
+    }
+
+    const model = process.env.OPENAI_RENDER_CRITIQUE_MODEL ?? "gpt-5.4-mini";
+    const client = new OpenAI({ apiKey });
+    const response = await client.responses.create({
+      model,
+      input: [
+        {
+          role: "system",
+          content: [
+            {
+              type: "input_text",
+              text:
+                "You critique residential exterior renders for high-quality home design output. Return precise structured JSON only."
+            }
+          ]
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: buildCritiquePrompt(input)
+            },
+            {
+              type: "input_image",
+              image_url: input.imageUrl,
+              detail: "high"
+            }
+          ]
+        }
+      ],
+      store: false,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "render_critique",
+          schema: renderCritiqueSchema,
+          description: "Structured critique of a generated exterior render.",
+          strict: true
+        }
+      }
+    });
+
+    const critique = normalizeCritique(JSON.parse(extractTextOutput(response)) as Partial<RenderCritique>);
+    const identity = await ctx.auth.getUserIdentity();
+    const critiqueId: Id<"renderCritiques"> = await ctx.runMutation(
+      internal.renders.storeRenderCritique,
+      {
+        renderId: args.renderId,
+        model,
+        ...critique,
+        authorEmail: identity?.email
+      }
+    );
+
+    return {
+      _id: critiqueId,
+      projectId: input.render.projectId,
+      renderId: args.renderId,
+      model,
+      ...critique,
+      authorEmail: identity?.email,
+      createdAt: Date.now()
+    };
   }
 });
 
@@ -602,7 +959,13 @@ export const list = query({
           .withIndex("by_renderId_and_createdAt", (query) => query.eq("renderId", render._id))
           .order("desc")
           .take(5);
+        const critiqueHistory = await ctx.db
+          .query("renderCritiques")
+          .withIndex("by_renderId_and_createdAt", (query) => query.eq("renderId", render._id))
+          .order("desc")
+          .take(3);
         const sourceReview = render.sourceReviewId ? await ctx.db.get(render.sourceReviewId) : null;
+        const sourceCritique = render.sourceCritiqueId ? await ctx.db.get(render.sourceCritiqueId) : null;
 
         return {
           _id: render._id,
@@ -616,8 +979,12 @@ export const list = query({
           createdAt: render.createdAt,
           parentRenderId: render.parentRenderId,
           sourceReviewId: render.sourceReviewId,
+          sourceCritiqueId: render.sourceCritiqueId,
           sourceReview,
-          reviewHistory
+          sourceCritique,
+          reviewHistory,
+          latestCritique: critiqueHistory[0] ?? null,
+          critiqueHistory
         };
       })
     );
@@ -703,6 +1070,15 @@ export const remove = mutation({
 
     for (const review of reviews) {
       await ctx.db.delete(review._id);
+    }
+
+    const critiques = await ctx.db
+      .query("renderCritiques")
+      .withIndex("by_renderId_and_createdAt", (query) => query.eq("renderId", args.renderId))
+      .take(100);
+
+    for (const critique of critiques) {
+      await ctx.db.delete(critique._id);
     }
 
     await ctx.storage.delete(render.imageUrl);

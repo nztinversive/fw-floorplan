@@ -43,7 +43,7 @@ import {
 import { analyzeRenderQuality } from "@/lib/render-quality"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
-type PendingRenderAction = "favorite" | "delete" | "regenerate"
+type PendingRenderAction = "favorite" | "delete" | "regenerate" | "critique"
 type RenderReviewDraft = {
   issueKeys: string[]
   notes: string
@@ -98,6 +98,7 @@ export default function ProjectRendersPage() {
   const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip")
   const presetsQuery = useQuery(api.renderPresets.listPresets, projectId ? { projectId } : "skip")
   const generateRender = useAction(api.renders.generateRender)
+  const critiqueRender = useAction(api.renders.critiqueRender)
   const toggleFavorite = useMutation(api.renders.toggleFavorite)
   const removeRender = useMutation(api.renders.remove)
   const saveRenderReview = useMutation(api.renders.saveReview)
@@ -164,6 +165,7 @@ export default function ProjectRendersPage() {
         createdAt: render.createdAt,
         parentRenderId: render.parentRenderId,
         sourceReviewId: render.sourceReviewId,
+        sourceCritiqueId: render.sourceCritiqueId,
         sourceReview: render.sourceReview
           ? {
             id: render.sourceReview._id,
@@ -175,6 +177,22 @@ export default function ProjectRendersPage() {
             createdAt: render.sourceReview.createdAt
           }
           : null,
+        sourceCritique: render.sourceCritique
+          ? {
+            id: render.sourceCritique._id,
+            projectId: render.sourceCritique.projectId,
+            renderId: render.sourceCritique.renderId,
+            model: render.sourceCritique.model,
+            score: render.sourceCritique.score,
+            confidence: render.sourceCritique.confidence,
+            recommendation: render.sourceCritique.recommendation,
+            summary: render.sourceCritique.summary,
+            issues: render.sourceCritique.issues,
+            suggestedFixes: render.sourceCritique.suggestedFixes,
+            authorEmail: render.sourceCritique.authorEmail,
+            createdAt: render.sourceCritique.createdAt
+          }
+          : null,
         reviewHistory: render.reviewHistory.map((review) => ({
           id: review._id,
           projectId: review.projectId,
@@ -183,6 +201,36 @@ export default function ProjectRendersPage() {
           notes: review.notes,
           authorEmail: review.authorEmail,
           createdAt: review.createdAt
+        })),
+        latestCritique: render.latestCritique
+          ? {
+            id: render.latestCritique._id,
+            projectId: render.latestCritique.projectId,
+            renderId: render.latestCritique.renderId,
+            model: render.latestCritique.model,
+            score: render.latestCritique.score,
+            confidence: render.latestCritique.confidence,
+            recommendation: render.latestCritique.recommendation,
+            summary: render.latestCritique.summary,
+            issues: render.latestCritique.issues,
+            suggestedFixes: render.latestCritique.suggestedFixes,
+            authorEmail: render.latestCritique.authorEmail,
+            createdAt: render.latestCritique.createdAt
+          }
+          : null,
+        critiqueHistory: render.critiqueHistory.map((critique) => ({
+          id: critique._id,
+          projectId: critique.projectId,
+          renderId: critique.renderId,
+          model: critique.model,
+          score: critique.score,
+          confidence: critique.confidence,
+          recommendation: critique.recommendation,
+          summary: critique.summary,
+          issues: critique.issues,
+          suggestedFixes: critique.suggestedFixes,
+          authorEmail: critique.authorEmail,
+          createdAt: critique.createdAt
         }))
       })),
     [rendersQuery]
@@ -419,6 +467,7 @@ export default function ProjectRendersPage() {
       skipBriefSave?: boolean;
       parentRenderId?: string;
       sourceReviewId?: string;
+      sourceCritiqueId?: string;
     } = {}
   ) {
     if (!projectId || isGenerationBusy) return false
@@ -441,7 +490,8 @@ export default function ProjectRendersPage() {
         },
         renderBrief: renderBriefForGeneration,
         parentRenderId: options.parentRenderId as Id<"renders"> | undefined,
-        sourceReviewId: options.sourceReviewId as Id<"renderReviews"> | undefined
+        sourceReviewId: options.sourceReviewId as Id<"renderReviews"> | undefined,
+        sourceCritiqueId: options.sourceCritiqueId as Id<"renderCritiques"> | undefined
       })
       toast("Render generated successfully", "success")
       return true
@@ -662,6 +712,21 @@ export default function ProjectRendersPage() {
     }
   }
 
+  async function handleCritiqueRender(render: StoredRender) {
+    setErrorMessage(null)
+    setPendingRenderAction({ renderId: render.id, action: "critique" })
+
+    try {
+      await critiqueRender({ renderId: render.id as Id<"renders"> })
+      toast("AI critique completed", "success")
+    } catch (error) {
+      console.error("Unable to critique render.", error)
+      toast("Unable to critique this render", "error")
+    } finally {
+      setPendingRenderAction(null)
+    }
+  }
+
   function buildRenderReviewRevision(render: StoredRender, review: RenderReviewDraft) {
     const feedback = formatRenderReviewFeedback(review)
     const styleLabel = getStyleLabel(render.style)
@@ -706,6 +771,35 @@ export default function ProjectRendersPage() {
         skipBriefSave: true,
         parentRenderId: render.id,
         sourceReviewId: reviewId
+      })
+    } finally {
+      setPendingRenderAction(null)
+    }
+  }
+
+  async function handleRegenerateWithCritique(render: StoredRender) {
+    const critique = render.latestCritique
+    if (!critique || !critique.suggestedFixes.trim()) {
+      toast("Run an AI critique before regenerating from it", "warning")
+      return
+    }
+
+    const styleLabel = getStyleLabel(render.style)
+    const viewLabel = RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle]
+    const revisionLine = `${styleLabel} ${viewLabel} AI critique (${critique.score}/100): ${critique.suggestedFixes.trim()}`
+    const renderBriefOverride = {
+      ...renderBrief,
+      revisionNotes: [renderBrief.revisionNotes.trim(), revisionLine].filter(Boolean).join("\n")
+    }
+
+    setPendingRenderAction({ renderId: render.id, action: "regenerate" })
+
+    try {
+      await triggerGeneration(render.style, render.settings, {
+        renderBriefOverride,
+        skipBriefSave: true,
+        parentRenderId: render.id,
+        sourceCritiqueId: critique.id
       })
     } finally {
       setPendingRenderAction(null)
@@ -1326,11 +1420,17 @@ export default function ProjectRendersPage() {
                   onToggleFavorite={handleToggleFavorite}
                   onDelete={handleDeleteRender}
                   onRegenerate={handleRegenerate}
+                  onCritique={handleCritiqueRender}
+                  isCritiquing={
+                    pendingRenderAction?.renderId === render.id &&
+                    pendingRenderAction.action === "critique"
+                  }
                   onApplyFeedback={handleApplyRenderFeedback}
                   onCopyPrompt={handleCopyPrompt}
                   onUsePromptAsBaseline={handleUsePromptAsBaseline}
                   onSaveReview={handleSaveRenderReview}
                   onRegenerateWithReview={handleRegenerateWithReview}
+                  onRegenerateWithCritique={handleRegenerateWithCritique}
                   isSavingReview={pendingReviewRenderId === render.id}
                   parentRender={render.parentRenderId ? renders.find((candidate) => candidate.id === render.parentRenderId) : undefined}
                   childRenders={childrenByRenderId[render.id] ?? []}

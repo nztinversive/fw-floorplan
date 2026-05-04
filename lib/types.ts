@@ -147,6 +147,27 @@ export type StoredRenderReview = {
   createdAt: number;
 };
 
+export type StoredRenderCritiqueIssue = {
+  category: string;
+  severity: "strength" | "minor" | "major";
+  detail: string;
+};
+
+export type StoredRenderCritique = {
+  id: string;
+  projectId: string;
+  renderId: string;
+  model: string;
+  score: number;
+  confidence: number;
+  recommendation: "use" | "tweak" | "regenerate";
+  summary: string;
+  issues: StoredRenderCritiqueIssue[];
+  suggestedFixes: string;
+  authorEmail?: string;
+  createdAt: number;
+};
+
 export type StoredRender = {
   id: string;
   projectId: string;
@@ -159,8 +180,12 @@ export type StoredRender = {
   createdAt: number;
   parentRenderId?: string;
   sourceReviewId?: string;
+  sourceCritiqueId?: string;
   sourceReview?: StoredRenderReview | null;
+  sourceCritique?: StoredRenderCritique | null;
   reviewHistory: StoredRenderReview[];
+  latestCritique?: StoredRenderCritique | null;
+  critiqueHistory: StoredRenderCritique[];
 };
 
 export type ProjectSummary = {

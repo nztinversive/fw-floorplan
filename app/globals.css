@@ -1890,6 +1890,128 @@ button:disabled,
   cursor: not-allowed;
 }
 
+.render-ai-critique-panel {
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid rgba(27, 42, 74, 0.1);
+  border-radius: 0.65rem;
+  background: rgba(248, 250, 252, 0.82);
+  padding: 0.75rem;
+}
+
+.render-ai-critique-panel.is-use {
+  border-color: rgba(34, 197, 94, 0.22);
+  background: rgba(240, 253, 244, 0.58);
+}
+
+.render-ai-critique-panel.is-tweak {
+  border-color: rgba(212, 168, 75, 0.26);
+  background: rgba(255, 251, 235, 0.58);
+}
+
+.render-ai-critique-panel.is-regenerate {
+  border-color: rgba(220, 38, 38, 0.18);
+  background: rgba(254, 242, 242, 0.52);
+}
+
+.render-ai-critique-header,
+.render-ai-critique-summary,
+.render-ai-critique-issue {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+}
+
+.render-ai-critique-header {
+  justify-content: space-between;
+}
+
+.render-ai-critique-summary {
+  color: var(--fw-navy);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.render-ai-critique-hint,
+.render-ai-critique-detail {
+  color: var(--fw-slate);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.render-ai-critique-issues {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.render-ai-critique-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.render-ai-critique-issue {
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(27, 42, 74, 0.08);
+}
+
+.render-ai-critique-title {
+  color: var(--fw-navy);
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.render-ai-critique-button,
+.render-ai-critique-action {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(27, 42, 74, 0.12);
+  background: #ffffff;
+  color: var(--fw-navy);
+  border-radius: 999px;
+  padding: 0.42rem 0.68rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.render-ai-critique-action {
+  justify-self: start;
+}
+
+.render-ai-critique-button:hover,
+.render-ai-critique-action:hover {
+  border-color: rgba(212, 168, 75, 0.55);
+  background: rgba(212, 168, 75, 0.12);
+}
+
+.render-ai-critique-button:disabled,
+.render-ai-critique-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.render-ai-critique-badge.is-use,
+.render-ai-critique-badge.is-strength {
+  background: rgba(34, 197, 94, 0.1);
+  color: #166534;
+}
+
+.render-ai-critique-badge.is-tweak,
+.render-ai-critique-badge.is-minor {
+  background: rgba(212, 168, 75, 0.16);
+  color: #7c5a16;
+}
+
+.render-ai-critique-badge.is-regenerate,
+.render-ai-critique-badge.is-major {
+  background: rgba(220, 38, 38, 0.1);
+  color: #991b1b;
+}
+
 .render-lineage-panel {
   display: grid;
   gap: 0.65rem;

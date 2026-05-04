@@ -211,6 +211,7 @@ export default defineSchema({
     isFavorite: v.boolean(),
     parentRenderId: v.optional(v.id("renders")),
     sourceReviewId: v.optional(v.id("renderReviews")),
+    sourceCritiqueId: v.optional(v.id("renderCritiques")),
     createdAt: v.number()
   })
     .index("by_projectId", ["projectId"])
@@ -221,6 +222,27 @@ export default defineSchema({
     renderId: v.id("renders"),
     issueKeys: v.array(v.string()),
     notes: v.string(),
+    authorEmail: v.optional(v.string()),
+    createdAt: v.number()
+  })
+    .index("by_projectId_and_createdAt", ["projectId", "createdAt"])
+    .index("by_renderId_and_createdAt", ["renderId", "createdAt"]),
+  renderCritiques: defineTable({
+    projectId: v.id("projects"),
+    renderId: v.id("renders"),
+    model: v.string(),
+    score: v.number(),
+    confidence: v.number(),
+    recommendation: v.union(v.literal("use"), v.literal("tweak"), v.literal("regenerate")),
+    summary: v.string(),
+    issues: v.array(
+      v.object({
+        category: v.string(),
+        severity: v.union(v.literal("strength"), v.literal("minor"), v.literal("major")),
+        detail: v.string()
+      })
+    ),
+    suggestedFixes: v.string(),
     authorEmail: v.optional(v.string()),
     createdAt: v.number()
   })

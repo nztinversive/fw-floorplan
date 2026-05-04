@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Download, Expand, FileText, RefreshCw, Star, Trash2 } from "lucide-react";
+import { Brain, Copy, Download, Expand, FileText, RefreshCw, Star, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import ProgressiveImage from "@/components/ProgressiveImage";
@@ -19,11 +19,14 @@ type RenderCardProps = {
   onToggleFavorite: (renderId: string) => Promise<void> | void;
   onDelete: (renderId: string) => Promise<void> | void;
   onRegenerate: (render: StoredRender) => Promise<void> | void;
+  onCritique?: (render: StoredRender) => Promise<void> | void;
+  isCritiquing?: boolean;
   onApplyFeedback?: (render: StoredRender, feedback: string) => void;
   onCopyPrompt?: (prompt: string) => Promise<void> | void;
   onUsePromptAsBaseline?: (render: StoredRender) => void;
   onSaveReview?: (render: StoredRender, review: { issueKeys: string[]; notes: string }) => Promise<unknown> | void;
   onRegenerateWithReview?: (render: StoredRender, review: { issueKeys: string[]; notes: string }) => Promise<void> | void;
+  onRegenerateWithCritique?: (render: StoredRender) => Promise<void> | void;
   isSavingReview?: boolean;
   parentRender?: StoredRender;
   childRenders?: StoredRender[];
@@ -74,11 +77,14 @@ export default function RenderCard({
   onToggleFavorite,
   onDelete,
   onRegenerate,
+  onCritique,
+  isCritiquing = false,
   onApplyFeedback,
   onCopyPrompt,
   onUsePromptAsBaseline,
   onSaveReview,
   onRegenerateWithReview,
+  onRegenerateWithCritique,
   isSavingReview = false,
   parentRender,
   childRenders = [],
@@ -92,9 +98,12 @@ export default function RenderCard({
   const [selectedReviewIssues, setSelectedReviewIssues] = useState<string[]>([]);
   const [reviewNotes, setReviewNotes] = useState("");
   const hasReviewDraft = selectedReviewIssues.length > 0 || reviewNotes.trim().length > 0;
-  const isReviewBusy = comparisonMode || isDeleting || isRegenerating || isSavingReview;
+  const isCardBusy = isDeleting || isRegenerating || isCritiquing;
+  const isReviewBusy = comparisonMode || isCardBusy || isSavingReview;
   const reviewHistory = render.reviewHistory ?? [];
   const sourceReview = render.sourceReview ?? null;
+  const sourceCritique = render.sourceCritique ?? null;
+  const latestCritique = render.latestCritique ?? null;
   const reviewSummary = useMemo(
     () =>
       selectedReviewIssues
@@ -191,7 +200,7 @@ export default function RenderCard({
               event.stopPropagation();
               onToggleFavorite(render.id);
             }}
-            disabled={comparisonMode || isFavoriting || isDeleting || isRegenerating}
+            disabled={comparisonMode || isFavoriting || isCardBusy}
             aria-label={render.isFavorite ? "Remove favorite" : "Mark favorite"}
             title={render.isFavorite ? "Remove favorite" : "Favorite"}
             style={render.isFavorite ? { color: "#d4a84b" } : undefined}
@@ -205,7 +214,7 @@ export default function RenderCard({
               event.stopPropagation();
               handleDownload();
             }}
-            disabled={comparisonMode || !render.imageUrl || isDeleting}
+            disabled={comparisonMode || !render.imageUrl || isCardBusy}
             aria-label="Download render"
             title="Download render"
           >
@@ -218,7 +227,7 @@ export default function RenderCard({
               event.stopPropagation();
               void handleDelete();
             }}
-            disabled={comparisonMode || isDeleting || isRegenerating}
+            disabled={comparisonMode || isCardBusy}
             aria-label="Delete render"
             title="Delete render"
           >
@@ -305,10 +314,94 @@ export default function RenderCard({
                 type="button"
                 className="render-quality-action"
                 onClick={() => onApplyFeedback(render, qualityReport.suggestion)}
-                disabled={comparisonMode || isDeleting || isRegenerating}
+                disabled={comparisonMode || isCardBusy}
               >
                 Add suggested fixes
               </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {onCritique ? (
+          <div
+            className={`render-ai-critique-panel is-${latestCritique?.recommendation ?? "empty"}`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="render-ai-critique-header">
+              <div>
+                <div className="field-label">AI render critique</div>
+                <div className="render-ai-critique-hint">
+                  {latestCritique
+                    ? `${latestCritique.score}/100 | ${Math.round(latestCritique.confidence * 100)}% confidence`
+                    : "Inspect image quality against the saved brief."}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="render-ai-critique-button"
+                onClick={() => void onCritique(render)}
+                disabled={comparisonMode || isCardBusy || !render.imageUrl}
+              >
+                <Brain size={15} />
+                {isCritiquing ? "Critiquing..." : latestCritique ? "Refresh critique" : "Run critique"}
+              </button>
+            </div>
+
+            {latestCritique ? (
+              <>
+                <div className="render-ai-critique-summary">
+                  <span className={`badge render-ai-critique-badge is-${latestCritique.recommendation}`}>
+                    {latestCritique.recommendation}
+                  </span>
+                  <span>{latestCritique.summary}</span>
+                </div>
+
+                {latestCritique.issues.length > 0 ? (
+                  <div className="render-ai-critique-issues">
+                    {latestCritique.issues.map((issue, index) => (
+                      <div key={`${issue.category}-${index}`} className="render-ai-critique-issue">
+                        <span className={`badge render-ai-critique-badge is-${issue.severity}`}>
+                          {issue.severity}
+                        </span>
+                        <div>
+                          <div className="render-ai-critique-title">{issue.category}</div>
+                          <div className="render-ai-critique-detail">{issue.detail}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {latestCritique.suggestedFixes && onApplyFeedback ? (
+                  <div className="render-ai-critique-actions">
+                    <button
+                      type="button"
+                      className="render-ai-critique-action"
+                      onClick={() => onApplyFeedback(render, latestCritique.suggestedFixes)}
+                      disabled={comparisonMode || isCardBusy}
+                    >
+                      Add critique fixes
+                    </button>
+                    {onRegenerateWithCritique ? (
+                      <button
+                        type="button"
+                        className="render-ai-critique-action"
+                        onClick={() => void onRegenerateWithCritique(render)}
+                        disabled={comparisonMode || isCardBusy}
+                      >
+                        <RefreshCw size={15} />
+                        Regenerate from critique
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {render.critiqueHistory.length > 1 ? (
+                  <div className="render-ai-critique-hint">
+                    {render.critiqueHistory.length} critique runs saved
+                  </div>
+                ) : null}
+              </>
             ) : null}
           </div>
         ) : null}
@@ -330,7 +423,7 @@ export default function RenderCard({
                     type="button"
                     className="render-lineage-action"
                     onClick={() => onCompareLineage(parentRender.id, render.id)}
-                    disabled={isDeleting || isRegenerating}
+                    disabled={isCardBusy}
                   >
                     Compare parent
                   </button>
@@ -354,6 +447,21 @@ export default function RenderCard({
               </div>
             ) : null}
 
+            {sourceCritique ? (
+              <div className="render-lineage-review">
+                <div className="render-lineage-meta">AI critique that produced this version</div>
+                <div className="render-ai-critique-summary">
+                  <span className={`badge render-ai-critique-badge is-${sourceCritique.recommendation}`}>
+                    {sourceCritique.score}/100
+                  </span>
+                  <span>{sourceCritique.summary}</span>
+                </div>
+                {sourceCritique.suggestedFixes ? (
+                  <div className="render-lineage-notes">{sourceCritique.suggestedFixes}</div>
+                ) : null}
+              </div>
+            ) : null}
+
             {childRenders.length > 0 ? (
               <div className="render-lineage-children">
                 <div className="render-lineage-meta">
@@ -366,7 +474,7 @@ export default function RenderCard({
                       type="button"
                       className="render-lineage-child"
                       onClick={() => onCompareLineage?.(render.id, childRender.id)}
-                      disabled={!onCompareLineage || isDeleting || isRegenerating}
+                      disabled={!onCompareLineage || isCardBusy}
                     >
                       {getStyleLabel(childRender.style)} | {formatRelativeTime(childRender.createdAt)}
                     </button>
@@ -384,7 +492,7 @@ export default function RenderCard({
             event.stopPropagation();
             onRegenerate(render);
           }}
-          disabled={comparisonMode || isDeleting || isRegenerating}
+          disabled={comparisonMode || isCardBusy}
         >
           <RefreshCw size={18} />
           {isRegenerating ? "Generating..." : "Regenerate"}
@@ -403,7 +511,7 @@ export default function RenderCard({
                     event.stopPropagation();
                     onApplyFeedback(render, option.feedback);
                   }}
-                  disabled={comparisonMode || isDeleting || isRegenerating}
+                  disabled={comparisonMode || isCardBusy}
                 >
                   {option.label}
                 </button>
@@ -525,7 +633,7 @@ export default function RenderCard({
                   type="button"
                   className="button-secondary"
                   onClick={() => onUsePromptAsBaseline(render)}
-                  disabled={comparisonMode || isDeleting || isRegenerating}
+                  disabled={comparisonMode || isCardBusy}
                 >
                   Use as baseline
                 </button>
