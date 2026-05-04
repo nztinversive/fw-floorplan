@@ -566,18 +566,68 @@ export const list = query({
       .collect();
 
     return await Promise.all(
-      renders.map(async (render) => ({
-        _id: render._id,
-        projectId: render.projectId,
-        style: render.style,
-        settings: render.settings,
-        imageStorageId: render.imageUrl,
-        imageUrl: await ctx.storage.getUrl(render.imageUrl),
-        prompt: render.prompt,
-        isFavorite: render.isFavorite,
-        createdAt: render.createdAt
-      }))
+      renders.map(async (render) => {
+        const reviewHistory = await ctx.db
+          .query("renderReviews")
+          .withIndex("by_renderId_and_createdAt", (query) => query.eq("renderId", render._id))
+          .order("desc")
+          .take(5);
+
+        return {
+          _id: render._id,
+          projectId: render.projectId,
+          style: render.style,
+          settings: render.settings,
+          imageStorageId: render.imageUrl,
+          imageUrl: await ctx.storage.getUrl(render.imageUrl),
+          prompt: render.prompt,
+          isFavorite: render.isFavorite,
+          createdAt: render.createdAt,
+          reviewHistory
+        };
+      })
     );
+  }
+});
+
+export const saveReview = mutation({
+  args: {
+    renderId: v.id("renders"),
+    issueKeys: v.array(v.string()),
+    notes: v.string()
+  },
+  handler: async (ctx, args) => {
+    const render = await ctx.db.get(args.renderId);
+    if (!render) {
+      throw new Error("Render not found");
+    }
+    await requireProjectEditor(ctx, render.projectId);
+
+    const issueKeys = Array.from(
+      new Set(args.issueKeys.map((issueKey) => issueKey.trim()).filter(Boolean))
+    ).slice(0, 8);
+    const notes = args.notes.trim();
+
+    if (issueKeys.length === 0 && notes.length === 0) {
+      throw new Error("Choose at least one review issue or add a note");
+    }
+
+    const identity = await ctx.auth.getUserIdentity();
+    const now = Date.now();
+    const reviewId = await ctx.db.insert("renderReviews", {
+      projectId: render.projectId,
+      renderId: args.renderId,
+      issueKeys,
+      notes,
+      authorEmail: identity?.email,
+      createdAt: now
+    });
+
+    await ctx.db.patch(render.projectId, {
+      updatedAt: now
+    });
+
+    return reviewId;
   }
 });
 
@@ -611,6 +661,15 @@ export const remove = mutation({
       throw new Error("Render not found");
     }
     await requireProjectEditor(ctx, render.projectId);
+
+    const reviews = await ctx.db
+      .query("renderReviews")
+      .withIndex("by_renderId_and_createdAt", (query) => query.eq("renderId", args.renderId))
+      .take(100);
+
+    for (const review of reviews) {
+      await ctx.db.delete(review._id);
+    }
 
     await ctx.storage.delete(render.imageUrl);
     await ctx.db.delete(args.renderId);

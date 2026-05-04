@@ -137,6 +137,16 @@ export type RenderBrief = {
   revisionNotes: string;
 };
 
+export type StoredRenderReview = {
+  id: string;
+  projectId: string;
+  renderId: string;
+  issueKeys: string[];
+  notes: string;
+  authorEmail?: string;
+  createdAt: number;
+};
+
 export type StoredRender = {
   id: string;
   projectId: string;
@@ -147,6 +157,7 @@ export type StoredRender = {
   prompt: string;
   isFavorite: boolean;
   createdAt: number;
+  reviewHistory: StoredRenderReview[];
 };
 
 export type ProjectSummary = {

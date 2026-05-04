@@ -213,6 +213,16 @@ export default defineSchema({
   })
     .index("by_projectId", ["projectId"])
     .index("by_projectId_and_createdAt", ["projectId", "createdAt"]),
+  renderReviews: defineTable({
+    projectId: v.id("projects"),
+    renderId: v.id("renders"),
+    issueKeys: v.array(v.string()),
+    notes: v.string(),
+    authorEmail: v.optional(v.string()),
+    createdAt: v.number()
+  })
+    .index("by_projectId_and_createdAt", ["projectId", "createdAt"])
+    .index("by_renderId_and_createdAt", ["renderId", "createdAt"]),
   renderPresets: defineTable({
     projectId: v.id("projects"),
     name: v.string(),

@@ -385,6 +385,10 @@ export const remove = mutationGeneric({
       .query("renderPresets")
       .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
       .collect();
+    const renderReviews = await ctx.db
+      .query("renderReviews")
+      .withIndex("by_projectId_and_createdAt", (query) => query.eq("projectId", args.id))
+      .collect();
     const comments = await ctx.db
       .query("comments")
       .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
@@ -428,6 +432,10 @@ export const remove = mutationGeneric({
 
     for (const renderPreset of renderPresets) {
       await ctx.db.delete(renderPreset._id);
+    }
+
+    for (const renderReview of renderReviews) {
+      await ctx.db.delete(renderReview._id);
     }
 
     for (const comment of comments) {

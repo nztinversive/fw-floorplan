@@ -1517,6 +1517,101 @@ button:disabled,
   cursor: not-allowed;
 }
 
+.render-review-panel {
+  display: grid;
+  gap: 0.7rem;
+  border-top: 1px solid rgba(27, 42, 74, 0.08);
+  padding-top: 0.9rem;
+}
+
+.render-review-hint,
+.render-review-history-meta {
+  color: var(--fw-slate);
+  font-size: 0.8rem;
+}
+
+.render-review-chip-grid,
+.render-review-actions,
+.render-review-history-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.render-review-chip {
+  border: 1px solid rgba(27, 42, 74, 0.12);
+  background: #ffffff;
+  color: var(--fw-navy);
+  border-radius: 999px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.render-review-chip:hover,
+.render-review-chip.is-selected {
+  border-color: rgba(212, 168, 75, 0.65);
+  background: rgba(212, 168, 75, 0.16);
+}
+
+.render-review-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.render-review-notes {
+  min-height: 5.8rem;
+  font-size: 0.85rem;
+}
+
+.render-review-summary {
+  border-left: 3px solid rgba(212, 168, 75, 0.75);
+  background: rgba(250, 247, 242, 0.75);
+  color: var(--fw-navy);
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.5rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.render-review-history {
+  border: 1px solid rgba(27, 42, 74, 0.1);
+  border-radius: 0.65rem;
+  padding: 0.7rem;
+  background: rgba(248, 250, 252, 0.82);
+}
+
+.render-review-history summary {
+  cursor: pointer;
+  color: var(--fw-navy);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.render-review-history-list {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.render-review-history-item {
+  display: grid;
+  gap: 0.45rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(27, 42, 74, 0.08);
+}
+
+.render-review-history-item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.render-review-history-notes {
+  color: var(--fw-navy);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
 .render-prompt-details {
   border-top: 1px solid rgba(27, 42, 74, 0.08);
   padding-top: 0.85rem;

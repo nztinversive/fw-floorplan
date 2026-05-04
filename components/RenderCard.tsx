@@ -1,9 +1,11 @@
 "use client";
 
 import { Copy, Download, Expand, FileText, RefreshCw, Star, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import ProgressiveImage from "@/components/ProgressiveImage";
 import { RENDER_VIEW_ANGLE_LABELS } from "@/lib/render-angles";
+import { RENDER_REVIEW_ISSUES, getRenderReviewIssueLabel } from "@/lib/render-review";
 import { STYLE_PRESET_MAP } from "@/lib/style-presets";
 import { formatRelativeTime } from "@/lib/file-utils";
 import type { StoredRender } from "@/lib/types";
@@ -19,6 +21,9 @@ type RenderCardProps = {
   onApplyFeedback?: (render: StoredRender, feedback: string) => void;
   onCopyPrompt?: (prompt: string) => Promise<void> | void;
   onUsePromptAsBaseline?: (render: StoredRender) => void;
+  onSaveReview?: (render: StoredRender, review: { issueKeys: string[]; notes: string }) => Promise<void> | void;
+  onRegenerateWithReview?: (render: StoredRender, review: { issueKeys: string[]; notes: string }) => Promise<void> | void;
+  isSavingReview?: boolean;
   comparisonMode?: boolean;
   isSelectedForComparison?: boolean;
   onSelectForComparison?: (renderId: string) => void;
@@ -67,11 +72,28 @@ export default function RenderCard({
   onApplyFeedback,
   onCopyPrompt,
   onUsePromptAsBaseline,
+  onSaveReview,
+  onRegenerateWithReview,
+  isSavingReview = false,
   comparisonMode = false,
   isSelectedForComparison = false,
   onSelectForComparison,
   onImageClick
 }: RenderCardProps) {
+  const [selectedReviewIssues, setSelectedReviewIssues] = useState<string[]>([]);
+  const [reviewNotes, setReviewNotes] = useState("");
+  const hasReviewDraft = selectedReviewIssues.length > 0 || reviewNotes.trim().length > 0;
+  const isReviewBusy = comparisonMode || isDeleting || isRegenerating || isSavingReview;
+  const reviewHistory = render.reviewHistory ?? [];
+  const reviewSummary = useMemo(
+    () =>
+      selectedReviewIssues
+        .map(getRenderReviewIssueLabel)
+        .concat(reviewNotes.trim() ? [reviewNotes.trim()] : [])
+        .join("; "),
+    [reviewNotes, selectedReviewIssues]
+  );
+
   function handleDelete() {
     onDelete(render.id);
   }
@@ -105,6 +127,36 @@ export default function RenderCard({
     event.stopPropagation();
     if (comparisonMode || !onImageClick || !render.imageUrl) return;
     onImageClick(render.id);
+  }
+
+  function toggleReviewIssue(issueKey: string) {
+    setSelectedReviewIssues((current) =>
+      current.includes(issueKey)
+        ? current.filter((key) => key !== issueKey)
+        : [...current, issueKey]
+    );
+  }
+
+  async function handleSaveReview() {
+    if (!onSaveReview || !hasReviewDraft) return;
+
+    await onSaveReview(render, {
+      issueKeys: selectedReviewIssues,
+      notes: reviewNotes
+    });
+    setSelectedReviewIssues([]);
+    setReviewNotes("");
+  }
+
+  async function handleRegenerateWithReview() {
+    if (!onRegenerateWithReview || !hasReviewDraft) return;
+
+    await onRegenerateWithReview(render, {
+      issueKeys: selectedReviewIssues,
+      notes: reviewNotes
+    });
+    setSelectedReviewIssues([]);
+    setReviewNotes("");
   }
 
   return (
@@ -236,6 +288,96 @@ export default function RenderCard({
                 </button>
               ))}
             </div>
+          </div>
+        ) : null}
+
+        {onSaveReview || onRegenerateWithReview ? (
+          <div className="render-review-panel" onClick={(event) => event.stopPropagation()}>
+            <div>
+              <div className="field-label">Render review</div>
+              <div className="render-review-hint">Flag what needs to change, then save it or regenerate with the fixes.</div>
+            </div>
+
+            <div className="render-review-chip-grid">
+              {RENDER_REVIEW_ISSUES.map((issue) => {
+                const isSelected = selectedReviewIssues.includes(issue.key);
+
+                return (
+                  <button
+                    key={issue.key}
+                    type="button"
+                    className={`render-review-chip${isSelected ? " is-selected" : ""}`}
+                    onClick={() => toggleReviewIssue(issue.key)}
+                    disabled={isReviewBusy}
+                    aria-pressed={isSelected}
+                  >
+                    {issue.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <label className="field" style={{ margin: 0 }}>
+              <span className="field-label">Reviewer notes</span>
+              <textarea
+                className="field-textarea render-review-notes"
+                value={reviewNotes}
+                onChange={(event) => setReviewNotes(event.target.value)}
+                placeholder="Example: keep this facade, but make the porch deeper and align the windows to the bedrooms."
+                disabled={isReviewBusy}
+              />
+            </label>
+
+            {reviewSummary ? <div className="render-review-summary">{reviewSummary}</div> : null}
+
+            <div className="render-review-actions">
+              {onSaveReview ? (
+                <button
+                  type="button"
+                  className="button-ghost"
+                  onClick={() => void handleSaveReview()}
+                  disabled={!hasReviewDraft || isReviewBusy}
+                >
+                  {isSavingReview ? "Saving..." : "Save review"}
+                </button>
+              ) : null}
+              {onRegenerateWithReview ? (
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => void handleRegenerateWithReview()}
+                  disabled={!hasReviewDraft || isReviewBusy}
+                >
+                  {isRegenerating ? "Generating..." : "Regenerate with fixes"}
+                </button>
+              ) : null}
+            </div>
+
+            {reviewHistory.length > 0 ? (
+              <details className="render-review-history">
+                <summary>Review history ({reviewHistory.length})</summary>
+                <div className="render-review-history-list">
+                  {reviewHistory.map((review) => (
+                    <div key={review.id} className="render-review-history-item">
+                      <div className="render-review-history-meta">
+                        {formatRelativeTime(review.createdAt)}
+                        {review.authorEmail ? ` by ${review.authorEmail}` : ""}
+                      </div>
+                      {review.issueKeys.length > 0 ? (
+                        <div className="render-review-history-chips">
+                          {review.issueKeys.map((issueKey) => (
+                            <span key={issueKey} className="badge">
+                              {getRenderReviewIssueLabel(issueKey)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                      {review.notes ? <div className="render-review-history-notes">{review.notes}</div> : null}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ) : null}
           </div>
         ) : null}
 

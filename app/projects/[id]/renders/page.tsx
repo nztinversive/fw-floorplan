@@ -25,6 +25,7 @@ import {
   RENDER_VIEW_ANGLES,
   type RenderViewAngle
 } from "@/lib/render-angles"
+import { formatRenderReviewFeedback } from "@/lib/render-review"
 import {
   RENDER_SETTING_OPTIONS,
   STYLE_PRESET_MAP,
@@ -37,6 +38,10 @@ import { sortFloors } from "@/lib/floor-utils"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
 type PendingRenderAction = "favorite" | "delete" | "regenerate"
+type RenderReviewDraft = {
+  issueKeys: string[]
+  notes: string
+}
 type SettingKey = keyof StylePresetDefaults
 type BatchProgress = {
   completed: number
@@ -89,6 +94,7 @@ export default function ProjectRendersPage() {
   const generateRender = useAction(api.renders.generateRender)
   const toggleFavorite = useMutation(api.renders.toggleFavorite)
   const removeRender = useMutation(api.renders.remove)
+  const saveRenderReview = useMutation(api.renders.saveReview)
   const savePreset = useMutation(api.renderPresets.savePreset)
   const deletePreset = useMutation(api.renderPresets.deletePreset)
   const updateRenderBrief = useMutation(api.projects.updateRenderBrief)
@@ -113,6 +119,7 @@ export default function ProjectRendersPage() {
     renderId: string
     action: PendingRenderAction
   } | null>(null)
+  const [pendingReviewRenderId, setPendingReviewRenderId] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
@@ -148,7 +155,16 @@ export default function ProjectRendersPage() {
         imageUrl: render.imageUrl,
         prompt: render.prompt,
         isFavorite: render.isFavorite,
-        createdAt: render.createdAt
+        createdAt: render.createdAt,
+        reviewHistory: render.reviewHistory.map((review) => ({
+          id: review._id,
+          projectId: review.projectId,
+          renderId: review.renderId,
+          issueKeys: review.issueKeys,
+          notes: review.notes,
+          authorEmail: review.authorEmail,
+          createdAt: review.createdAt
+        }))
       })),
     [rendersQuery]
   )
@@ -308,14 +324,19 @@ export default function ProjectRendersPage() {
     }))
   }
 
-  async function triggerGeneration(nextStyle: string, nextSettings: RenderSettings) {
-    if (!projectId || isGenerationBusy) return
+  async function triggerGeneration(
+    nextStyle: string,
+    nextSettings: RenderSettings,
+    options: { renderBriefOverride?: RenderBrief; skipBriefSave?: boolean } = {}
+  ) {
+    if (!projectId || isGenerationBusy) return false
 
+    const renderBriefForGeneration = options.renderBriefOverride ?? renderBrief
     setErrorMessage(null)
     setIsGenerating(true)
 
     try {
-      if (isRenderBriefDirty) {
+      if (isRenderBriefDirty && !options.skipBriefSave) {
         await saveRenderBrief({ silent: true })
       }
       await generateRender({
@@ -326,13 +347,15 @@ export default function ProjectRendersPage() {
           ...nextSettings,
           style: nextStyle
         },
-        renderBrief
+        renderBrief: renderBriefForGeneration
       })
       toast("Render generated successfully", "success")
+      return true
     } catch (error) {
       console.error("Unable to generate render.", error)
       setErrorMessage("Unable to generate a render right now. Check the floor plan and API configuration, then try again.")
       toast("Render generation failed", "error")
+      return false
     } finally {
       setIsGenerating(false)
     }
@@ -538,6 +561,53 @@ export default function ProjectRendersPage() {
 
     try {
       await triggerGeneration(render.style, render.settings)
+    } finally {
+      setPendingRenderAction(null)
+    }
+  }
+
+  function buildRenderReviewRevision(render: StoredRender, review: RenderReviewDraft) {
+    const feedback = formatRenderReviewFeedback(review)
+    const styleLabel = getStyleLabel(render.style)
+    const viewLabel = RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle]
+
+    return `${styleLabel} ${viewLabel} review: ${feedback}.`
+  }
+
+  async function handleSaveRenderReview(render: StoredRender, review: RenderReviewDraft) {
+    setPendingReviewRenderId(render.id)
+
+    try {
+      await saveRenderReview({
+        renderId: render.id as Id<"renders">,
+        issueKeys: review.issueKeys,
+        notes: review.notes
+      })
+      toast("Render review saved", "success")
+    } catch (error) {
+      console.error("Unable to save render review.", error)
+      toast("Unable to save this render review", "error")
+      throw error
+    } finally {
+      setPendingReviewRenderId(null)
+    }
+  }
+
+  async function handleRegenerateWithReview(render: StoredRender, review: RenderReviewDraft) {
+    const revisionLine = buildRenderReviewRevision(render, review)
+    const renderBriefOverride = {
+      ...renderBrief,
+      revisionNotes: [renderBrief.revisionNotes.trim(), revisionLine].filter(Boolean).join("\n")
+    }
+
+    setPendingRenderAction({ renderId: render.id, action: "regenerate" })
+
+    try {
+      await handleSaveRenderReview(render, review)
+      await triggerGeneration(render.style, render.settings, {
+        renderBriefOverride,
+        skipBriefSave: true
+      })
     } finally {
       setPendingRenderAction(null)
     }
@@ -1106,6 +1176,9 @@ export default function ProjectRendersPage() {
                   onApplyFeedback={handleApplyRenderFeedback}
                   onCopyPrompt={handleCopyPrompt}
                   onUsePromptAsBaseline={handleUsePromptAsBaseline}
+                  onSaveReview={handleSaveRenderReview}
+                  onRegenerateWithReview={handleRegenerateWithReview}
+                  isSavingReview={pendingReviewRenderId === render.id}
                   comparisonMode={comparisonMode}
                   isSelectedForComparison={selectedRenderIds.includes(render.id)}
                   onSelectForComparison={handleComparisonSelect}
