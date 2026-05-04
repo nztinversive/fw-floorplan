@@ -1,6 +1,7 @@
 import { mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import type { QueryCtx } from "./_generated/server";
 import { floorPlanDataValidator } from "./validators";
 import {
   ensureProjectOwnerMember,
@@ -15,11 +16,41 @@ import {
   saveFloorPlanChildData
 } from "./floorPlanChildData";
 
+function createShareToken() {
+  return `${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, "");
+}
+
 function hasArg<T extends object, K extends PropertyKey>(
   args: T,
   key: K
 ): args is T & Record<K, unknown> {
   return Object.prototype.hasOwnProperty.call(args, key);
+}
+
+async function getPresentationProject(ctx: QueryCtx, projectId: Id<"projects">) {
+  const project = await ctx.db.get(projectId);
+  if (!project) {
+    return null;
+  }
+
+  const floorPlans = await ctx.db
+    .query("floorPlans")
+    .withIndex("by_projectId", (query) => query.eq("projectId", projectId))
+    .collect();
+
+  const hydratedFloorPlans = await hydrateFloorPlansData(ctx, floorPlans);
+  const floorPlansWithSourceImageUrls = await Promise.all(
+    hydratedFloorPlans.map(async (floorPlan) => ({
+      ...floorPlan,
+      sourceImageUrl: floorPlan.sourceImage ? await ctx.storage.getUrl(floorPlan.sourceImage) : null
+    }))
+  );
+
+  return {
+    ...project,
+    thumbnailUrl: project.thumbnail ? await ctx.storage.getUrl(project.thumbnail) : null,
+    floorPlans: floorPlansWithSourceImageUrls.sort((a, b) => a.floor - b.floor)
+  };
 }
 
 export const list = queryGeneric({
@@ -59,24 +90,75 @@ export const get = queryGeneric({
       return null;
     }
     await requireProjectViewer(ctx, args.id);
+    return await getPresentationProject(ctx, args.id);
+  }
+});
 
-    const floorPlans = await ctx.db
-      .query("floorPlans")
-      .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
+export const getPublicShare = queryGeneric({
+  args: {
+    id: v.id("projects"),
+    token: v.string()
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.id);
+    const token = args.token.trim();
+
+    if (
+      !project ||
+      !token ||
+      project.publicShareEnabled !== true ||
+      project.publicShareToken !== token
+    ) {
+      return null;
+    }
+
+    const presentationProject = await getPresentationProject(ctx, args.id);
+    if (!presentationProject) {
+      return null;
+    }
+
+    const renders = await ctx.db
+      .query("renders")
+      .withIndex("by_projectId_and_createdAt", (query) => query.eq("projectId", args.id))
+      .order("desc")
       .collect();
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
+      .order("desc")
+      .take(200);
+    const replies = await ctx.db
+      .query("commentReplies")
+      .withIndex("by_projectId", (query) => query.eq("projectId", args.id))
+      .order("desc")
+      .take(500);
+    const repliesByCommentId = new Map<string, typeof replies>();
 
-    const hydratedFloorPlans = await hydrateFloorPlansData(ctx, floorPlans);
-    const floorPlansWithSourceImageUrls = await Promise.all(
-      hydratedFloorPlans.map(async (floorPlan) => ({
-        ...floorPlan,
-        sourceImageUrl: floorPlan.sourceImage ? await ctx.storage.getUrl(floorPlan.sourceImage) : null
-      }))
-    );
+    for (const reply of replies) {
+      const currentReplies = repliesByCommentId.get(reply.commentId) ?? [];
+      currentReplies.push(reply);
+      repliesByCommentId.set(reply.commentId, currentReplies);
+    }
 
     return {
-      ...project,
-      thumbnailUrl: project.thumbnail ? await ctx.storage.getUrl(project.thumbnail) : null,
-      floorPlans: floorPlansWithSourceImageUrls.sort((a, b) => a.floor - b.floor)
+      project: presentationProject,
+      renders: await Promise.all(
+        renders.map(async (render) => ({
+          _id: render._id,
+          projectId: render.projectId,
+          style: render.style,
+          settings: render.settings,
+          imageStorageId: render.imageUrl,
+          imageUrl: await ctx.storage.getUrl(render.imageUrl),
+          prompt: render.prompt,
+          isFavorite: render.isFavorite,
+          createdAt: render.createdAt
+        }))
+      ),
+      comments: comments.map((comment) => ({
+        ...comment,
+        replies: (repliesByCommentId.get(comment._id) ?? []).reverse()
+      }))
     };
   }
 });
@@ -165,6 +247,81 @@ export const update = mutationGeneric({
       clientName: hasArg(args, "clientName") ? args.clientName || undefined : project.clientName,
       thumbnail: args.thumbnail ?? project.thumbnail,
       updatedAt: Date.now()
+    });
+
+    return args.id;
+  }
+});
+
+export const enablePublicShare = mutationGeneric({
+  args: {
+    id: v.id("projects")
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.id);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+    await requireProjectOwner(ctx, args.id);
+
+    const now = Date.now();
+    const token = project.publicShareToken ?? createShareToken();
+
+    await ctx.db.patch(args.id, {
+      publicShareEnabled: true,
+      publicShareToken: token,
+      publicShareCreatedAt: project.publicShareCreatedAt ?? now,
+      publicShareUpdatedAt: now,
+      updatedAt: now
+    });
+
+    return token;
+  }
+});
+
+export const rotatePublicShare = mutationGeneric({
+  args: {
+    id: v.id("projects")
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.id);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+    await requireProjectOwner(ctx, args.id);
+
+    const now = Date.now();
+    const token = createShareToken();
+
+    await ctx.db.patch(args.id, {
+      publicShareEnabled: true,
+      publicShareToken: token,
+      publicShareCreatedAt: project.publicShareCreatedAt ?? now,
+      publicShareUpdatedAt: now,
+      updatedAt: now
+    });
+
+    return token;
+  }
+});
+
+export const disablePublicShare = mutationGeneric({
+  args: {
+    id: v.id("projects")
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.id);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+    await requireProjectOwner(ctx, args.id);
+
+    const now = Date.now();
+    await ctx.db.patch(args.id, {
+      publicShareEnabled: false,
+      publicShareToken: undefined,
+      publicShareUpdatedAt: now,
+      updatedAt: now
     });
 
     return args.id;

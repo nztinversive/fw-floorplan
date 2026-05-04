@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useMutation, useQuery } from "convex/react"
-import { CalendarDays, DraftingCompass, Download, Image as ImageIcon, Info, Layers, Link2, MapPin, MessageSquare, Pencil, Trash2, User, X } from "lucide-react"
+import { AlertTriangle, CalendarDays, CheckCircle2, DraftingCompass, Download, Image as ImageIcon, Info, Layers, Link2, MapPin, MessageSquare, Pencil, RotateCw, Trash2, User, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import Breadcrumb from "@/components/Breadcrumb"
@@ -59,6 +59,9 @@ export default function ProjectOverviewPage() {
   const saveFloorPlan = useMutation(api.floorPlans.save)
   const updateProject = useMutation(api.projects.update)
   const removeProject = useMutation(api.projects.remove)
+  const enablePublicShare = useMutation(api.projects.enablePublicShare)
+  const rotatePublicShare = useMutation(api.projects.rotatePublicShare)
+  const disablePublicShare = useMutation(api.projects.disablePublicShare)
   const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [isCreatingFloor, setIsCreatingFloor] = useState(false)
   const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
@@ -66,6 +69,7 @@ export default function ProjectOverviewPage() {
   const [showComparisonDialog, setShowComparisonDialog] = useState(false)
   const [showCommentsSection, setShowCommentsSection] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isUpdatingShareLink, setIsUpdatingShareLink] = useState(false)
   const [activeInsightsTab, setActiveInsightsTab] = useState<OverviewInsightsTab>("summary")
 
   useEffect(() => {
@@ -133,6 +137,47 @@ export default function ProjectOverviewPage() {
     [orderedFloorPlans]
   )
   const comparisonOptionsCount = orderedFloorPlans.length + (versionsQuery?.length ?? 0)
+  const publicShareUrl =
+    typeof window !== "undefined" && projectId && project?.publicShareEnabled && project.publicShareToken
+      ? `${window.location.origin}/projects/${projectId}/share?token=${project.publicShareToken}`
+      : typeof window !== "undefined" && projectId
+        ? `${window.location.origin}/projects/${projectId}/share`
+        : projectId
+          ? `/projects/${projectId}/share`
+          : ""
+  const clientPackageChecks = [
+    {
+      label: "Floor plan saved",
+      ready: orderedFloorPlans.length > 0,
+      detail:
+        orderedFloorPlans.length > 0
+          ? `${orderedFloorPlans.length} floor${orderedFloorPlans.length === 1 ? "" : "s"} available for presentation.`
+          : "Create or save at least one floor before sharing."
+    },
+    {
+      label: "Render concepts",
+      ready: (rendersQuery?.length ?? 0) > 0,
+      detail:
+        (rendersQuery?.length ?? 0) > 0
+          ? `${rendersQuery?.length ?? 0} render${rendersQuery?.length === 1 ? "" : "s"} available.`
+          : "Generate at least one exterior render for a complete client package."
+    },
+    {
+      label: "Public presentation link",
+      ready: Boolean(project?.publicShareEnabled && project.publicShareToken),
+      detail: project?.publicShareEnabled
+        ? "Anyone with the tokenized link can view the read-only presentation."
+        : "Enable a public link when the package is ready to send."
+    },
+    {
+      label: "Review comments",
+      ready: activeCommentCount === 0,
+      detail:
+        activeCommentCount === 0
+          ? "No open review comments are waiting."
+          : `${activeCommentCount} active comment${activeCommentCount === 1 ? "" : "s"} remain.`
+    }
+  ]
 
   function startEditing() {
     if (!project) return
@@ -162,6 +207,51 @@ export default function ProjectOverviewPage() {
 
   function cancelEditing() {
     setIsEditing(false)
+  }
+
+  async function handleEnablePublicShare() {
+    if (!projectId || isUpdatingShareLink) return
+
+    setIsUpdatingShareLink(true)
+    try {
+      await enablePublicShare({ id: projectId })
+      toast("Public presentation link enabled", "success")
+    } catch (error) {
+      console.error("Unable to enable public share link.", error)
+      toast("Unable to enable public share link", "error")
+    } finally {
+      setIsUpdatingShareLink(false)
+    }
+  }
+
+  async function handleRotatePublicShare() {
+    if (!projectId || isUpdatingShareLink) return
+
+    setIsUpdatingShareLink(true)
+    try {
+      await rotatePublicShare({ id: projectId })
+      toast("Public presentation link rotated", "success")
+    } catch (error) {
+      console.error("Unable to rotate public share link.", error)
+      toast("Unable to rotate public share link", "error")
+    } finally {
+      setIsUpdatingShareLink(false)
+    }
+  }
+
+  async function handleDisablePublicShare() {
+    if (!projectId || isUpdatingShareLink) return
+
+    setIsUpdatingShareLink(true)
+    try {
+      await disablePublicShare({ id: projectId })
+      toast("Public presentation link disabled", "success")
+    } catch (error) {
+      console.error("Unable to disable public share link.", error)
+      toast("Unable to disable public share link", "error")
+    } finally {
+      setIsUpdatingShareLink(false)
+    }
   }
 
   async function handleDeleteProject() {
@@ -281,7 +371,7 @@ export default function ProjectOverviewPage() {
     )
   }
 
-  if (!projectId || project === null) {
+  if (!projectId || !project) {
     return (
       <main className="page-shell">
         <div className="empty-state">
@@ -686,7 +776,84 @@ export default function ProjectOverviewPage() {
         </section>
       ) : null}
 
-      <ShareLinkCard url={typeof window !== "undefined" ? `${window.location.origin}/projects/${projectId}/share` : `/projects/${projectId}/share`} />
+      <section className="panel" style={{ marginTop: "1.5rem" }}>
+        <div className="panel-header">
+          <div>
+            <div className="section-title">Client presentation readiness</div>
+            <div className="muted">
+              Check the package before sending the read-only presentation link.
+            </div>
+          </div>
+          <span className="badge">
+            {clientPackageChecks.filter((check) => check.ready).length}/{clientPackageChecks.length} ready
+          </span>
+        </div>
+        <div className="compliance-list">
+          {clientPackageChecks.map((check) => {
+            const Icon = check.ready ? CheckCircle2 : AlertTriangle
+
+            return (
+              <div key={check.label} className={`compliance-item${check.ready ? "" : " is-warning"}`}>
+                <div className={`compliance-icon-shell${check.ready ? " is-success" : " is-warning"}`}>
+                  <Icon size={16} />
+                </div>
+                <div className="compliance-copy">
+                  <div className="compliance-title">
+                    <strong>{check.label}</strong>
+                    <span className={`badge compliance-badge${check.ready ? " is-success" : " is-warning"}`}>
+                      {check.ready ? "ready" : "needs work"}
+                    </span>
+                  </div>
+                  <div>{check.detail}</div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      <ShareLinkCard
+        url={publicShareUrl}
+        disabled={!project.publicShareEnabled}
+        description={
+          project.publicShareEnabled
+            ? "Public read-only client presentation link. Anyone with the token can view floor plans, renders, and comments."
+            : "Enable a tokenized public link when this package is ready for a client."
+        }
+        actions={
+          project.publicShareEnabled ? (
+            <>
+              <button
+                type="button"
+                className="button-ghost"
+                onClick={handleRotatePublicShare}
+                disabled={isUpdatingShareLink}
+              >
+                <RotateCw size={16} />
+                Rotate
+              </button>
+              <button
+                type="button"
+                className="button-ghost"
+                onClick={handleDisablePublicShare}
+                disabled={isUpdatingShareLink}
+              >
+                Disable
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={handleEnablePublicShare}
+              disabled={isUpdatingShareLink}
+            >
+              <Link2 size={16} />
+              {isUpdatingShareLink ? "Enabling..." : "Enable public link"}
+            </button>
+          )
+        }
+      />
 
       {showComparisonDialog ? (
         <div className="dialog-backdrop" onClick={() => setShowComparisonDialog(false)}>

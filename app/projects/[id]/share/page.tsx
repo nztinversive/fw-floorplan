@@ -1,7 +1,7 @@
 "use client"
 
-import { useParams } from "next/navigation"
-import { useMutation, useQuery } from "convex/react"
+import { useParams, useSearchParams } from "next/navigation"
+import { useConvexAuth, useQuery } from "convex/react"
 import { Download, Expand, MapPin, User, Layers, Image as ImageIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 
@@ -10,17 +10,20 @@ import Lightbox from "@/components/Lightbox"
 import ProgressiveImage from "@/components/ProgressiveImage"
 import ReadOnlyFloorPlanCanvas from "@/components/ReadOnlyFloorPlanCanvas"
 import ShareLinkCard from "@/components/ShareLinkCard"
-import SharePermissionsPanel from "@/components/SharePermissionsPanel"
 import { SkeletonPanel } from "@/components/Skeleton"
 import { useToast } from "@/components/Toast"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import { formatFloorLabel, sortFloors } from "@/lib/floor-utils"
-import { DEFAULT_RENDER_VIEW_ANGLE, RENDER_VIEW_ANGLE_LABELS } from "@/lib/render-angles"
+import {
+  DEFAULT_RENDER_VIEW_ANGLE,
+  RENDER_VIEW_ANGLE_LABELS,
+  type RenderViewAngle
+} from "@/lib/render-angles"
 import { formatRelativeTime } from "@/lib/file-utils"
 import { STYLE_PRESET_MAP } from "@/lib/style-presets"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
-import type { PersistedFloorPlan, ProjectComment, ProjectMemberRole } from "@/lib/types"
+import type { PersistedFloorPlan, ProjectComment } from "@/lib/types"
 
 function getStyleLabel(style: string) {
   return STYLE_PRESET_MAP[style as keyof typeof STYLE_PRESET_MAP]?.name ?? style
@@ -28,21 +31,33 @@ function getStyleLabel(style: string) {
 
 export default function ProjectSharePage() {
   const params = useParams<{ id: string }>()
+  const searchParams = useSearchParams()
+  const { isAuthenticated } = useConvexAuth()
   const { toast } = useToast()
   const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as Id<"projects"> | undefined
-  const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip")
-  const currentMember = useQuery(api.members.currentMember, projectId ? { projectId } : "skip")
-  const membersQuery = useQuery(
-    api.members.listMembers,
-    projectId && currentMember?.role === "owner" ? { projectId } : "skip"
+  const shareToken = searchParams.get("token")?.trim() ?? ""
+  const protectedProject = useQuery(
+    api.projects.get,
+    projectId && !shareToken && isAuthenticated ? { id: projectId } : "skip"
   )
-  const rendersQuery = useQuery(api.renders.list, projectId ? { projectId } : "skip")
-  const commentsQuery = useQuery(api.comments.listComments, projectId ? { projectId } : "skip")
-  const inviteMember = useMutation(api.members.inviteMember)
-  const removeMember = useMutation(api.members.removeMember)
-  const updateRole = useMutation(api.members.updateRole)
+  const publicShare = useQuery(
+    api.projects.getPublicShare,
+    projectId && shareToken ? { id: projectId, token: shareToken } : "skip"
+  )
+  const rendersQuery = useQuery(
+    api.renders.list,
+    projectId && !shareToken && isAuthenticated ? { projectId } : "skip"
+  )
+  const commentsQuery = useQuery(
+    api.comments.listComments,
+    projectId && !shareToken && isAuthenticated ? { projectId } : "skip"
+  )
   const [isExporting, setIsExporting] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const project = shareToken ? publicShare?.project : protectedProject
+  const shareUrl = typeof window !== "undefined"
+    ? window.location.href
+    : `/projects/${projectId}/share${shareToken ? `?token=${shareToken}` : ""}`
 
   const floorPlans = useMemo(
     () => (project?.floorPlans ? sortFloors(project.floorPlans as PersistedFloorPlan[]) : []),
@@ -55,21 +70,24 @@ export default function ProjectSharePage() {
       ),
     [floorPlans]
   )
-  const comments = useMemo(() => (commentsQuery ?? []) as ProjectComment[], [commentsQuery])
+  const comments = useMemo(
+    () => ((shareToken ? publicShare?.comments : commentsQuery) ?? []) as ProjectComment[],
+    [commentsQuery, publicShare?.comments, shareToken]
+  )
   const activeCommentCount = useMemo(
     () => comments.filter((comment) => comment.status !== "resolved").length,
     [comments]
   )
   const renders = useMemo(
     () =>
-      (rendersQuery ?? []).map((render) => ({
+      ((shareToken ? publicShare?.renders : rendersQuery) ?? []).map((render) => ({
         ...render,
         settings: {
           ...render.settings,
-          viewAngle: render.settings.viewAngle ?? DEFAULT_RENDER_VIEW_ANGLE
+          viewAngle: (render.settings.viewAngle ?? DEFAULT_RENDER_VIEW_ANGLE) as RenderViewAngle
         }
       })),
-    [rendersQuery]
+    [publicShare?.renders, rendersQuery, shareToken]
   )
   const visibleRenders = useMemo(() => {
     const favs = renders.filter((render) => render.isFavorite)
@@ -83,7 +101,7 @@ export default function ProjectSharePage() {
         .map((r) => ({
           src: r.imageUrl!,
           alt: `${getStyleLabel(r.style)} render`,
-          caption: `${getStyleLabel(r.style)} — ${RENDER_VIEW_ANGLE_LABELS[r.settings.viewAngle]}`,
+          caption: `${getStyleLabel(r.style)} — ${RENDER_VIEW_ANGLE_LABELS[r.settings.viewAngle as RenderViewAngle]}`,
           badge: r.isFavorite ? "★ Favorite" : undefined
         })),
     [visibleRenders]
@@ -93,43 +111,6 @@ export default function ProjectSharePage() {
     const favs = renders.filter((r) => r.isFavorite && r.imageUrl)
     return favs.length > 0 ? favs : renders.filter((r) => r.imageUrl)
   }, [renders])
-
-  async function handleInvite(email: string, role: ProjectMemberRole) {
-    if (!projectId) {
-      return
-    }
-
-    try {
-      await inviteMember({ projectId, email, role })
-      toast("Member invited", "success")
-    } catch (error) {
-      console.error("Unable to invite member.", error)
-      toast("Unable to invite member", "error")
-      throw error
-    }
-  }
-
-  async function handleRemove(memberId: string) {
-    try {
-      await removeMember({ memberId: memberId as Id<"members"> })
-      toast("Member removed", "success")
-    } catch (error) {
-      console.error("Unable to remove member.", error)
-      toast("Unable to remove member", "error")
-      throw error
-    }
-  }
-
-  async function handleUpdateRole(memberId: string, role: ProjectMemberRole) {
-    try {
-      await updateRole({ memberId: memberId as Id<"members">, role })
-      toast("Member role updated", "success")
-    } catch (error) {
-      console.error("Unable to update member role.", error)
-      toast("Unable to update member role", "error")
-      throw error
-    }
-  }
 
   async function handleExportPdf() {
     if (!project || isExporting) return
@@ -173,9 +154,10 @@ export default function ProjectSharePage() {
   }
 
   if (
-    (projectId && project === undefined) ||
-    (projectId && rendersQuery === undefined) ||
-    (projectId && commentsQuery === undefined)
+    (projectId && shareToken && publicShare === undefined) ||
+    (projectId && !shareToken && isAuthenticated && project === undefined) ||
+    (projectId && !shareToken && isAuthenticated && rendersQuery === undefined) ||
+    (projectId && !shareToken && isAuthenticated && commentsQuery === undefined)
   ) {
     return (
       <main className="page-shell">
@@ -184,7 +166,22 @@ export default function ProjectSharePage() {
     )
   }
 
-  if (!projectId || project === null) {
+  if (!projectId || publicShare === null || protectedProject === null || (!shareToken && !isAuthenticated)) {
+    return (
+      <main className="page-shell">
+        <div className="empty-state">
+          <div className="section-title">Project not found</div>
+          <div className="muted">
+            {shareToken
+              ? "This shared presentation link is no longer available."
+              : "Sign in with project access or use a public presentation link."}
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  if (!project) {
     return (
       <main className="page-shell">
         <div className="empty-state">
@@ -252,17 +249,14 @@ export default function ProjectSharePage() {
       </section>
 
       <ShareLinkCard
-        url={typeof window !== "undefined" ? window.location.href : `/projects/${projectId}/share`}
+        url={shareUrl}
+        disabled={!shareToken}
+        description={
+          shareToken
+            ? "Public read-only presentation link. Anyone with this token can view the shared floor plans and render gallery."
+            : "Protected member presentation view. Enable and copy the public client link from the project overview."
+        }
       />
-
-      {currentMember?.role === "owner" ? (
-        <SharePermissionsPanel
-          members={membersQuery ?? []}
-          onInvite={handleInvite}
-          onRemove={handleRemove}
-          onUpdateRole={handleUpdateRole}
-        />
-      ) : null}
 
       <div className="share-grid">
         <section className="panel">
@@ -339,7 +333,7 @@ export default function ProjectSharePage() {
                   <div className="render-card-body">
                     <div className="render-toolbar-badges">
                       <span className="badge">{getStyleLabel(render.style)}</span>
-                      <span className="badge">{RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle]}</span>
+                      <span className="badge">{RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle as RenderViewAngle]}</span>
                       {render.isFavorite ? <span className="badge">Favorite</span> : null}
                     </div>
                     <div className="render-meta">

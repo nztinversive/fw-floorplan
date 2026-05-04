@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useParams, usePathname } from "next/navigation"
 import { useAuthActions } from "@convex-dev/auth/react"
-import { useQuery } from "convex/react"
+import { useConvexAuth, useQuery } from "convex/react"
 import { CircleHelp, DraftingCompass, Eye, Image as ImageIcon, Link2 } from "lucide-react"
 
 import { api } from "@/convex/_generated/api"
@@ -11,6 +11,7 @@ import type { Id } from "@/convex/_generated/dataModel"
 
 export default function HeaderNav() {
   const { signOut } = useAuthActions()
+  const { isAuthenticated } = useConvexAuth()
   const pathname = usePathname()
   const params = useParams<{ id: string }>()
   const projectId = (Array.isArray(params?.id) ? params.id[0] : params?.id) as
@@ -19,10 +20,19 @@ export default function HeaderNav() {
 
   const isProjectPage = pathname?.startsWith("/projects/") && projectId
   const isHelp = pathname === "/help"
+  const isShare = pathname?.startsWith(`/projects/${projectId}/share`)
   const project = useQuery(
     api.projects.get,
-    isProjectPage ? { id: projectId! } : "skip"
+    isProjectPage && (isAuthenticated || !isShare) ? { id: projectId! } : "skip"
   )
+
+  if (isShare && !isAuthenticated) {
+    return (
+      <nav className="header-nav-v2">
+        <span className="header-nav-project">Shared presentation</span>
+      </nav>
+    )
+  }
 
   if (!isProjectPage || !project) {
     return (
@@ -42,7 +52,7 @@ export default function HeaderNav() {
   const isOverview = pathname === base
   const isEdit = pathname?.startsWith(`${base}/edit`)
   const isRenders = pathname?.startsWith(`${base}/renders`)
-  const isShare = pathname?.startsWith(`${base}/share`)
+  const isShareActive = pathname?.startsWith(`${base}/share`)
 
   return (
     <nav className="header-nav-v2">
@@ -60,7 +70,7 @@ export default function HeaderNav() {
         <ImageIcon size={14} />
         Renders
       </Link>
-      <Link href={`${base}/share`} className={`header-nav-link${isShare ? " is-active" : ""}`}>
+      <Link href={`${base}/share`} className={`header-nav-link${isShareActive ? " is-active" : ""}`}>
         <Link2 size={14} />
         Share
       </Link>

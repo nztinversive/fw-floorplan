@@ -1,10 +1,14 @@
 "use client"
 
 import { Check, Copy, QrCode } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import type { ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 type ShareLinkCardProps = {
   url: string
+  description?: string
+  actions?: ReactNode
+  disabled?: boolean
 }
 
 function generateQrSvg(data: string, size: number = 200): string {
@@ -46,11 +50,14 @@ function generateQrSvg(data: string, size: number = 200): string {
   return `data:image/svg+xml;base64,${btoa(svg)}`
 }
 
-export default function ShareLinkCard({ url }: ShareLinkCardProps) {
+export default function ShareLinkCard({ url, description, actions, disabled = false }: ShareLinkCardProps) {
   const [copied, setCopied] = useState(false)
   const [showQr, setShowQr] = useState(false)
   const timerRef = useRef<number | null>(null)
-  const qrDataUrl = useRef<string | null>(null)
+  const qrDataUrl = useMemo(
+    () => (typeof window !== "undefined" ? generateQrSvg(url) : null),
+    [url]
+  )
 
   useEffect(() => {
     return () => {
@@ -58,11 +65,11 @@ export default function ShareLinkCard({ url }: ShareLinkCardProps) {
     }
   }, [])
 
-  if (!qrDataUrl.current && typeof window !== "undefined") {
-    qrDataUrl.current = generateQrSvg(url)
-  }
-
   const handleCopy = useCallback(async () => {
+    if (disabled) {
+      return
+    }
+
     try {
       await navigator.clipboard.writeText(url)
       setCopied(true)
@@ -79,24 +86,30 @@ export default function ShareLinkCard({ url }: ShareLinkCardProps) {
       if (timerRef.current) window.clearTimeout(timerRef.current)
       timerRef.current = window.setTimeout(() => setCopied(false), 2000)
     }
-  }, [url])
+  }, [disabled, url])
 
   return (
     <div className="share-link-card" style={{ marginTop: "1.5rem" }}>
       <div className="share-link-header">
         <div>
           <div className="section-title">Share link</div>
-          <div className="muted">Send this link to signed-in project members for a read-only presentation view.</div>
+          <div className="muted">
+            {description ?? "Send this link to signed-in project members for a read-only presentation view."}
+          </div>
         </div>
-        <button
-          type="button"
-          className={`button-ghost${showQr ? " is-active" : ""}`}
-          onClick={() => setShowQr((v) => !v)}
-          aria-label="Toggle QR code"
-        >
-          <QrCode size={18} />
-          QR code
-        </button>
+        <div className="button-row" style={{ alignItems: "center" }}>
+          {actions}
+          <button
+            type="button"
+            className={`button-ghost${showQr ? " is-active" : ""}`}
+            onClick={() => setShowQr((v) => !v)}
+            aria-label="Toggle QR code"
+            disabled={disabled}
+          >
+            <QrCode size={18} />
+            QR code
+          </button>
+        </div>
       </div>
 
       <div className="share-link-url-row">
@@ -107,6 +120,7 @@ export default function ShareLinkCard({ url }: ShareLinkCardProps) {
           type="button"
           className={`button copy-btn${copied ? " is-copied" : ""}`}
           onClick={handleCopy}
+          disabled={disabled}
         >
           <span className="copy-btn-icon">
             {copied ? <Check size={16} /> : <Copy size={16} />}
@@ -115,11 +129,11 @@ export default function ShareLinkCard({ url }: ShareLinkCardProps) {
         </button>
       </div>
 
-      {showQr && qrDataUrl.current ? (
+      {showQr && qrDataUrl ? (
         <div className="share-qr-wrap qr-enter">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={qrDataUrl.current}
+            src={qrDataUrl}
             alt="QR code for share link"
             width={160}
             height={160}

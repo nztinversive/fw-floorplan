@@ -503,7 +503,7 @@ export default function ProjectRendersPage() {
     )
   }
 
-  if (!projectId || project === null) {
+  if (!projectId || !project) {
     return (
       <main className="page-shell">
         <div className="empty-state">

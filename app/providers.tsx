@@ -4,6 +4,7 @@ import type { FormEvent, ReactNode } from "react"
 import { useMemo, useState } from "react"
 import { ConvexAuthProvider, useAuthActions } from "@convex-dev/auth/react"
 import { Authenticated, AuthLoading, ConvexReactClient, Unauthenticated } from "convex/react"
+import { usePathname } from "next/navigation"
 import { ToastProvider } from "@/components/Toast"
 
 type ProvidersProps = {
@@ -93,6 +94,8 @@ function AuthScreen() {
 
 export default function Providers({ children }: ProvidersProps) {
   const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL
+  const pathname = usePathname()
+  const isPublicShareRoute = /^\/projects\/[^/]+\/share\/?$/.test(pathname ?? "")
   const convex = useMemo(
     () => (convexUrl ? new ConvexReactClient(convexUrl) : null),
     [convexUrl]
@@ -122,7 +125,7 @@ export default function Providers({ children }: ProvidersProps) {
           </main>
         </AuthLoading>
         <Unauthenticated>
-          <AuthScreen />
+          {isPublicShareRoute ? children : <AuthScreen />}
         </Unauthenticated>
         <Authenticated>{children}</Authenticated>
       </ToastProvider>

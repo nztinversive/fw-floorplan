@@ -388,7 +388,7 @@ export default function ProjectEditorPage() {
     )
   }
 
-  if (!projectId || project === null) {
+  if (!projectId || !project) {
     return (
       <main className="page-shell">
         <div className="empty-state">

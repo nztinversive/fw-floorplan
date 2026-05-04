@@ -90,6 +90,10 @@ export default defineSchema({
     address: v.optional(v.string()),
     clientName: v.optional(v.string()),
     ownerEmail: v.optional(v.string()),
+    publicShareEnabled: v.optional(v.boolean()),
+    publicShareToken: v.optional(v.string()),
+    publicShareCreatedAt: v.optional(v.number()),
+    publicShareUpdatedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
     thumbnail: v.optional(v.id("_storage"))
