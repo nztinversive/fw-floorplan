@@ -4,8 +4,9 @@ import Image from "next/image"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useAction, useMutation, useQuery } from "convex/react"
-import { AlertTriangle, Download, ImagePlus, Palette, Sparkles, Trash2, X } from "lucide-react"
+import { AlertTriangle, Copy, Download, ImagePlus, Palette, Sparkles, Trash2, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
+import { useDebounce } from "use-debounce"
 
 import Breadcrumb from "@/components/Breadcrumb"
 import ConfirmDialog from "@/components/ConfirmDialog"
@@ -115,6 +116,23 @@ export default function ProjectRendersPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const [previewRenderBrief] = useDebounce(renderBrief, 400)
+  const [previewSettings] = useDebounce(settings, 250)
+  const promptPreview = useQuery(
+    api.renders.previewPrompt,
+    projectId && project && project.floorPlans.length > 0
+      ? {
+        projectId,
+        style: selectedStyle,
+        settings: {
+          ...previewSettings,
+          style: selectedStyle
+        },
+        viewAngle: previewSettings.viewAngle,
+        renderBrief: previewRenderBrief
+      }
+      : "skip"
+  )
 
   const renders = useMemo<StoredRender[]>(
     () =>
@@ -202,6 +220,30 @@ export default function ProjectRendersPage() {
       ...current,
       [key]: value
     }))
+  }
+
+  async function handleCopyPrompt(prompt: string) {
+    try {
+      await navigator.clipboard.writeText(prompt)
+      toast("Prompt copied", "success")
+    } catch {
+      const textarea = document.createElement("textarea")
+      textarea.value = prompt
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand("copy")
+      document.body.removeChild(textarea)
+      toast("Prompt copied", "success")
+    }
+  }
+
+  function handleUsePromptAsBaseline(render: StoredRender) {
+    setRenderBrief((current) => ({
+      ...current,
+      designNotes: render.prompt,
+      revisionNotes: ""
+    }))
+    toast("Prompt loaded into the render brief", "info")
   }
 
   async function saveRenderBrief(options: { silent?: boolean } = {}) {
@@ -742,6 +784,36 @@ export default function ProjectRendersPage() {
           </div>
         </section>
 
+        <section className="panel prompt-preview-panel">
+          <div className="panel-header">
+            <div>
+              <div className="section-title">Prompt preview</div>
+              <div className="muted">
+                The current floor plan summary, style, settings, and brief as the generator will receive them.
+              </div>
+            </div>
+            <button
+              type="button"
+              className="button-ghost"
+              onClick={() => {
+                if (promptPreview?.prompt) void handleCopyPrompt(promptPreview.prompt)
+              }}
+              disabled={!promptPreview?.prompt}
+            >
+              <Copy size={16} />
+              Copy prompt
+            </button>
+          </div>
+
+          {promptPreview === undefined ? (
+            <div className="prompt-preview-empty">Preparing prompt...</div>
+          ) : promptPreview?.prompt ? (
+            <pre className="prompt-preview-text">{promptPreview.prompt}</pre>
+          ) : (
+            <div className="prompt-preview-empty">Save a floor plan before previewing the render prompt.</div>
+          )}
+        </section>
+
         <div className="render-controls">
           <section className="panel">
             <div className="panel-header">
@@ -1032,6 +1104,8 @@ export default function ProjectRendersPage() {
                   onDelete={handleDeleteRender}
                   onRegenerate={handleRegenerate}
                   onApplyFeedback={handleApplyRenderFeedback}
+                  onCopyPrompt={handleCopyPrompt}
+                  onUsePromptAsBaseline={handleUsePromptAsBaseline}
                   comparisonMode={comparisonMode}
                   isSelectedForComparison={selectedRenderIds.includes(render.id)}
                   onSelectForComparison={handleComparisonSelect}

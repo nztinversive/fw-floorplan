@@ -1305,6 +1305,39 @@ button:disabled,
   min-height: 8rem;
 }
 
+.prompt-preview-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.prompt-preview-text,
+.render-prompt-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+  color: #1f2937;
+  background: rgba(250, 247, 242, 0.78);
+  border: 1px solid rgba(27, 42, 74, 0.1);
+  border-radius: 0.6rem;
+  padding: 0.9rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.82rem;
+}
+
+.prompt-preview-text {
+  max-height: 18rem;
+  overflow: auto;
+}
+
+.prompt-preview-empty {
+  border: 1px dashed rgba(27, 42, 74, 0.16);
+  background: rgba(248, 250, 252, 0.8);
+  border-radius: 0.6rem;
+  padding: 1rem;
+  color: var(--fw-slate);
+}
+
 .style-grid {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
@@ -1482,6 +1515,34 @@ button:disabled,
 .render-feedback-chip:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.render-prompt-details {
+  border-top: 1px solid rgba(27, 42, 74, 0.08);
+  padding-top: 0.85rem;
+}
+
+.render-prompt-details summary {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--fw-navy);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.render-prompt-text {
+  margin-top: 0.75rem;
+  max-height: 14rem;
+  overflow: auto;
+}
+
+.render-prompt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
 }
 
 .render-meta {

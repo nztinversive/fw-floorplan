@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Expand, RefreshCw, Star, Trash2 } from "lucide-react";
+import { Copy, Download, Expand, FileText, RefreshCw, Star, Trash2 } from "lucide-react";
 
 import ProgressiveImage from "@/components/ProgressiveImage";
 import { RENDER_VIEW_ANGLE_LABELS } from "@/lib/render-angles";
@@ -17,6 +17,8 @@ type RenderCardProps = {
   onDelete: (renderId: string) => Promise<void> | void;
   onRegenerate: (render: StoredRender) => Promise<void> | void;
   onApplyFeedback?: (render: StoredRender, feedback: string) => void;
+  onCopyPrompt?: (prompt: string) => Promise<void> | void;
+  onUsePromptAsBaseline?: (render: StoredRender) => void;
   comparisonMode?: boolean;
   isSelectedForComparison?: boolean;
   onSelectForComparison?: (renderId: string) => void;
@@ -63,6 +65,8 @@ export default function RenderCard({
   onDelete,
   onRegenerate,
   onApplyFeedback,
+  onCopyPrompt,
+  onUsePromptAsBaseline,
   comparisonMode = false,
   isSelectedForComparison = false,
   onSelectForComparison,
@@ -233,6 +237,38 @@ export default function RenderCard({
               ))}
             </div>
           </div>
+        ) : null}
+
+        {render.prompt ? (
+          <details className="render-prompt-details" onClick={(event) => event.stopPropagation()}>
+            <summary>
+              <FileText size={15} />
+              Saved prompt
+            </summary>
+            <pre className="render-prompt-text">{render.prompt}</pre>
+            <div className="render-prompt-actions">
+              {onCopyPrompt ? (
+                <button
+                  type="button"
+                  className="button-ghost"
+                  onClick={() => onCopyPrompt(render.prompt)}
+                >
+                  <Copy size={15} />
+                  Copy prompt
+                </button>
+              ) : null}
+              {onUsePromptAsBaseline ? (
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => onUsePromptAsBaseline(render)}
+                  disabled={comparisonMode || isDeleting || isRegenerating}
+                >
+                  Use as baseline
+                </button>
+              ) : null}
+            </div>
+          </details>
         ) : null}
       </div>
     </article>

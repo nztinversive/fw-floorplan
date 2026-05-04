@@ -3,7 +3,7 @@ import { v } from "convex/values";
 
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { action, internalMutation, mutation, query } from "./_generated/server";
+import { action, internalMutation, mutation, query, type QueryCtx } from "./_generated/server";
 import {
   RENDER_VIEW_ANGLE_PROMPTS,
   type RenderViewAngle
@@ -11,7 +11,7 @@ import {
 import { STYLE_PRESET_MAP, type StylePresetId } from "../lib/style-presets";
 import { requireProjectEditor, requireProjectViewer } from "./members";
 import { renderBriefValidator, renderSettingsValidator, renderViewAngleValidator } from "./validators";
-import type { HydratedFloorPlanDoc } from "./floorPlanChildData";
+import { hydrateFloorPlansData, type HydratedFloorPlanDoc } from "./floorPlanChildData";
 
 type ProjectWithFloorPlans = Doc<"projects"> & {
   floorPlans: HydratedFloorPlanDoc[];
@@ -341,6 +341,95 @@ function composePrompt(args: {
   ].filter(Boolean).join(" ");
 }
 
+async function getProjectWithFloorPlans(ctx: QueryCtx, projectId: Id<"projects">) {
+  const project = await ctx.db.get(projectId);
+  if (!project) {
+    return null;
+  }
+
+  const floorPlans = await ctx.db
+    .query("floorPlans")
+    .withIndex("by_projectId", (query) => query.eq("projectId", projectId))
+    .collect();
+  const hydratedFloorPlans = await hydrateFloorPlansData(ctx, floorPlans);
+
+  return {
+    ...project,
+    floorPlans: hydratedFloorPlans.sort((left, right) => left.floor - right.floor)
+  };
+}
+
+function buildRenderPrompt(args: {
+  project: ProjectWithFloorPlans;
+  style: string;
+  settings: {
+    style: string;
+    sidingMaterial: string;
+    roofStyle: string;
+    colorPalette: string;
+    landscaping: string;
+    timeOfDay: string;
+    season: string;
+    viewAngle: RenderViewAngle;
+  };
+  viewAngle: RenderViewAngle;
+  renderBrief?: RenderBrief;
+}) {
+  const styleId = normalizeStyleId(args.style);
+  const settings = {
+    ...args.settings,
+    style: styleId,
+    viewAngle: args.viewAngle
+  };
+  const architecturalDescription = describeFloorPlans(args.project.floorPlans);
+  const prompt = composePrompt({
+    architecturalDescription,
+    projectName: args.project.name,
+    address: args.project.address,
+    styleId,
+    renderBrief: args.renderBrief ?? args.project.renderBrief,
+    settings
+  });
+
+  return {
+    architecturalDescription,
+    prompt,
+    settings,
+    styleId
+  };
+}
+
+export const previewPrompt = query({
+  args: {
+    projectId: v.id("projects"),
+    style: v.string(),
+    settings: renderSettingsValidator,
+    viewAngle: renderViewAngleValidator,
+    renderBrief: v.optional(renderBriefValidator)
+  },
+  handler: async (ctx, args) => {
+    await requireProjectEditor(ctx, args.projectId);
+
+    const project = await getProjectWithFloorPlans(ctx, args.projectId);
+    if (!project || project.floorPlans.length === 0) {
+      return null;
+    }
+
+    const preview = buildRenderPrompt({
+      project,
+      style: args.style,
+      settings: args.settings,
+      viewAngle: args.viewAngle,
+      renderBrief: args.renderBrief
+    });
+
+    return {
+      architecturalDescription: preview.architecturalDescription,
+      prompt: preview.prompt
+    };
+  }
+});
+
 async function resolveGeneratedImageBlob(response: {
   data?: Array<{
     url?: string | null;
@@ -429,20 +518,12 @@ export const generateRender = action({
       throw new Error("A saved floor plan is required before generating a render");
     }
 
-    const styleId = normalizeStyleId(args.style);
-    const settings = {
-      ...args.settings,
-      style: styleId,
-      viewAngle: args.viewAngle
-    };
-    const architecturalDescription = describeFloorPlans(project.floorPlans);
-    const prompt = composePrompt({
-      architecturalDescription,
-      projectName: project.name,
-      address: project.address,
-      styleId,
-      renderBrief: args.renderBrief ?? project.renderBrief,
-      settings
+    const promptDetails = buildRenderPrompt({
+      project,
+      style: args.style,
+      settings: args.settings,
+      viewAngle: args.viewAngle,
+      renderBrief: args.renderBrief
     });
 
     const apiKey = process.env.OPENAI_API_KEY;
@@ -453,7 +534,7 @@ export const generateRender = action({
     const client = new OpenAI({ apiKey });
     const response = await client.images.generate({
       model: "gpt-image-1",
-      prompt,
+      prompt: promptDetails.prompt,
       size: "1536x1024",
       quality: "high"
     });
@@ -462,9 +543,9 @@ export const generateRender = action({
     const storageId = await ctx.storage.store(imageBlob);
     const renderId: Id<"renders"> = await ctx.runMutation(internal.renders.storeGeneratedRender, {
       projectId: args.projectId,
-      style: styleId,
-      settings,
-      prompt,
+      style: promptDetails.styleId,
+      settings: promptDetails.settings,
+      prompt: promptDetails.prompt,
       imageUrl: storageId
     });
 
