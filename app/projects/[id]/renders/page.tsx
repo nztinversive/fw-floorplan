@@ -1787,6 +1787,7 @@ export default function ProjectRendersPage() {
                   isSavingReview={pendingReviewRenderId === render.id}
                   parentRender={render.parentRenderId ? renders.find((candidate) => candidate.id === render.parentRenderId) : undefined}
                   childRenders={childrenByRenderId[render.id] ?? []}
+                  childQualityReports={renderQualityById}
                   onCompareLineage={handleCompareLineage}
                   qualityReport={renderQualityById[render.id]}
                   parentQualityReport={render.parentRenderId ? renderQualityById[render.parentRenderId] : undefined}

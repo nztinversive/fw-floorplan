@@ -50,6 +50,16 @@ export function getRenderWinnerVariant(key: RenderWinnerVariantKey) {
   return RENDER_WINNER_VARIANTS.find((variant) => variant.key === key);
 }
 
+export function getWinnerVariantLabelFromPrompt(prompt: string) {
+  const normalizedPrompt = prompt.toLowerCase();
+
+  return (
+    RENDER_WINNER_VARIANTS.find((variant) =>
+      normalizedPrompt.includes(`winner-based variant (${variant.label.toLowerCase()})`)
+    )?.label ?? null
+  );
+}
+
 export function buildWinnerVariantRevision(render: StoredRender, variantKey: RenderWinnerVariantKey) {
   const variant = getRenderWinnerVariant(variantKey);
   const styleLabel = getStyleLabel(render.style);

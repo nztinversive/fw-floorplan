@@ -14,6 +14,7 @@ import {
   getRenderStyleLockTraits,
   type RenderStyleLockKey
 } from "@/lib/render-style-locks";
+import { getWinnerVariantLabelFromPrompt } from "@/lib/render-variants";
 import { STYLE_PRESET_MAP } from "@/lib/style-presets";
 import { formatRelativeTime } from "@/lib/file-utils";
 import type { StoredRender } from "@/lib/types";
@@ -38,6 +39,7 @@ type RenderCardProps = {
   isSavingReview?: boolean;
   parentRender?: StoredRender;
   childRenders?: StoredRender[];
+  childQualityReports?: Record<string, RenderQualityReport | undefined>;
   onCompareLineage?: (parentRenderId: string, childRenderId: string) => void;
   qualityReport?: RenderQualityReport;
   parentQualityReport?: RenderQualityReport;
@@ -127,6 +129,7 @@ export default function RenderCard({
   isSavingReview = false,
   parentRender,
   childRenders = [],
+  childQualityReports = {},
   onCompareLineage,
   qualityReport,
   parentQualityReport,
@@ -156,6 +159,10 @@ export default function RenderCard({
   const qualityComparison = useMemo(
     () => getQualityComparison(parentQualityReport, qualityReport),
     [parentQualityReport, qualityReport]
+  );
+  const groupedChildRenders = useMemo(
+    () => [...childRenders].sort((left, right) => left.createdAt - right.createdAt),
+    [childRenders]
   );
   const reviewSummary = useMemo(
     () =>
@@ -677,22 +684,51 @@ export default function RenderCard({
 
             {childRenders.length > 0 ? (
               <div className="render-lineage-children">
-                <div className="render-lineage-meta">
-                  {childRenders.length} regenerated version{childRenders.length === 1 ? "" : "s"} from this render
+                <div className="render-variant-group-header">
+                  <div>
+                    <div className="field-label">Variant comparison group</div>
+                    <div className="render-lineage-meta">
+                      Compare the original render against {childRenders.length} generated variation{childRenders.length === 1 ? "" : "s"}.
+                    </div>
+                  </div>
+                  <span className="badge">Original + {childRenders.length}</span>
                 </div>
-                <div className="render-lineage-child-list">
-                  {childRenders.slice(0, 3).map((childRender) => (
+
+                <div className="render-variant-group-list">
+                  <div className="render-variant-row is-original">
+                    <div>
+                      <strong>Original render</strong>
+                      <span>{getStyleLabel(render.style)} | {RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle]}</span>
+                    </div>
+                    {qualityReport ? <span className="badge">{qualityReport.score}/100 QA</span> : null}
+                  </div>
+
+                  {groupedChildRenders.slice(0, 6).map((childRender, index) => {
+                    const variantLabel = getWinnerVariantLabelFromPrompt(childRender.prompt) ?? `Variant ${index + 1}`;
+                    const childQualityReport = childQualityReports[childRender.id];
+
+                    return (
                     <button
                       key={childRender.id}
                       type="button"
-                      className="render-lineage-child"
+                      className="render-variant-row"
                       onClick={() => onCompareLineage?.(render.id, childRender.id)}
                       disabled={!onCompareLineage || isCardBusy}
                     >
-                      {getStyleLabel(childRender.style)} | {formatRelativeTime(childRender.createdAt)}
+                      <span>
+                        <strong>{variantLabel}</strong>
+                        <span>{formatRelativeTime(childRender.createdAt)}</span>
+                      </span>
+                      {childQualityReport ? <span className="badge">{childQualityReport.score}/100 QA</span> : null}
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
+                {groupedChildRenders.length > 6 ? (
+                  <div className="render-lineage-meta">
+                    {groupedChildRenders.length - 6} more variation{groupedChildRenders.length - 6 === 1 ? "" : "s"} available in the gallery.
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
