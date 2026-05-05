@@ -1393,13 +1393,27 @@ button:disabled,
 }
 
 .design-dna-strengths,
-.design-dna-drift {
+.design-dna-drift,
+.design-dna-drift-empty {
   display: grid;
   gap: 0.65rem;
 }
 
+.design-dna-drift-empty {
+  padding: 0.75rem;
+  border: 1px solid rgba(34, 197, 94, 0.16);
+  border-radius: 0.6rem;
+  background: rgba(240, 253, 244, 0.5);
+}
+
 .design-dna-strength-list,
 .design-dna-drift-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.design-dna-drift-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
@@ -1455,6 +1469,10 @@ button:disabled,
 }
 
 .design-dna-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   justify-self: start;
   border: 1px solid rgba(27, 42, 74, 0.12);
   background: #ffffff;
@@ -1468,6 +1486,11 @@ button:disabled,
 .design-dna-action:hover {
   border-color: rgba(212, 168, 75, 0.55);
   background: rgba(212, 168, 75, 0.12);
+}
+
+.design-dna-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .room-directions-panel {

@@ -1,21 +1,25 @@
 "use client";
 
-import { AlertTriangle, Dna, Star } from "lucide-react";
+import { AlertTriangle, Dna, RefreshCw, Star } from "lucide-react";
 
-import type { DesignDNAReport } from "@/lib/design-dna";
+import type { DesignDNADriftRender, DesignDNAReport } from "@/lib/design-dna";
 
 type DesignDNAPanelProps = {
   report: DesignDNAReport;
   disabled?: boolean;
+  isRegenerating?: boolean;
   onApplyDNA: (dnaText: string) => void;
   onFocusRender?: (renderId: string) => void;
+  onRegenerateDrift?: (driftRender: DesignDNADriftRender) => void;
 };
 
 export default function DesignDNAPanel({
   report,
   disabled = false,
+  isRegenerating = false,
   onApplyDNA,
-  onFocusRender
+  onFocusRender,
+  onRegenerateDrift
 }: DesignDNAPanelProps) {
   const isReady = report.status === "ready";
 
@@ -93,20 +97,39 @@ export default function DesignDNAPanel({
                         </span>
                       ))}
                     </div>
-                    {onFocusRender ? (
-                      <button
-                        type="button"
-                        className="design-dna-action"
-                        onClick={() => onFocusRender(render.renderId)}
-                      >
-                        Review render
-                      </button>
-                    ) : null}
+                    <div className="design-dna-drift-actions">
+                      {onFocusRender ? (
+                        <button
+                          type="button"
+                          className="design-dna-action"
+                          onClick={() => onFocusRender(render.renderId)}
+                          disabled={disabled || isRegenerating}
+                        >
+                          Review render
+                        </button>
+                      ) : null}
+                      {onRegenerateDrift ? (
+                        <button
+                          type="button"
+                          className="design-dna-action"
+                          onClick={() => onRegenerateDrift(render)}
+                          disabled={disabled || isRegenerating}
+                        >
+                          <RefreshCw size={14} />
+                          {isRegenerating ? "Regenerating..." : "Regenerate back to DNA"}
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="design-dna-drift-empty">
+              <div className="field-label">DNA drift watch</div>
+              <div className="muted">All non-favorite render settings currently match the favorite baseline.</div>
+            </div>
+          )}
 
           <div className="design-dna-actions">
             <button

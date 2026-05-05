@@ -36,7 +36,11 @@ import {
   type StylePresetDefaults,
   type StylePresetId
 } from "@/lib/style-presets"
-import { buildProjectDesignDNAReport } from "@/lib/design-dna"
+import {
+  buildDesignDNARegenerationRevision,
+  buildProjectDesignDNAReport,
+  type DesignDNADriftRender
+} from "@/lib/design-dna"
 import { buildRenderStyleLockRevision, type RenderStyleLockKey } from "@/lib/render-style-locks"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
 import { sortFloors } from "@/lib/floor-utils"
@@ -49,7 +53,7 @@ import { analyzeDesignOutputQA } from "@/lib/design-output-qa"
 import { analyzeRenderQuality } from "@/lib/render-quality"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
-type PendingRenderAction = "favorite" | "delete" | "regenerate" | "critique" | "qa-regenerate" | "locked-regenerate"
+type PendingRenderAction = "favorite" | "delete" | "regenerate" | "critique" | "qa-regenerate" | "locked-regenerate" | "dna-regenerate"
 type RenderReviewDraft = {
   issueKeys: string[]
   notes: string
@@ -932,6 +936,41 @@ export default function ProjectRendersPage() {
     }
   }
 
+  async function handleRegenerateBackToDNA(driftRender: DesignDNADriftRender) {
+    const render = renders.find((candidate) => candidate.id === driftRender.renderId)
+
+    if (!render) {
+      toast("DNA drift target render is no longer available", "warning")
+      return
+    }
+
+    if (!designDNA.dnaText) {
+      toast("Favorite a strong render before regenerating back to DNA", "warning")
+      return
+    }
+
+    const revisionLine = buildDesignDNARegenerationRevision({
+      dnaText: designDNA.dnaText,
+      driftRender
+    })
+    const renderBriefOverride = {
+      ...renderBrief,
+      revisionNotes: [renderBrief.revisionNotes.trim(), revisionLine].filter(Boolean).join("\n")
+    }
+
+    setPendingRenderAction({ renderId: render.id, action: "dna-regenerate" })
+
+    try {
+      await triggerGeneration(render.style, render.settings, {
+        renderBriefOverride,
+        skipBriefSave: true,
+        parentRenderId: render.id
+      })
+    } finally {
+      setPendingRenderAction(null)
+    }
+  }
+
   function handleCompareLineage(parentRenderId: string, childRenderId: string) {
     setComparisonMode(true)
     setSelectedRenderIds([parentRenderId, childRenderId])
@@ -1242,8 +1281,10 @@ export default function ProjectRendersPage() {
         <DesignDNAPanel
           report={designDNA}
           disabled={isGenerationBusy || isSavingBrief}
+          isRegenerating={pendingRenderAction?.action === "dna-regenerate"}
           onApplyDNA={handleApplyDesignDNA}
           onFocusRender={handleFocusQARender}
+          onRegenerateDrift={handleRegenerateBackToDNA}
         />
 
         <RoomDesignDirectionsPanel
@@ -1627,7 +1668,8 @@ export default function ProjectRendersPage() {
                     (
                       pendingRenderAction.action === "regenerate" ||
                       pendingRenderAction.action === "qa-regenerate" ||
-                      pendingRenderAction.action === "locked-regenerate"
+                      pendingRenderAction.action === "locked-regenerate" ||
+                      pendingRenderAction.action === "dna-regenerate"
                     )
                   }
                   onToggleFavorite={handleToggleFavorite}

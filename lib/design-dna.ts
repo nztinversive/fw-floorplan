@@ -178,6 +178,24 @@ function buildDNAText(traits: DesignDNATrait[], strengths: string[]) {
   ].join("\n");
 }
 
+export function buildDesignDNARegenerationRevision(args: {
+  dnaText: string;
+  driftRender: DesignDNADriftRender;
+}) {
+  const driftSummary = args.driftRender.driftTraits
+    .map((trait) => `${trait.label} should return to ${trait.expected} instead of ${trait.actual}`)
+    .join("; ");
+
+  return [
+    `Regenerate ${args.driftRender.label} back to Project Design DNA.`,
+    args.dnaText,
+    driftSummary ? `Fix these DNA mismatches: ${driftSummary}.` : null,
+    "Preserve the project DNA and only change the mismatched traits needed to bring this render back in line."
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 export function buildProjectDesignDNAReport(args: { renders: StoredRender[] }): DesignDNAReport {
   const sourceRenders = args.renders.filter((render) => render.isFavorite && render.imageUrl);
 
@@ -203,7 +221,7 @@ export function buildProjectDesignDNAReport(args: { renders: StoredRender[] }): 
     .filter((render) => render.imageUrl && !render.isFavorite)
     .map((render) => {
       const score = scoreRenderAgainstDNA(render, traits);
-      if (!score || score.score >= 75) {
+      if (!score || score.score >= 100) {
         return null;
       }
 
