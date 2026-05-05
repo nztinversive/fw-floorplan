@@ -53,6 +53,7 @@ import {
   type RenderConsistencyStatus
 } from "@/lib/render-consistency"
 import { analyzeDesignOutputQA } from "@/lib/design-output-qa"
+import { analyzeRenderAcceptance } from "@/lib/render-acceptance"
 import { analyzeRenderQuality } from "@/lib/render-quality"
 import { analyzeRenderDecision } from "@/lib/render-decision"
 import {
@@ -389,6 +390,16 @@ export default function ProjectRendersPage() {
       return deltaById
     }, {})
   }, [project, renderBrief, renders])
+  const renderAcceptanceById = useMemo(() => {
+    return renders.reduce<Record<string, ReturnType<typeof analyzeRenderAcceptance>>>((acceptanceById, render) => {
+      acceptanceById[render.id] = analyzeRenderAcceptance({
+        render,
+        qualityReport: renderQualityById[render.id],
+        specDeltaReport: renderSpecDeltaById[render.id]
+      })
+      return acceptanceById
+    }, {})
+  }, [renderQualityById, renderSpecDeltaById, renders])
 
   const finalRender = useMemo(
     () => renders.find((render) => render.isFinal && render.imageUrl) ?? null,
@@ -419,7 +430,9 @@ export default function ProjectRendersPage() {
     const hasWinner = Boolean(finalRender || renders.some((render) => render.isFavorite))
     const hasVariants = renders.some((render) => render.parentRenderId)
     const hasFinal = Boolean(finalRender)
-    const packageReady = Boolean(hasPlanRooms && hasFinal && finalRender?.imageUrl)
+    const finalAcceptance = finalRender ? renderAcceptanceById[finalRender.id] : null
+    const finalAccepted = finalAcceptance?.status === "ready"
+    const packageReady = Boolean(hasPlanRooms && hasFinal && finalRender?.imageUrl && finalAccepted)
 
     return [
       {
@@ -443,12 +456,21 @@ export default function ProjectRendersPage() {
         done: hasFinal
       },
       {
+        label: "Acceptance gate",
+        detail: finalAccepted
+          ? "The final render passes the render acceptance checklist."
+          : finalRender
+            ? "Resolve final render acceptance checks before delivery."
+            : "Accept a render as final after review.",
+        done: finalAccepted
+      },
+      {
         label: "Package ready",
         detail: packageReady ? "Export/share will lead with the final render." : "Finish the checklist before client delivery.",
         done: packageReady
       }
     ]
-  }, [finalRender, project?.floorPlans, renders])
+  }, [finalRender, project?.floorPlans, renderAcceptanceById, renders])
 
   const lightboxImages = useMemo(
     () =>
@@ -2052,6 +2074,7 @@ export default function ProjectRendersPage() {
                   onCompareLineage={handleCompareLineage}
                   qualityReport={renderQualityById[render.id]}
                   specDeltaReport={renderSpecDeltaById[render.id]}
+                  acceptanceReport={renderAcceptanceById[render.id]}
                   parentQualityReport={render.parentRenderId ? renderQualityById[render.parentRenderId] : undefined}
                   comparisonMode={comparisonMode}
                   isSelectedForComparison={selectedRenderIds.includes(render.id)}

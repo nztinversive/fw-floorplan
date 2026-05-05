@@ -1,10 +1,11 @@
 "use client";
 
-import { Brain, Copy, Download, Expand, FileText, Lock, RefreshCw, Star, Trash2, Trophy } from "lucide-react";
+import { Brain, CheckCircle2, CircleAlert, Copy, Download, Expand, FileText, Lock, RefreshCw, Star, Trash2, Trophy } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import ProgressiveImage from "@/components/ProgressiveImage";
 import { RENDER_VIEW_ANGLE_LABELS } from "@/lib/render-angles";
+import type { RenderAcceptanceReport } from "@/lib/render-acceptance";
 import type { RenderQualityReport } from "@/lib/render-quality";
 import { RENDER_REVIEW_ISSUES, getRenderReviewIssueLabel } from "@/lib/render-review";
 import type { RenderSpecDeltaReport } from "@/lib/render-spec-delta";
@@ -47,6 +48,7 @@ type RenderCardProps = {
   onCompareLineage?: (parentRenderId: string, childRenderId: string) => void;
   qualityReport?: RenderQualityReport;
   specDeltaReport?: RenderSpecDeltaReport;
+  acceptanceReport?: RenderAcceptanceReport;
   parentQualityReport?: RenderQualityReport;
   comparisonMode?: boolean;
   isSelectedForComparison?: boolean;
@@ -141,6 +143,7 @@ export default function RenderCard({
   onCompareLineage,
   qualityReport,
   specDeltaReport,
+  acceptanceReport,
   parentQualityReport,
   comparisonMode = false,
   isSelectedForComparison = false,
@@ -469,6 +472,68 @@ export default function RenderCard({
                 {isRegenerating ? "Generating..." : "Regenerate to match spec"}
               </button>
             ) : null}
+          </div>
+        ) : null}
+
+        {acceptanceReport ? (
+          <div className={`render-acceptance-panel is-${acceptanceReport.status}`} onClick={(event) => event.stopPropagation()}>
+            <div className="render-acceptance-summary">
+              <div>
+                <div className="render-acceptance-score">{acceptanceReport.score}</div>
+                <div className="render-acceptance-score-label">accept</div>
+              </div>
+              <div>
+                <div className="render-acceptance-heading">
+                  <span className={`badge render-acceptance-badge is-${acceptanceReport.status}`}>
+                    {acceptanceReport.label}
+                  </span>
+                  <span>Render acceptance</span>
+                </div>
+                <div className="render-acceptance-copy">{acceptanceReport.summary}</div>
+              </div>
+            </div>
+
+            <div className="render-acceptance-checks">
+              {acceptanceReport.checks.map((check) => (
+                <div key={check.id} className="render-acceptance-check">
+                  {check.status === "pass" ? (
+                    <CheckCircle2 size={16} />
+                  ) : (
+                    <CircleAlert size={16} />
+                  )}
+                  <div>
+                    <div className="render-acceptance-title">
+                      {check.title}
+                      <span className={`badge render-acceptance-chip is-${check.status}`}>{check.status}</span>
+                    </div>
+                    <div className="render-acceptance-detail">{check.detail}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="render-acceptance-actions">
+              {onApplyFeedback && acceptanceReport.suggestedFixes && acceptanceReport.status !== "ready" ? (
+                <button
+                  type="button"
+                  className="render-acceptance-action"
+                  onClick={() => onApplyFeedback(render, acceptanceReport.suggestedFixes)}
+                  disabled={comparisonMode || isCardBusy}
+                >
+                  Add acceptance fixes
+                </button>
+              ) : null}
+              {onSetFinal ? (
+                <button
+                  type="button"
+                  className="render-acceptance-action is-primary"
+                  onClick={() => void onSetFinal(render.id, true)}
+                  disabled={comparisonMode || isCardBusy || isFinalizing || render.isFinal || !acceptanceReport.canAccept}
+                >
+                  {render.isFinal ? "Accepted final" : acceptanceReport.canAccept ? "Accept as final" : "Fix before final"}
+                </button>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
