@@ -13,6 +13,7 @@ import ConfirmDialog from "@/components/ConfirmDialog"
 import DesignDNAPanel from "@/components/DesignDNAPanel"
 import DesignOutputQAPanel from "@/components/DesignOutputQAPanel"
 import Lightbox from "@/components/Lightbox"
+import RenderDecisionPanel from "@/components/RenderDecisionPanel"
 import RenderCard from "@/components/RenderCard"
 import RenderProgress from "@/components/RenderProgress"
 import RoomDesignDirectionsPanel from "@/components/RoomDesignDirectionsPanel"
@@ -51,6 +52,7 @@ import {
 } from "@/lib/render-consistency"
 import { analyzeDesignOutputQA } from "@/lib/design-output-qa"
 import { analyzeRenderQuality } from "@/lib/render-quality"
+import { analyzeRenderDecision } from "@/lib/render-decision"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
 type PendingRenderAction = "favorite" | "delete" | "regenerate" | "critique" | "qa-regenerate" | "locked-regenerate" | "dna-regenerate"
@@ -395,6 +397,17 @@ export default function ProjectRendersPage() {
         })
         : null,
     [project, renderBrief, settings]
+  )
+  const renderDecision = useMemo(
+    () =>
+      comparisonRenders.length === 2
+        ? analyzeRenderDecision({
+          renders: [comparisonRenders[0], comparisonRenders[1]],
+          qualityByRenderId: renderQualityById,
+          designDNA
+        })
+        : null,
+    [comparisonRenders, designDNA, renderQualityById]
   )
 
   useEffect(() => {
@@ -1122,6 +1135,49 @@ export default function ProjectRendersPage() {
     })
   }
 
+  function getDecisionRender(renderId?: string) {
+    if (!renderId) {
+      return null
+    }
+
+    return renders.find((render) => render.id === renderId) ?? null
+  }
+
+  async function handleFavoriteDecisionWinner() {
+    const winner = getDecisionRender(renderDecision?.winner?.renderId)
+    if (!winner) {
+      toast("Decision winner is no longer available", "warning")
+      return
+    }
+
+    if (winner.isFavorite) {
+      toast("Recommended render is already favorited", "info")
+      return
+    }
+
+    await handleToggleFavorite(winner.id)
+  }
+
+  async function handleRegenerateDecisionWeaker() {
+    const weaker = getDecisionRender(renderDecision?.weaker?.renderId)
+    if (!weaker) {
+      toast("Weaker render is no longer available", "warning")
+      return
+    }
+
+    await handleRegenerate(weaker)
+  }
+
+  function handleUseDecisionWinnerAsBaseline() {
+    const winner = getDecisionRender(renderDecision?.winner?.renderId)
+    if (!winner) {
+      toast("Decision winner is no longer available", "warning")
+      return
+    }
+
+    handleUsePromptAsBaseline(winner)
+  }
+
   if ((projectId && project === undefined) || (projectId && rendersQuery === undefined)) {
     return (
       <main className="page-shell">
@@ -1607,45 +1663,57 @@ export default function ProjectRendersPage() {
               </div>
 
               {comparisonRenders.length === 2 ? (
-                <div className="comparison-grid">
-                  {comparisonRenders.map((render) => (
-                    <article key={render.id} className="comparison-card">
-                      <div className="comparison-media">
-                        {render.imageUrl ? (
-                          <Image
-                            src={render.imageUrl}
-                            alt={`${getStyleLabel(render.style)} comparison render`}
-                            fill
-                            sizes="(max-width: 1024px) 100vw, 50vw"
-                            unoptimized
-                          />
-                        ) : (
-                          <div className="comparison-empty">Render image unavailable</div>
-                        )}
-                      </div>
-                      <div className="comparison-meta">
-                        <div className="render-toolbar-badges">
-                          <span className="badge">{getStyleLabel(render.style)}</span>
-                          <span className="badge">{RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle]}</span>
+                <>
+                  {renderDecision ? (
+                    <RenderDecisionPanel
+                      report={renderDecision}
+                      isBusy={isGenerationBusy || pendingRenderAction !== null}
+                      onFavoriteWinner={handleFavoriteDecisionWinner}
+                      onRegenerateWeaker={handleRegenerateDecisionWeaker}
+                      onUseWinnerAsBaseline={handleUseDecisionWinnerAsBaseline}
+                    />
+                  ) : null}
+
+                  <div className="comparison-grid">
+                    {comparisonRenders.map((render) => (
+                      <article key={render.id} className="comparison-card">
+                        <div className="comparison-media">
+                          {render.imageUrl ? (
+                            <Image
+                              src={render.imageUrl}
+                              alt={`${getStyleLabel(render.style)} comparison render`}
+                              fill
+                              sizes="(max-width: 1024px) 100vw, 50vw"
+                              unoptimized
+                            />
+                          ) : (
+                            <div className="comparison-empty">Render image unavailable</div>
+                          )}
                         </div>
-                        <dl className="key-value comparison-labels">
-                          <dt>Siding</dt>
-                          <dd>{render.settings.sidingMaterial}</dd>
-                          <dt>Roof</dt>
-                          <dd>{render.settings.roofStyle}</dd>
-                          <dt>Palette</dt>
-                          <dd>{render.settings.colorPalette}</dd>
-                          <dt>Landscape</dt>
-                          <dd>{render.settings.landscaping}</dd>
-                          <dt>Light</dt>
-                          <dd>{render.settings.timeOfDay}</dd>
-                          <dt>Season</dt>
-                          <dd>{render.settings.season}</dd>
-                        </dl>
-                      </div>
-                    </article>
-                  ))}
-                </div>
+                        <div className="comparison-meta">
+                          <div className="render-toolbar-badges">
+                            <span className="badge">{getStyleLabel(render.style)}</span>
+                            <span className="badge">{RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle]}</span>
+                          </div>
+                          <dl className="key-value comparison-labels">
+                            <dt>Siding</dt>
+                            <dd>{render.settings.sidingMaterial}</dd>
+                            <dt>Roof</dt>
+                            <dd>{render.settings.roofStyle}</dd>
+                            <dt>Palette</dt>
+                            <dd>{render.settings.colorPalette}</dd>
+                            <dt>Landscape</dt>
+                            <dd>{render.settings.landscaping}</dd>
+                            <dt>Light</dt>
+                            <dd>{render.settings.timeOfDay}</dd>
+                            <dt>Season</dt>
+                            <dd>{render.settings.season}</dd>
+                          </dl>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </>
               ) : null}
             </div>
           ) : null}
