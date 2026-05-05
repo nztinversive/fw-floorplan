@@ -53,9 +53,10 @@ import {
 import { analyzeDesignOutputQA } from "@/lib/design-output-qa"
 import { analyzeRenderQuality } from "@/lib/render-quality"
 import { analyzeRenderDecision } from "@/lib/render-decision"
+import { buildWinnerVariantRevision, type RenderWinnerVariantKey } from "@/lib/render-variants"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
-type PendingRenderAction = "favorite" | "delete" | "regenerate" | "critique" | "qa-regenerate" | "locked-regenerate" | "dna-regenerate"
+type PendingRenderAction = "favorite" | "delete" | "regenerate" | "critique" | "qa-regenerate" | "locked-regenerate" | "dna-regenerate" | "variant-regenerate"
 type RenderReviewDraft = {
   issueKeys: string[]
   notes: string
@@ -1178,6 +1179,32 @@ export default function ProjectRendersPage() {
     handleUsePromptAsBaseline(winner)
   }
 
+  async function handleGenerateWinnerVariant(variantKey: RenderWinnerVariantKey) {
+    const winner = getDecisionRender(renderDecision?.winner?.renderId)
+    if (!winner) {
+      toast("Pick a winning render before generating variants", "warning")
+      return
+    }
+
+    const revisionLine = buildWinnerVariantRevision(winner, variantKey)
+    const renderBriefOverride = {
+      ...renderBrief,
+      revisionNotes: [renderBrief.revisionNotes.trim(), revisionLine].filter(Boolean).join("\n")
+    }
+
+    setPendingRenderAction({ renderId: winner.id, action: "variant-regenerate" })
+
+    try {
+      await triggerGeneration(winner.style, winner.settings, {
+        renderBriefOverride,
+        skipBriefSave: true,
+        parentRenderId: winner.id
+      })
+    } finally {
+      setPendingRenderAction(null)
+    }
+  }
+
   if ((projectId && project === undefined) || (projectId && rendersQuery === undefined)) {
     return (
       <main className="page-shell">
@@ -1671,6 +1698,7 @@ export default function ProjectRendersPage() {
                       onFavoriteWinner={handleFavoriteDecisionWinner}
                       onRegenerateWeaker={handleRegenerateDecisionWeaker}
                       onUseWinnerAsBaseline={handleUseDecisionWinnerAsBaseline}
+                      onGenerateWinnerVariant={handleGenerateWinnerVariant}
                     />
                   ) : null}
 
@@ -1737,7 +1765,8 @@ export default function ProjectRendersPage() {
                       pendingRenderAction.action === "regenerate" ||
                       pendingRenderAction.action === "qa-regenerate" ||
                       pendingRenderAction.action === "locked-regenerate" ||
-                      pendingRenderAction.action === "dna-regenerate"
+                      pendingRenderAction.action === "dna-regenerate" ||
+                      pendingRenderAction.action === "variant-regenerate"
                     )
                   }
                   onToggleFavorite={handleToggleFavorite}

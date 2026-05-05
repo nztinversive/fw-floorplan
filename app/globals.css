@@ -2948,6 +2948,61 @@ button:disabled,
   cursor: not-allowed;
 }
 
+.render-decision-variants {
+  display: grid;
+  gap: 0.65rem;
+  padding-top: 0.15rem;
+}
+
+.render-decision-variant-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--fw-navy);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.render-decision-variant-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.render-decision-variant {
+  display: grid;
+  gap: 0.3rem;
+  min-height: 5.6rem;
+  border: 1px solid rgba(27, 42, 74, 0.1);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--fw-navy);
+  padding: 0.7rem;
+  text-align: left;
+}
+
+.render-decision-variant:hover {
+  border-color: rgba(212, 168, 75, 0.55);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.render-decision-variant:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.render-decision-variant strong {
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.render-decision-variant span {
+  color: var(--fw-slate);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .share-hero {
   gap: 1.25rem;
 }
@@ -5838,6 +5893,7 @@ button:disabled,
   .render-controls,
   .comparison-grid,
   .render-decision-score-grid,
+  .render-decision-variant-grid,
   .floor-plan-comparison-grid {
     grid-template-columns: 1fr;
   }
@@ -5990,7 +6046,8 @@ button:disabled,
   }
 
   .comparison-grid,
-  .render-decision-score-grid {
+  .render-decision-score-grid,
+  .render-decision-variant-grid {
     grid-template-columns: 1fr;
   }
 

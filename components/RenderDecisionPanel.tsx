@@ -1,8 +1,9 @@
 "use client";
 
-import { RefreshCw, Star, Target, Trophy } from "lucide-react";
+import { Layers3, RefreshCw, Star, Target, Trophy } from "lucide-react";
 
 import type { RenderDecisionReport } from "@/lib/render-decision";
+import { RENDER_WINNER_VARIANTS, type RenderWinnerVariantKey } from "@/lib/render-variants";
 
 type RenderDecisionPanelProps = {
   report: RenderDecisionReport;
@@ -10,6 +11,7 @@ type RenderDecisionPanelProps = {
   onFavoriteWinner?: () => void;
   onRegenerateWeaker?: () => void;
   onUseWinnerAsBaseline?: () => void;
+  onGenerateWinnerVariant?: (variantKey: RenderWinnerVariantKey) => void;
 };
 
 function getRecommendationLabel(report: RenderDecisionReport) {
@@ -25,8 +27,11 @@ export default function RenderDecisionPanel({
   isBusy = false,
   onFavoriteWinner,
   onRegenerateWeaker,
-  onUseWinnerAsBaseline
+  onUseWinnerAsBaseline,
+  onGenerateWinnerVariant
 }: RenderDecisionPanelProps) {
+  const canGenerateWinnerVariants = Boolean(report.winner && onGenerateWinnerVariant);
+
   return (
     <section className={`render-decision-panel is-${report.recommendation}`}>
       <div className="render-decision-header">
@@ -102,6 +107,29 @@ export default function RenderDecisionPanel({
           </button>
         ) : null}
       </div>
+
+      {canGenerateWinnerVariants ? (
+        <div className="render-decision-variants">
+          <div className="render-decision-variant-heading">
+            <Layers3 size={16} />
+            <span>Generate winner variants</span>
+          </div>
+          <div className="render-decision-variant-grid">
+            {RENDER_WINNER_VARIANTS.map((variant) => (
+              <button
+                key={variant.key}
+                type="button"
+                className="render-decision-variant"
+                onClick={() => onGenerateWinnerVariant?.(variant.key)}
+                disabled={isBusy}
+              >
+                <strong>{variant.label}</strong>
+                <span>{variant.description}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
