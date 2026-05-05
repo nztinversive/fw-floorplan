@@ -66,10 +66,11 @@ import {
   buildRenderSpecDeltaRevision,
   type RenderSpecDeltaReport
 } from "@/lib/render-spec-delta"
+import { buildRenderVisualQARevision, type RenderVisualQAFix } from "@/lib/render-visual-qa"
 import { buildWinnerVariantRevision, type RenderWinnerVariantKey } from "@/lib/render-variants"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
-type PendingRenderAction = "favorite" | "final" | "delete" | "regenerate" | "critique" | "qa-regenerate" | "locked-regenerate" | "dna-regenerate" | "variant-regenerate" | "spec-regenerate"
+type PendingRenderAction = "favorite" | "final" | "delete" | "regenerate" | "critique" | "qa-regenerate" | "locked-regenerate" | "dna-regenerate" | "variant-regenerate" | "spec-regenerate" | "visual-regenerate"
 type RenderReviewDraft = {
   issueKeys: string[]
   notes: string
@@ -1024,10 +1025,10 @@ export default function ProjectRendersPage() {
 
     try {
       await critiqueRender({ renderId: render.id as Id<"renders"> })
-      toast("AI critique completed", "success")
+      toast("Visual QA completed", "success")
     } catch (error) {
-      console.error("Unable to critique render.", error)
-      toast("Unable to critique this render", "error")
+      console.error("Unable to run visual QA.", error)
+      toast("Unable to run visual QA for this render", "error")
     } finally {
       setPendingRenderAction(null)
     }
@@ -1086,13 +1087,13 @@ export default function ProjectRendersPage() {
   async function handleRegenerateWithCritique(render: StoredRender) {
     const critique = render.latestCritique
     if (!critique || !critique.suggestedFixes.trim()) {
-      toast("Run an AI critique before regenerating from it", "warning")
+      toast("Run visual QA before regenerating from it", "warning")
       return
     }
 
     const styleLabel = getStyleLabel(render.style)
     const viewLabel = RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle]
-    const revisionLine = `${styleLabel} ${viewLabel} AI critique (${critique.score}/100): ${critique.suggestedFixes.trim()}`
+    const revisionLine = `${styleLabel} ${viewLabel} image-based visual QA (${critique.score}/100): ${critique.suggestedFixes.trim()}`
     const renderBriefOverride = {
       ...renderBrief,
       revisionNotes: [renderBrief.revisionNotes.trim(), revisionLine].filter(Boolean).join("\n")
@@ -1106,6 +1107,27 @@ export default function ProjectRendersPage() {
         skipBriefSave: true,
         parentRenderId: render.id,
         sourceCritiqueId: critique.id
+      })
+    } finally {
+      setPendingRenderAction(null)
+    }
+  }
+
+  async function handleRegenerateWithVisualFix(render: StoredRender, fix: RenderVisualQAFix) {
+    const revisionLine = buildRenderVisualQARevision(fix)
+    const renderBriefOverride = {
+      ...renderBrief,
+      revisionNotes: [renderBrief.revisionNotes.trim(), revisionLine].filter(Boolean).join("\n")
+    }
+
+    setPendingRenderAction({ renderId: render.id, action: "visual-regenerate" })
+
+    try {
+      await triggerGeneration(render.style, render.settings, {
+        renderBriefOverride,
+        skipBriefSave: true,
+        parentRenderId: render.id,
+        sourceCritiqueId: render.latestCritique?.id
       })
     } finally {
       setPendingRenderAction(null)
@@ -2047,7 +2069,8 @@ export default function ProjectRendersPage() {
                       pendingRenderAction.action === "locked-regenerate" ||
                       pendingRenderAction.action === "dna-regenerate" ||
                       pendingRenderAction.action === "variant-regenerate" ||
-                      pendingRenderAction.action === "spec-regenerate"
+                      pendingRenderAction.action === "spec-regenerate" ||
+                      pendingRenderAction.action === "visual-regenerate"
                     )
                   }
                   onToggleFavorite={handleToggleFavorite}
@@ -2065,6 +2088,7 @@ export default function ProjectRendersPage() {
                   onSaveReview={handleSaveRenderReview}
                   onRegenerateWithReview={handleRegenerateWithReview}
                   onRegenerateWithCritique={handleRegenerateWithCritique}
+                  onRegenerateWithVisualFix={handleRegenerateWithVisualFix}
                   onRegenerateWithStyleLocks={handleRegenerateWithStyleLocks}
                   onRegenerateWithSpecDelta={handleRegenerateWithSpecDelta}
                   isSavingReview={pendingReviewRenderId === render.id}

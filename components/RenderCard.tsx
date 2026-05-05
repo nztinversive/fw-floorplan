@@ -20,6 +20,10 @@ import { getWinnerVariantLabelFromPrompt } from "@/lib/render-variants";
 import { STYLE_PRESET_MAP } from "@/lib/style-presets";
 import { formatRelativeTime } from "@/lib/file-utils";
 import type { StoredRender } from "@/lib/types";
+import {
+  getRenderVisualQAFixes,
+  type RenderVisualQAFix
+} from "@/lib/render-visual-qa";
 
 type RenderCardProps = {
   render: StoredRender;
@@ -39,6 +43,7 @@ type RenderCardProps = {
   onSaveReview?: (render: StoredRender, review: { issueKeys: string[]; notes: string }) => Promise<unknown> | void;
   onRegenerateWithReview?: (render: StoredRender, review: { issueKeys: string[]; notes: string }) => Promise<void> | void;
   onRegenerateWithCritique?: (render: StoredRender) => Promise<void> | void;
+  onRegenerateWithVisualFix?: (render: StoredRender, fix: RenderVisualQAFix) => Promise<void> | void;
   onRegenerateWithStyleLocks?: (render: StoredRender, lockKeys: RenderStyleLockKey[]) => Promise<void> | void;
   onRegenerateWithSpecDelta?: (render: StoredRender, report: RenderSpecDeltaReport) => Promise<void> | void;
   isSavingReview?: boolean;
@@ -134,6 +139,7 @@ export default function RenderCard({
   onSaveReview,
   onRegenerateWithReview,
   onRegenerateWithCritique,
+  onRegenerateWithVisualFix,
   onRegenerateWithStyleLocks,
   onRegenerateWithSpecDelta,
   isSavingReview = false,
@@ -172,6 +178,7 @@ export default function RenderCard({
     () => getQualityComparison(parentQualityReport, qualityReport),
     [parentQualityReport, qualityReport]
   );
+  const visualQAFixes = useMemo(() => getRenderVisualQAFixes(render), [render]);
   const groupedChildRenders = useMemo(
     () => [...childRenders].sort((left, right) => left.createdAt - right.createdAt),
     [childRenders]
@@ -689,11 +696,11 @@ export default function RenderCard({
           >
             <div className="render-ai-critique-header">
               <div>
-                <div className="field-label">AI render critique</div>
+                <div className="field-label">Image-based visual QA</div>
                 <div className="render-ai-critique-hint">
                   {latestCritique
                     ? `${latestCritique.score}/100 | ${Math.round(latestCritique.confidence * 100)}% confidence`
-                    : "Inspect image quality against the saved brief."}
+                    : "Inspect the actual image against the floor plan, design spec, camera, and client-ready polish."}
                 </div>
               </div>
               <button
@@ -703,7 +710,7 @@ export default function RenderCard({
                 disabled={comparisonMode || isCardBusy || !render.imageUrl}
               >
                 <Brain size={15} />
-                {isCritiquing ? "Critiquing..." : latestCritique ? "Refresh critique" : "Run critique"}
+                {isCritiquing ? "Reviewing..." : latestCritique ? "Refresh visual QA" : "Run visual QA"}
               </button>
             </div>
 
@@ -740,7 +747,7 @@ export default function RenderCard({
                       onClick={() => onApplyFeedback(render, latestCritique.suggestedFixes)}
                       disabled={comparisonMode || isCardBusy}
                     >
-                      Add critique fixes
+                      Add visual QA fixes
                     </button>
                     {onRegenerateWithCritique ? (
                       <button
@@ -750,15 +757,35 @@ export default function RenderCard({
                         disabled={comparisonMode || isCardBusy}
                       >
                         <RefreshCw size={15} />
-                        Regenerate from critique
+                        Regenerate from visual QA
                       </button>
                     ) : null}
                   </div>
                 ) : null}
 
+                {visualQAFixes.length > 0 && onRegenerateWithVisualFix ? (
+                  <div className="render-visual-qa-targets">
+                    <div className="render-ai-critique-hint">Targeted image fixes</div>
+                    <div className="render-visual-qa-target-grid">
+                      {visualQAFixes.map((fix) => (
+                        <button
+                          key={fix.id}
+                          type="button"
+                          className={`render-visual-qa-target is-${fix.severity}`}
+                          onClick={() => void onRegenerateWithVisualFix(render, fix)}
+                          disabled={comparisonMode || isCardBusy}
+                        >
+                          <RefreshCw size={14} />
+                          {fix.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 {render.critiqueHistory.length > 1 ? (
                   <div className="render-ai-critique-hint">
-                    {render.critiqueHistory.length} critique runs saved
+                    {render.critiqueHistory.length} visual QA runs saved
                   </div>
                 ) : null}
               </>
@@ -809,7 +836,7 @@ export default function RenderCard({
 
             {sourceCritique ? (
               <div className="render-lineage-review">
-                <div className="render-lineage-meta">AI critique that produced this version</div>
+                <div className="render-lineage-meta">Visual QA that produced this version</div>
                 <div className="render-ai-critique-summary">
                   <span className={`badge render-ai-critique-badge is-${sourceCritique.recommendation}`}>
                     {sourceCritique.score}/100

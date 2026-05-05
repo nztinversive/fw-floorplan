@@ -66,6 +66,25 @@ function getOpenFixes(checks: RenderAcceptanceCheck[]) {
     .join("; ");
 }
 
+function getVisualIssue(args: { render: StoredRender; terms: string[] }) {
+  return args.render.latestCritique?.issues.find((issue) => {
+    if (issue.severity === "strength") {
+      return false;
+    }
+
+    const issueText = `${issue.category} ${issue.detail}`.toLowerCase();
+    return args.terms.some((term) => issueText.includes(term));
+  });
+}
+
+function visualIssueStatus(issue: ReturnType<typeof getVisualIssue>, fallback: RenderAcceptanceCheckStatus) {
+  if (!issue) {
+    return fallback;
+  }
+
+  return issue.severity === "major" ? "fail" : "review";
+}
+
 export function analyzeRenderAcceptance(args: {
   render: StoredRender;
   qualityReport?: RenderQualityReport;
@@ -75,14 +94,33 @@ export function analyzeRenderAcceptance(args: {
   const windowCheck = getQualityCheck(args.qualityReport, "room-window-alignment");
   const curbAppealCheck = getQualityCheck(args.qualityReport, "curb-appeal");
   const cameraCheck = getSpecCheck(args.specDeltaReport, "camera-angle");
+  const planVisualIssue = getVisualIssue({
+    render: args.render,
+    terms: ["floor", "plan", "room", "window", "door", "facade rhythm"]
+  });
+  const specVisualIssue = getVisualIssue({
+    render: args.render,
+    terms: ["spec", "brief", "constraint", "garage", "carport", "porch", "entry"]
+  });
+  const cameraVisualIssue = getVisualIssue({
+    render: args.render,
+    terms: ["camera", "angle", "view", "perspective", "elevation"]
+  });
+  const polishVisualIssue = getVisualIssue({
+    render: args.render,
+    terms: ["quality", "polish", "lighting", "landscape", "curb", "realism", "massing", "proportion"]
+  });
   const specOpenChecks = args.specDeltaReport?.checks.filter((check) => check.status !== "match") ?? [];
   const majorCritiqueIssues =
     args.render.latestCritique?.issues.filter((issue) => issue.severity === "major") ?? [];
   const critiqueWantsRegeneration = args.render.latestCritique?.recommendation === "regenerate";
 
   const imageStatus: RenderAcceptanceCheckStatus = args.render.imageUrl ? "pass" : "fail";
-  const planStatus = qualityStatusToAcceptance(planCheck?.status);
-  const specStatus = args.specDeltaReport ? specStatusToAcceptance(args.specDeltaReport.status) : "review";
+  const planStatus = visualIssueStatus(planVisualIssue, qualityStatusToAcceptance(planCheck?.status));
+  const specStatus = visualIssueStatus(
+    specVisualIssue,
+    args.specDeltaReport ? specStatusToAcceptance(args.specDeltaReport.status) : "review"
+  );
   const keyElementStatus: RenderAcceptanceCheckStatus =
     critiqueWantsRegeneration || majorCritiqueIssues.length > 0
       ? "fail"
@@ -91,15 +129,22 @@ export function analyzeRenderAcceptance(args: {
         : windowCheck?.status === "regenerate"
           ? "fail"
           : "review";
-  const cameraStatus = cameraCheck ? specStatusToAcceptance(cameraCheck.status) : "review";
-  const clientReadyStatus: RenderAcceptanceCheckStatus =
+  const cameraStatus = visualIssueStatus(
+    cameraVisualIssue,
+    cameraCheck ? specStatusToAcceptance(cameraCheck.status) : "review"
+  );
+  const hasStrongClientReadySignals =
     args.qualityReport?.status === "strong" &&
     (!args.specDeltaReport || args.specDeltaReport.status !== "drift") &&
-    !critiqueWantsRegeneration
-      ? "pass"
-      : args.qualityReport?.status === "regenerate" || critiqueWantsRegeneration
-        ? "fail"
-        : "review";
+    !critiqueWantsRegeneration;
+  const clientReadyStatus: RenderAcceptanceCheckStatus =
+    polishVisualIssue?.severity === "major" || args.qualityReport?.status === "regenerate" || critiqueWantsRegeneration
+      ? "fail"
+      : polishVisualIssue
+        ? "review"
+        : hasStrongClientReadySignals
+          ? "pass"
+          : "review";
 
   const checks = [
     buildCheck({
@@ -111,13 +156,17 @@ export function analyzeRenderAcceptance(args: {
     buildCheck({
       id: "floor-plan-match",
       title: "Matches floor plan",
-      detail: planCheck?.detail ?? "Run render quality analysis against saved floor-plan cues before final acceptance.",
+      detail:
+        planVisualIssue?.detail ??
+        planCheck?.detail ??
+        "Run render quality analysis against saved floor-plan cues before final acceptance.",
       status: planStatus
     }),
     buildCheck({
       id: "design-spec-match",
       title: "Matches design spec",
       detail:
+        specVisualIssue?.detail ??
         args.specDeltaReport?.summary ??
         "No spec-delta report is available yet, so confirm this render against the current design spec.",
       status: specStatus
@@ -134,13 +183,14 @@ export function analyzeRenderAcceptance(args: {
     buildCheck({
       id: "camera-usable",
       title: "Camera angle usable",
-      detail: cameraCheck?.detail ?? "Confirm the camera angle is useful for client review.",
+      detail: cameraVisualIssue?.detail ?? cameraCheck?.detail ?? "Confirm the camera angle is useful for client review.",
       status: cameraStatus
     }),
     buildCheck({
       id: "client-ready",
       title: "Client-ready",
       detail:
+        polishVisualIssue?.detail ??
         curbAppealCheck?.detail ??
         (args.render.latestCritique
           ? args.render.latestCritique.summary

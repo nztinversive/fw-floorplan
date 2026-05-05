@@ -559,9 +559,11 @@ function buildCritiquePrompt(args: {
   const viewAngle = args.render.settings.viewAngle ?? DEFAULT_RENDER_VIEW_ANGLE;
 
   return [
-    "You are an architectural design director reviewing AI-generated exterior home renders for a modular home design workflow.",
-    "Evaluate the visible render against the saved render prompt and floor-plan summary. Be practical: focus on design quality, floor-plan fidelity, buildability cues, client-readiness, material coherence, window/door logic, roof realism, and whether another generation would likely improve the output.",
-    "Do not mention that you cannot perfectly verify dimensions from a single render. Ground every issue in what is visible or in a clear mismatch with the brief.",
+    "You are an architectural design director running image-based visual QA on AI-generated exterior home renders for a modular home design workflow.",
+    "Inspect the actual visible image against the saved render prompt, floor-plan summary, and render-ready design spec embedded in the prompt when present.",
+    "Prioritize these QA categories: floor plan fidelity, design spec match, camera angle, missing or invented key elements, material/style fidelity, buildability, and client-ready polish.",
+    "For every non-strength issue, use a short actionable category such as floor plan fidelity, design spec, camera angle, key elements, materials/style, buildability, or client polish.",
+    "Do not mention that you cannot perfectly verify dimensions from a single render. Ground every issue in what is visible or in a clear mismatch with the brief/spec.",
     "",
     `Project: ${args.project.name}`,
     args.project.address ? `Address/context: ${args.project.address}` : null,
@@ -570,7 +572,7 @@ function buildCritiquePrompt(args: {
     `Saved camera angle: ${RENDER_VIEW_ANGLE_PROMPTS[viewAngle]}`,
     `Saved generation prompt: ${args.render.prompt}`,
     "",
-    "Return only the structured critique schema. Keep suggestedFixes as one regeneration-ready instruction sentence or short paragraph."
+    "Return only the structured critique schema. Keep suggestedFixes as one regeneration-ready instruction sentence or short paragraph that fixes the visible QA failures."
   ]
     .filter(Boolean)
     .join("\n");
@@ -885,7 +887,7 @@ export const critiqueRender = action({
             {
               type: "input_text",
               text:
-                "You critique residential exterior renders for high-quality home design output. Return precise structured JSON only."
+                "You run image-based visual QA for residential exterior renders. Inspect the image against the plan/spec/brief and return precise structured JSON only."
             }
           ]
         },
