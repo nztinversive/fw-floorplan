@@ -13,6 +13,7 @@ import ConfirmDialog from "@/components/ConfirmDialog"
 import DesignDNAPanel from "@/components/DesignDNAPanel"
 import DesignOutputQAPanel from "@/components/DesignOutputQAPanel"
 import Lightbox from "@/components/Lightbox"
+import RenderDesignSpecPanel from "@/components/RenderDesignSpecPanel"
 import RenderDecisionPanel from "@/components/RenderDecisionPanel"
 import RenderCard from "@/components/RenderCard"
 import RenderProgress from "@/components/RenderProgress"
@@ -54,6 +55,11 @@ import {
 import { analyzeDesignOutputQA } from "@/lib/design-output-qa"
 import { analyzeRenderQuality } from "@/lib/render-quality"
 import { analyzeRenderDecision } from "@/lib/render-decision"
+import {
+  applyRenderDesignSpecToBrief,
+  buildRenderDesignSpecReport,
+  type RenderDesignSpecAction
+} from "@/lib/render-design-spec"
 import { buildWinnerVariantRevision, type RenderWinnerVariantKey } from "@/lib/render-variants"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
@@ -187,8 +193,24 @@ export default function ProjectRendersPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
-  const [previewRenderBrief] = useDebounce(renderBrief, 400)
   const [previewSettings] = useDebounce(settings, 250)
+  const renderDesignSpec = useMemo(
+    () =>
+      project
+        ? buildRenderDesignSpecReport({
+          floorPlans: project.floorPlans,
+          renderBrief,
+          settings,
+          styleLabel: getStyleLabel(selectedStyle)
+        })
+        : null,
+    [project, renderBrief, selectedStyle, settings]
+  )
+  const generationRenderBrief = useMemo(
+    () => (renderDesignSpec ? applyRenderDesignSpecToBrief(renderBrief, renderDesignSpec) : renderBrief),
+    [renderBrief, renderDesignSpec]
+  )
+  const [previewRenderBrief] = useDebounce(generationRenderBrief, 400)
   const promptPreview = useQuery(
     api.renders.previewPrompt,
     projectId && project && project.floorPlans.length > 0
@@ -536,6 +558,26 @@ export default function ProjectRendersPage() {
     toast("Suggestion added to the render brief", "info")
   }
 
+  function handleApplyDesignSpecAction(action: RenderDesignSpecAction) {
+    setRenderBrief((current) => {
+      const currentValue = current[action.target]
+      const existingLines = currentValue
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+
+      if (existingLines.includes(action.text)) {
+        return current
+      }
+
+      return {
+        ...current,
+        [action.target]: [...existingLines, action.text].join("\n")
+      }
+    })
+    toast("Design spec guidance added to the brief", "info")
+  }
+
   async function handleCopyPrompt(prompt: string) {
     try {
       await navigator.clipboard.writeText(prompt)
@@ -635,7 +677,28 @@ export default function ProjectRendersPage() {
   ) {
     if (!projectId || isGenerationBusy) return false
 
-    const renderBriefForGeneration = options.renderBriefOverride ?? renderBrief
+    const baseRenderBriefForGeneration = options.renderBriefOverride ?? renderBrief
+    const generationSettings = {
+      ...nextSettings,
+      style: nextStyle
+    }
+    const generationDesignSpec = project
+      ? buildRenderDesignSpecReport({
+        floorPlans: project.floorPlans,
+        renderBrief: baseRenderBriefForGeneration,
+        settings: generationSettings,
+        styleLabel: getStyleLabel(nextStyle)
+      })
+      : null
+
+    if (generationDesignSpec?.status === "blocked") {
+      toast("Resolve the blocked design spec items before generating", "warning")
+      return false
+    }
+
+    const renderBriefForGeneration = generationDesignSpec
+      ? applyRenderDesignSpecToBrief(baseRenderBriefForGeneration, generationDesignSpec)
+      : baseRenderBriefForGeneration
     setErrorMessage(null)
     setIsGenerating(true)
 
@@ -757,6 +820,11 @@ export default function ProjectRendersPage() {
       return
     }
 
+    if (renderDesignSpec?.status === "blocked") {
+      toast("Resolve the blocked design spec items before batch generating", "warning")
+      return
+    }
+
     const combinations = batchStyles.flatMap((styleId) =>
       batchAngles.map((viewAngle) => ({
         styleId,
@@ -786,17 +854,30 @@ export default function ProjectRendersPage() {
     }
 
     for (const [index, combination] of combinations.entries()) {
+      const batchSettings = {
+        ...settings,
+        style: combination.styleId,
+        viewAngle: combination.viewAngle
+      }
+      const batchDesignSpec = project
+        ? buildRenderDesignSpecReport({
+          floorPlans: project.floorPlans,
+          renderBrief,
+          settings: batchSettings,
+          styleLabel: getStyleLabel(combination.styleId)
+        })
+        : null
+      const batchRenderBrief = batchDesignSpec
+        ? applyRenderDesignSpecToBrief(renderBrief, batchDesignSpec)
+        : renderBrief
+
       try {
         await generateRender({
           projectId,
           style: combination.styleId,
           viewAngle: combination.viewAngle,
-          settings: {
-            ...settings,
-            style: combination.styleId,
-            viewAngle: combination.viewAngle
-          },
-          renderBrief
+          settings: batchSettings,
+          renderBrief: batchRenderBrief
         })
       } catch (error) {
         failed += 1
@@ -1416,7 +1497,7 @@ export default function ProjectRendersPage() {
           </div>
 
           <div className="field-hint">
-            Generate and batch generate automatically use the current brief. Unsaved brief edits are saved before generation starts.
+            Generate and batch generate automatically use the current brief plus the render-ready design spec. Unsaved brief edits are saved before generation starts.
           </div>
         </section>
 
@@ -1435,6 +1516,14 @@ export default function ProjectRendersPage() {
           disabled={isGenerationBusy || isSavingBrief}
           onApplyDirections={handleApplyRoomDesignDirections}
         />
+
+        {renderDesignSpec ? (
+          <RenderDesignSpecPanel
+            report={renderDesignSpec}
+            disabled={isGenerationBusy || isSavingBrief}
+            onApplyAction={handleApplyDesignSpecAction}
+          />
+        ) : null}
 
         <section className="panel prompt-preview-panel">
           <div className="panel-header">
