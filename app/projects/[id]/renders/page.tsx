@@ -4,7 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useAction, useMutation, useQuery } from "convex/react"
-import { AlertTriangle, Copy, Download, ImagePlus, Palette, Sparkles, Trash2, X } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Circle, Copy, Download, ImagePlus, Palette, Sparkles, Trash2, Trophy, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { useDebounce } from "use-debounce"
 
@@ -23,6 +23,7 @@ import StyleSelector from "@/components/StyleSelector"
 import { useToast } from "@/components/Toast"
 import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
+import { formatRelativeTime } from "@/lib/file-utils"
 import {
   DEFAULT_RENDER_VIEW_ANGLE,
   RENDER_VIEW_ANGLE_LABELS,
@@ -56,7 +57,7 @@ import { analyzeRenderDecision } from "@/lib/render-decision"
 import { buildWinnerVariantRevision, type RenderWinnerVariantKey } from "@/lib/render-variants"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
-type PendingRenderAction = "favorite" | "delete" | "regenerate" | "critique" | "qa-regenerate" | "locked-regenerate" | "dna-regenerate" | "variant-regenerate"
+type PendingRenderAction = "favorite" | "final" | "delete" | "regenerate" | "critique" | "qa-regenerate" | "locked-regenerate" | "dna-regenerate" | "variant-regenerate"
 type RenderReviewDraft = {
   issueKeys: string[]
   notes: string
@@ -155,6 +156,7 @@ export default function ProjectRendersPage() {
   const generateRender = useAction(api.renders.generateRender)
   const critiqueRender = useAction(api.renders.critiqueRender)
   const toggleFavorite = useMutation(api.renders.toggleFavorite)
+  const setFinalRender = useMutation(api.renders.setFinal)
   const removeRender = useMutation(api.renders.remove)
   const saveRenderReview = useMutation(api.renders.saveReview)
   const savePreset = useMutation(api.renderPresets.savePreset)
@@ -217,6 +219,7 @@ export default function ProjectRendersPage() {
         imageUrl: render.imageUrl,
         prompt: render.prompt,
         isFavorite: render.isFavorite,
+        isFinal: render.isFinal ?? false,
         createdAt: render.createdAt,
         parentRenderId: render.parentRenderId,
         sourceReviewId: render.sourceReviewId,
@@ -340,9 +343,15 @@ export default function ProjectRendersPage() {
     }, {})
   }, [childrenByRenderId, project, renders])
 
+  const finalRender = useMemo(
+    () => renders.find((render) => render.isFinal && render.imageUrl) ?? null,
+    [renders]
+  )
   const exportRenders = useMemo(() => {
-    const favoriteRenders = renders.filter((render) => render.isFavorite && render.imageUrl)
-    return favoriteRenders.length > 0 ? favoriteRenders : renders.filter((render) => render.imageUrl)
+    const finalRenders = renders.filter((render) => render.isFinal && render.imageUrl)
+    const favoriteRenders = renders.filter((render) => render.isFavorite && !render.isFinal && render.imageUrl)
+    const curatedRenders = [...finalRenders, ...favoriteRenders]
+    return curatedRenders.length > 0 ? curatedRenders : renders.filter((render) => render.imageUrl)
   }, [renders])
   const designOutputQA = useMemo(
     () =>
@@ -358,6 +367,41 @@ export default function ProjectRendersPage() {
     () => buildProjectDesignDNAReport({ renders }),
     [renders]
   )
+  const renderReadinessItems = useMemo(() => {
+    const hasPlanRooms = (project?.floorPlans ?? []).some((floorPlan) => floorPlan.data.rooms.length > 0)
+    const hasWinner = Boolean(finalRender || renders.some((render) => render.isFavorite))
+    const hasVariants = renders.some((render) => render.parentRenderId)
+    const hasFinal = Boolean(finalRender)
+    const packageReady = Boolean(hasPlanRooms && hasFinal && finalRender?.imageUrl)
+
+    return [
+      {
+        label: "Plan checked",
+        detail: hasPlanRooms ? "Saved floor plan data is available." : "Save room-labeled floor plan data first.",
+        done: hasPlanRooms
+      },
+      {
+        label: "Winner picked",
+        detail: hasWinner ? "A render has been curated as the leading direction." : "Favorite or finalize a strong render.",
+        done: hasWinner
+      },
+      {
+        label: "Variants reviewed",
+        detail: hasVariants ? "Generated variants are available for comparison." : "Generate winner variants before final selection.",
+        done: hasVariants
+      },
+      {
+        label: "Final selected",
+        detail: hasFinal ? "A final render is selected for package export." : "Mark one render as final.",
+        done: hasFinal
+      },
+      {
+        label: "Package ready",
+        detail: packageReady ? "Export/share will lead with the final render." : "Finish the checklist before client delivery.",
+        done: packageReady
+      }
+    ]
+  }, [finalRender, project?.floorPlans, renders])
 
   const lightboxImages = useMemo(
     () =>
@@ -791,6 +835,21 @@ export default function ProjectRendersPage() {
     } catch (error) {
       console.error("Unable to toggle favorite.", error)
       toast("Unable to update favorites", "error")
+    } finally {
+      setPendingRenderAction(null)
+    }
+  }
+
+  async function handleSetFinalRender(renderId: string, isFinal: boolean) {
+    setErrorMessage(null)
+    setPendingRenderAction({ renderId, action: "final" })
+
+    try {
+      await setFinalRender({ renderId: renderId as Id<"renders">, isFinal })
+      toast(isFinal ? "Final render selected" : "Final render cleared", "success")
+    } catch (error) {
+      console.error("Unable to update final render.", error)
+      toast("Unable to update the final render", "error")
     } finally {
       setPendingRenderAction(null)
     }
@@ -1650,6 +1709,63 @@ export default function ProjectRendersPage() {
           isRegenerating={pendingRenderAction?.action === "qa-regenerate"}
         />
 
+        <section className="panel render-finalization-panel">
+          <div className="panel-header">
+            <div>
+              <div className="section-title">Final design package</div>
+              <div className="muted">
+                {finalRender
+                  ? "Export and share will lead with the selected final render."
+                  : "Pick one final render before sending the client package."}
+              </div>
+            </div>
+            <span className={`badge render-finalization-status${finalRender ? " is-ready" : ""}`}>
+              <Trophy size={14} />
+              {finalRender ? "Final selected" : "Needs final"}
+            </span>
+          </div>
+
+          <div className="render-finalization-grid">
+            <div className="render-finalization-current">
+              <div className="field-label">Current final</div>
+              {finalRender ? (
+                <>
+                  <div className="render-finalization-title">
+                    {getStyleLabel(finalRender.style)} | {RENDER_VIEW_ANGLE_LABELS[finalRender.settings.viewAngle]}
+                  </div>
+                  <div className="render-lineage-meta">
+                    Generated {formatRelativeTime(finalRender.createdAt)} • {renderQualityById[finalRender.id]?.score ?? "-"}
+                    /100 QA
+                  </div>
+                  <button
+                    type="button"
+                    className="render-lineage-action"
+                    onClick={() => handleFocusQARender(finalRender.id)}
+                  >
+                    Review final render
+                  </button>
+                </>
+              ) : (
+                <div className="render-lineage-meta">
+                  Use the trophy button on the strongest render once variants have been reviewed.
+                </div>
+              )}
+            </div>
+
+            <div className="render-finalization-checklist">
+              {renderReadinessItems.map((item) => (
+                <div key={item.label} className={`render-finalization-step${item.done ? " is-done" : ""}`}>
+                  {item.done ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                  <div>
+                    <strong>{item.label}</strong>
+                    <span>{item.detail}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section className="panel">
           <div className="panel-header">
             <div>
@@ -1755,6 +1871,9 @@ export default function ProjectRendersPage() {
                   isFavoriting={
                     pendingRenderAction?.renderId === render.id && pendingRenderAction.action === "favorite"
                   }
+                  isFinalizing={
+                    pendingRenderAction?.renderId === render.id && pendingRenderAction.action === "final"
+                  }
                   isDeleting={
                     pendingRenderAction?.renderId === render.id && pendingRenderAction.action === "delete"
                   }
@@ -1770,6 +1889,7 @@ export default function ProjectRendersPage() {
                     )
                   }
                   onToggleFavorite={handleToggleFavorite}
+                  onSetFinal={handleSetFinalRender}
                   onDelete={handleDeleteRender}
                   onRegenerate={handleRegenerate}
                   onCritique={handleCritiqueRender}

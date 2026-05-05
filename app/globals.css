@@ -383,6 +383,11 @@ button:disabled,
   color: #9a3412;
 }
 
+.render-final-badge {
+  background: rgba(27, 42, 74, 0.1);
+  color: var(--fw-navy);
+}
+
 .form-grid {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
@@ -2557,6 +2562,72 @@ button:disabled,
 .design-output-qa-fix-button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.render-finalization-panel {
+  display: grid;
+  gap: 1rem;
+  border-color: rgba(27, 42, 74, 0.12);
+}
+
+.render-finalization-status {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.render-finalization-status.is-ready {
+  background: rgba(34, 197, 94, 0.1);
+  color: #166534;
+}
+
+.render-finalization-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+  gap: 0.85rem;
+}
+
+.render-finalization-current,
+.render-finalization-checklist {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.65rem;
+  background: rgba(248, 250, 252, 0.76);
+}
+
+.render-finalization-title {
+  color: var(--fw-navy);
+  font-size: 1rem;
+  font-weight: 850;
+}
+
+.render-finalization-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.55rem;
+  align-items: flex-start;
+  color: var(--fw-slate);
+}
+
+.render-finalization-step.is-done {
+  color: #166534;
+}
+
+.render-finalization-step strong {
+  display: block;
+  color: var(--fw-navy);
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.render-finalization-step span {
+  display: block;
+  margin-top: 0.12rem;
+  color: var(--fw-slate);
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .render-ai-critique-panel {
@@ -5953,6 +6024,7 @@ button.render-variant-row:disabled {
   .comparison-grid,
   .render-decision-score-grid,
   .render-decision-variant-grid,
+  .render-finalization-grid,
   .floor-plan-comparison-grid {
     grid-template-columns: 1fr;
   }

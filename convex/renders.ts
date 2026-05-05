@@ -976,6 +976,7 @@ export const list = query({
           imageUrl: await ctx.storage.getUrl(render.imageUrl),
           prompt: render.prompt,
           isFavorite: render.isFavorite,
+          isFinal: render.isFinal ?? false,
           createdAt: render.createdAt,
           parentRenderId: render.parentRenderId,
           sourceReviewId: render.sourceReviewId,
@@ -1049,6 +1050,56 @@ export const toggleFavorite = mutation({
     });
 
     return nextValue;
+  }
+});
+
+export const setFinal = mutation({
+  args: {
+    renderId: v.id("renders"),
+    isFinal: v.boolean()
+  },
+  handler: async (ctx, args) => {
+    const render = await ctx.db.get(args.renderId);
+    if (!render) {
+      throw new Error("Render not found");
+    }
+    await requireProjectEditor(ctx, render.projectId);
+
+    if (!args.isFinal) {
+      await ctx.db.patch(args.renderId, {
+        isFinal: false
+      });
+      await ctx.db.patch(render.projectId, {
+        updatedAt: Date.now()
+      });
+      return false;
+    }
+
+    const currentFinalRenders = await ctx.db
+      .query("renders")
+      .withIndex("by_projectId_and_isFinal", (query) =>
+        query.eq("projectId", render.projectId).eq("isFinal", true)
+      )
+      .take(20);
+
+    for (const projectRender of currentFinalRenders) {
+      if (projectRender._id !== args.renderId) {
+        await ctx.db.patch(projectRender._id, {
+          isFinal: false
+        });
+      }
+    }
+
+    await ctx.db.patch(args.renderId, {
+      isFinal: true,
+      isFavorite: true
+    });
+
+    await ctx.db.patch(render.projectId, {
+      updatedAt: Date.now()
+    });
+
+    return true;
   }
 });
 

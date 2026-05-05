@@ -1,6 +1,6 @@
 "use client";
 
-import { Brain, Copy, Download, Expand, FileText, Lock, RefreshCw, Star, Trash2 } from "lucide-react";
+import { Brain, Copy, Download, Expand, FileText, Lock, RefreshCw, Star, Trash2, Trophy } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import ProgressiveImage from "@/components/ProgressiveImage";
@@ -22,9 +22,11 @@ import type { StoredRender } from "@/lib/types";
 type RenderCardProps = {
   render: StoredRender;
   isFavoriting: boolean;
+  isFinalizing?: boolean;
   isDeleting: boolean;
   isRegenerating: boolean;
   onToggleFavorite: (renderId: string) => Promise<void> | void;
+  onSetFinal?: (renderId: string, isFinal: boolean) => Promise<void> | void;
   onDelete: (renderId: string) => Promise<void> | void;
   onRegenerate: (render: StoredRender) => Promise<void> | void;
   onCritique?: (render: StoredRender) => Promise<void> | void;
@@ -112,9 +114,11 @@ function getQualityComparison(parentReport?: RenderQualityReport, childReport?: 
 export default function RenderCard({
   render,
   isFavoriting,
+  isFinalizing = false,
   isDeleting,
   isRegenerating,
   onToggleFavorite,
+  onSetFinal,
   onDelete,
   onRegenerate,
   onCritique,
@@ -265,9 +269,26 @@ export default function RenderCard({
         <div className="render-toolbar-badges">
           <span className="badge">{getStyleLabel(render.style)}</span>
           <span className="badge">{RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle]}</span>
+          {render.isFinal ? <span className="badge render-final-badge">Final</span> : null}
           {comparisonMode && isSelectedForComparison ? <span className="badge">Selected</span> : null}
         </div>
         <div className="render-actions">
+          {onSetFinal ? (
+            <button
+              type="button"
+              className="icon-button"
+              onClick={(event) => {
+                event.stopPropagation();
+                void onSetFinal(render.id, !render.isFinal);
+              }}
+              disabled={comparisonMode || isFinalizing || isCardBusy}
+              aria-label={render.isFinal ? "Clear final render" : "Mark final render"}
+              title={render.isFinal ? "Clear final" : "Mark final"}
+              style={render.isFinal ? { color: "#1b2a4a" } : undefined}
+            >
+              <Trophy size={18} fill={render.isFinal ? "currentColor" : "none"} />
+            </button>
+          ) : null}
           <button
             type="button"
             className="icon-button"
@@ -476,7 +497,7 @@ export default function RenderCard({
                   Promote child to favorite
                 </button>
               ) : (
-                <span className="badge render-qa-chip is-improved">Favorited</span>
+                <span className="badge render-qa-chip is-improved">{render.isFinal ? "Final" : "Favorited"}</span>
               )}
             </div>
           </div>

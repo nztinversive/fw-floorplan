@@ -153,6 +153,7 @@ export const getPublicShare = queryGeneric({
           imageUrl: await ctx.storage.getUrl(render.imageUrl),
           prompt: render.prompt,
           isFavorite: render.isFavorite,
+          isFinal: render.isFinal ?? false,
           createdAt: render.createdAt
         }))
       ),

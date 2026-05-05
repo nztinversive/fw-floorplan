@@ -73,6 +73,7 @@ type ShareRenderRecord = {
   imageUrl?: string | null;
   prompt: string;
   isFavorite: boolean;
+  isFinal?: boolean;
   createdAt: number;
   parentRenderId?: string;
   sourceReviewId?: string;
@@ -123,6 +124,7 @@ function normalizeShareRender(render: ShareRenderRecord): StoredRender {
     imageUrl: render.imageUrl,
     prompt: render.prompt,
     isFavorite: render.isFavorite,
+    isFinal: render.isFinal ?? false,
     createdAt: render.createdAt,
     parentRenderId: render.parentRenderId,
     sourceReviewId: render.sourceReviewId,
@@ -229,6 +231,11 @@ export default function ProjectSharePage() {
     [publicShare?.renders, rendersQuery, shareToken]
   )
   const visibleRenders = useMemo(() => {
+    const finals = renders.filter((render) => render.isFinal)
+    if (finals.length > 0) {
+      const favs = renders.filter((render) => render.isFavorite && !render.isFinal)
+      return [...finals, ...favs]
+    }
     const favs = renders.filter((render) => render.isFavorite)
     return favs.length > 0 ? favs : renders
   }, [renders])
@@ -278,14 +285,16 @@ export default function ProjectSharePage() {
           src: r.imageUrl!,
           alt: `${getStyleLabel(r.style)} render`,
           caption: `${getStyleLabel(r.style)} — ${RENDER_VIEW_ANGLE_LABELS[r.settings.viewAngle as RenderViewAngle]}`,
-          badge: r.isFavorite ? "★ Favorite" : undefined
+          badge: r.isFinal ? "Final" : r.isFavorite ? "★ Favorite" : undefined
         })),
     [visibleRenders]
   )
 
   const exportRenders = useMemo(() => {
-    const favs = renders.filter((r) => r.isFavorite && r.imageUrl)
-    return favs.length > 0 ? favs : renders.filter((r) => r.imageUrl)
+    const finals = renders.filter((r) => r.isFinal && r.imageUrl)
+    const favs = renders.filter((r) => r.isFavorite && !r.isFinal && r.imageUrl)
+    const curatedRenders = [...finals, ...favs]
+    return curatedRenders.length > 0 ? curatedRenders : renders.filter((r) => r.imageUrl)
   }, [renders])
   const projectMembers = useMemo(
     () => (membersQuery ?? []) as ProjectMember[],
@@ -532,7 +541,9 @@ export default function ProjectSharePage() {
             <div>
               <div className="section-title">Render gallery</div>
               <div className="muted">
-                {renders.some((r) => r.isFavorite)
+                {renders.some((r) => r.isFinal)
+                  ? "Showing final render first."
+                  : renders.some((r) => r.isFavorite)
                   ? "Showing favorited renders."
                   : "No favorites selected, so all saved renders are shown."}
               </div>
@@ -572,6 +583,7 @@ export default function ProjectSharePage() {
                     <div className="render-toolbar-badges">
                       <span className="badge">{getStyleLabel(render.style)}</span>
                       <span className="badge">{RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle as RenderViewAngle]}</span>
+                      {render.isFinal ? <span className="badge render-final-badge">Final</span> : null}
                       {render.isFavorite ? <span className="badge">Favorite</span> : null}
                     </div>
                     <div className="render-meta">

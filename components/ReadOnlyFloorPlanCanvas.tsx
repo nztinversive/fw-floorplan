@@ -55,6 +55,7 @@ export default function ReadOnlyFloorPlanCanvas({ data, comments = EMPTY_COMMENT
   const sizeRef = useRef<CanvasSize>({ width: 960, height: 640 });
   const zoomRef = useRef(1);
   const panRef = useRef<Point>({ x: 0, y: 0 });
+  const resizeFrameRef = useRef<number | null>(null);
   const contentBounds = useMemo(() => getContentBounds(data, comments), [comments, data]);
   const contentMinX = contentBounds?.minX ?? null;
   const contentMaxX = contentBounds?.maxX ?? null;
@@ -67,11 +68,10 @@ export default function ReadOnlyFloorPlanCanvas({ data, comments = EMPTY_COMMENT
       return;
     }
 
-    const updateSize = () => {
-      const bounds = element.getBoundingClientRect();
+    const applySize = () => {
       const nextSize = {
-        width: Math.max(320, Math.floor(bounds.width)),
-        height: Math.max(360, Math.floor(bounds.height))
+        width: Math.max(320, element.clientWidth),
+        height: Math.max(360, element.clientHeight)
       };
 
       if (sizeRef.current.width === nextSize.width && sizeRef.current.height === nextSize.height) {
@@ -82,11 +82,28 @@ export default function ReadOnlyFloorPlanCanvas({ data, comments = EMPTY_COMMENT
       setSize(nextSize);
     };
 
-    updateSize();
+    const updateSize = () => {
+      if (resizeFrameRef.current !== null) {
+        return;
+      }
+
+      resizeFrameRef.current = window.requestAnimationFrame(() => {
+        resizeFrameRef.current = null;
+        applySize();
+      });
+    };
+
+    applySize();
 
     const observer = new ResizeObserver(updateSize);
     observer.observe(element);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (resizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(resizeFrameRef.current);
+        resizeFrameRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {

@@ -177,6 +177,7 @@ export type StoredRender = {
   imageUrl?: string | null;
   prompt: string;
   isFavorite: boolean;
+  isFinal: boolean;
   createdAt: number;
   parentRenderId?: string;
   sourceReviewId?: string;
