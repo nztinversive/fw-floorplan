@@ -1,12 +1,19 @@
 "use client";
 
-import { Brain, Copy, Download, Expand, FileText, RefreshCw, Star, Trash2 } from "lucide-react";
+import { Brain, Copy, Download, Expand, FileText, Lock, RefreshCw, Star, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import ProgressiveImage from "@/components/ProgressiveImage";
 import { RENDER_VIEW_ANGLE_LABELS } from "@/lib/render-angles";
 import type { RenderQualityReport } from "@/lib/render-quality";
 import { RENDER_REVIEW_ISSUES, getRenderReviewIssueLabel } from "@/lib/render-review";
+import {
+  DEFAULT_RENDER_STYLE_LOCK_KEYS,
+  RENDER_STYLE_LOCK_LABELS,
+  extractRenderStyleLockSummary,
+  getRenderStyleLockTraits,
+  type RenderStyleLockKey
+} from "@/lib/render-style-locks";
 import { STYLE_PRESET_MAP } from "@/lib/style-presets";
 import { formatRelativeTime } from "@/lib/file-utils";
 import type { StoredRender } from "@/lib/types";
@@ -27,6 +34,7 @@ type RenderCardProps = {
   onSaveReview?: (render: StoredRender, review: { issueKeys: string[]; notes: string }) => Promise<unknown> | void;
   onRegenerateWithReview?: (render: StoredRender, review: { issueKeys: string[]; notes: string }) => Promise<void> | void;
   onRegenerateWithCritique?: (render: StoredRender) => Promise<void> | void;
+  onRegenerateWithStyleLocks?: (render: StoredRender, lockKeys: RenderStyleLockKey[]) => Promise<void> | void;
   isSavingReview?: boolean;
   parentRender?: StoredRender;
   childRenders?: StoredRender[];
@@ -115,6 +123,7 @@ export default function RenderCard({
   onSaveReview,
   onRegenerateWithReview,
   onRegenerateWithCritique,
+  onRegenerateWithStyleLocks,
   isSavingReview = false,
   parentRender,
   childRenders = [],
@@ -128,13 +137,22 @@ export default function RenderCard({
 }: RenderCardProps) {
   const [selectedReviewIssues, setSelectedReviewIssues] = useState<string[]>([]);
   const [reviewNotes, setReviewNotes] = useState("");
+  const [selectedStyleLockKeys, setSelectedStyleLockKeys] = useState<RenderStyleLockKey[]>(
+    DEFAULT_RENDER_STYLE_LOCK_KEYS
+  );
   const hasReviewDraft = selectedReviewIssues.length > 0 || reviewNotes.trim().length > 0;
+  const hasStyleLocks = selectedStyleLockKeys.length > 0;
   const isCardBusy = isDeleting || isRegenerating || isCritiquing;
   const isReviewBusy = comparisonMode || isCardBusy || isSavingReview;
   const reviewHistory = render.reviewHistory ?? [];
   const sourceReview = render.sourceReview ?? null;
   const sourceCritique = render.sourceCritique ?? null;
   const latestCritique = render.latestCritique ?? null;
+  const savedStyleLockSummary = useMemo(() => extractRenderStyleLockSummary(render.prompt), [render.prompt]);
+  const styleLockTraits = useMemo(
+    () => getRenderStyleLockTraits(render, selectedStyleLockKeys),
+    [render, selectedStyleLockKeys]
+  );
   const qualityComparison = useMemo(
     () => getQualityComparison(parentQualityReport, qualityReport),
     [parentQualityReport, qualityReport]
@@ -189,6 +207,20 @@ export default function RenderCard({
         ? current.filter((key) => key !== issueKey)
         : [...current, issueKey]
     );
+  }
+
+  function toggleStyleLock(key: RenderStyleLockKey) {
+    setSelectedStyleLockKeys((current) =>
+      current.includes(key)
+        ? current.filter((entry) => entry !== key)
+        : [...current, key]
+    );
+  }
+
+  async function handleRegenerateWithStyleLocks() {
+    if (!onRegenerateWithStyleLocks || !hasStyleLocks) return;
+
+    await onRegenerateWithStyleLocks(render, selectedStyleLockKeys);
   }
 
   async function handleSaveReview() {
@@ -440,6 +472,66 @@ export default function RenderCard({
                 <span className="badge render-qa-chip is-improved">Favorited</span>
               )}
             </div>
+          </div>
+        ) : null}
+
+        {savedStyleLockSummary ? (
+          <div className="render-style-lock-summary" onClick={(event) => event.stopPropagation()}>
+            <div className="field-label">Generated with locked traits</div>
+            <div className="render-style-lock-saved">{savedStyleLockSummary}</div>
+          </div>
+        ) : null}
+
+        {onRegenerateWithStyleLocks ? (
+          <div className="render-style-lock-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="render-style-lock-header">
+              <div>
+                <div className="field-label">Style locks</div>
+                <div className="render-style-lock-hint">
+                  Keep the strongest traits from this render while changing only the weak parts.
+                </div>
+              </div>
+              <Lock size={16} />
+            </div>
+
+            <div className="render-style-lock-chip-grid">
+              {(Object.keys(RENDER_STYLE_LOCK_LABELS) as RenderStyleLockKey[]).map((key) => {
+                const trait = getRenderStyleLockTraits(render, [key])[0];
+                const isSelected = selectedStyleLockKeys.includes(key);
+
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`render-style-lock-chip${isSelected ? " is-selected" : ""}`}
+                    onClick={() => toggleStyleLock(key)}
+                    disabled={comparisonMode || isCardBusy}
+                    aria-pressed={isSelected}
+                  >
+                    <span>{trait.label}</span>
+                    <strong>{trait.value}</strong>
+                  </button>
+                );
+              })}
+            </div>
+
+            {styleLockTraits.length > 0 ? (
+              <div className="render-style-lock-preview">
+                {styleLockTraits.map((trait) => `${trait.label}: ${trait.value}`).join("; ")}
+              </div>
+            ) : (
+              <div className="render-style-lock-preview">Select at least one trait to lock for the next version.</div>
+            )}
+
+            <button
+              type="button"
+              className="render-style-lock-action"
+              onClick={() => void handleRegenerateWithStyleLocks()}
+              disabled={comparisonMode || isCardBusy || !hasStyleLocks}
+            >
+              <RefreshCw size={15} />
+              {isRegenerating ? "Generating..." : "Regenerate with locks"}
+            </button>
           </div>
         ) : null}
 

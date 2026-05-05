@@ -35,6 +35,7 @@ import {
   type StylePresetDefaults,
   type StylePresetId
 } from "@/lib/style-presets"
+import { buildRenderStyleLockRevision, type RenderStyleLockKey } from "@/lib/render-style-locks"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
 import { sortFloors } from "@/lib/floor-utils"
 import {
@@ -46,7 +47,7 @@ import { analyzeDesignOutputQA } from "@/lib/design-output-qa"
 import { analyzeRenderQuality } from "@/lib/render-quality"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
-type PendingRenderAction = "favorite" | "delete" | "regenerate" | "critique" | "qa-regenerate"
+type PendingRenderAction = "favorite" | "delete" | "regenerate" | "critique" | "qa-regenerate" | "locked-regenerate"
 type RenderReviewDraft = {
   issueKeys: string[]
   notes: string
@@ -870,6 +871,31 @@ export default function ProjectRendersPage() {
     }
   }
 
+  async function handleRegenerateWithStyleLocks(render: StoredRender, lockKeys: RenderStyleLockKey[]) {
+    if (lockKeys.length === 0) {
+      toast("Select at least one trait to lock", "warning")
+      return
+    }
+
+    const revisionLine = buildRenderStyleLockRevision(render, lockKeys)
+    const renderBriefOverride = {
+      ...renderBrief,
+      revisionNotes: [renderBrief.revisionNotes.trim(), revisionLine].filter(Boolean).join("\n")
+    }
+
+    setPendingRenderAction({ renderId: render.id, action: "locked-regenerate" })
+
+    try {
+      await triggerGeneration(render.style, render.settings, {
+        renderBriefOverride,
+        skipBriefSave: true,
+        parentRenderId: render.id
+      })
+    } finally {
+      setPendingRenderAction(null)
+    }
+  }
+
   function handleCompareLineage(parentRenderId: string, childRenderId: string) {
     setComparisonMode(true)
     setSelectedRenderIds([parentRenderId, childRenderId])
@@ -1555,7 +1581,11 @@ export default function ProjectRendersPage() {
                   isRegenerating={
                     isGenerating &&
                     pendingRenderAction?.renderId === render.id &&
-                    (pendingRenderAction.action === "regenerate" || pendingRenderAction.action === "qa-regenerate")
+                    (
+                      pendingRenderAction.action === "regenerate" ||
+                      pendingRenderAction.action === "qa-regenerate" ||
+                      pendingRenderAction.action === "locked-regenerate"
+                    )
                   }
                   onToggleFavorite={handleToggleFavorite}
                   onDelete={handleDeleteRender}
@@ -1571,6 +1601,7 @@ export default function ProjectRendersPage() {
                   onSaveReview={handleSaveRenderReview}
                   onRegenerateWithReview={handleRegenerateWithReview}
                   onRegenerateWithCritique={handleRegenerateWithCritique}
+                  onRegenerateWithStyleLocks={handleRegenerateWithStyleLocks}
                   isSavingReview={pendingReviewRenderId === render.id}
                   parentRender={render.parentRenderId ? renders.find((candidate) => candidate.id === render.parentRenderId) : undefined}
                   childRenders={childrenByRenderId[render.id] ?? []}
