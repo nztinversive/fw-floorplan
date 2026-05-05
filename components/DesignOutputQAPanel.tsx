@@ -11,6 +11,7 @@ type DesignOutputQAPanelProps = {
   onFocusRender?: (renderId: string) => void;
   onApplyFixes?: (fixes: string) => void;
   onRegenerateFromQA?: (renderId: string, fixes: string) => void;
+  regenerateLabel?: string;
   isRegenerating?: boolean;
   compact?: boolean;
 };
@@ -38,6 +39,7 @@ export default function DesignOutputQAPanel({
   onFocusRender,
   onApplyFixes,
   onRegenerateFromQA,
+  regenerateLabel = "Regenerate from QA",
   isRegenerating = false,
   compact = false
 }: DesignOutputQAPanelProps) {
@@ -120,7 +122,7 @@ export default function DesignOutputQAPanel({
               disabled={isRegenerating}
             >
               <RefreshCw size={15} />
-              {isRegenerating ? "Regenerating..." : "Regenerate from QA"}
+              {isRegenerating ? "Regenerating..." : regenerateLabel}
             </button>
           ) : null}
 

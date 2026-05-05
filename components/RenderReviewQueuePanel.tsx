@@ -11,7 +11,7 @@ type RenderReviewQueuePanelProps = {
   isBusy?: boolean;
   onFocusRender?: (renderId: string) => void;
   onRunVisualQA?: (renderId: string) => void;
-  onFixRender?: (renderId: string, fixes: string) => void;
+  onFixRender?: (renderId: string, fixes: string, item: RenderReviewQueueItem) => void;
 };
 
 const GROUPS: Array<{
@@ -67,7 +67,7 @@ function RenderQueueItemCard({
   isBusy: boolean;
   onFocusRender?: (renderId: string) => void;
   onRunVisualQA?: (renderId: string) => void;
-  onFixRender?: (renderId: string, fixes: string) => void;
+  onFixRender?: (renderId: string, fixes: string, item: RenderReviewQueueItem) => void;
 }) {
   const render = item.render;
 
@@ -119,11 +119,11 @@ function RenderQueueItemCard({
           <button
             type="button"
             className="render-review-queue-action is-primary"
-            onClick={() => onFixRender(render.id, item.suggestedFixes)}
+            onClick={() => onFixRender(render.id, item.suggestedFixes, item)}
             disabled={isBusy}
           >
             <RefreshCw size={14} />
-            Fix
+            Fix brief
           </button>
         ) : null}
       </div>
@@ -163,11 +163,11 @@ export default function RenderReviewQueuePanel({
           <button
             type="button"
             className="render-review-queue-action is-primary"
-            onClick={() => onFixRender(report.weakest!.render.id, report.weakest!.suggestedFixes)}
+            onClick={() => onFixRender(report.weakest!.render.id, report.weakest!.suggestedFixes, report.weakest!)}
             disabled={isBusy}
           >
             <RefreshCw size={15} />
-            Fix next weakest
+            Brief next weakest
           </button>
         </div>
       ) : null}

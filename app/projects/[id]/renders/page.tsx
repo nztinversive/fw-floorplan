@@ -18,6 +18,7 @@ import RenderDecisionPanel from "@/components/RenderDecisionPanel"
 import RenderCard from "@/components/RenderCard"
 import RenderProgress from "@/components/RenderProgress"
 import RenderReviewQueuePanel from "@/components/RenderReviewQueuePanel"
+import RenderRevisionBriefPanel, { type RenderRevisionBriefDraft } from "@/components/RenderRevisionBriefPanel"
 import RoomDesignDirectionsPanel from "@/components/RoomDesignDirectionsPanel"
 import SettingTooltip, { SETTING_TOOLTIPS } from "@/components/SettingTooltip"
 import { SkeletonPanel } from "@/components/Skeleton"
@@ -68,7 +69,7 @@ import {
   type RenderSpecDeltaReport
 } from "@/lib/render-spec-delta"
 import { buildRenderVisualQARevision, type RenderVisualQAFix } from "@/lib/render-visual-qa"
-import { buildRenderReviewQueueReport } from "@/lib/render-review-queue"
+import { buildRenderReviewQueueReport, type RenderReviewQueueItem } from "@/lib/render-review-queue"
 import { buildWinnerVariantRevision, type RenderWinnerVariantKey } from "@/lib/render-variants"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
@@ -161,6 +162,34 @@ function formatTimestamp(timestamp: number) {
   }).format(timestamp)
 }
 
+function appendUniqueRevisionLine(existingNotes: string, nextLine: string) {
+  const trimmedLine = nextLine.trim()
+  if (!trimmedLine) return existingNotes.trim()
+
+  const existingLines = existingNotes
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+
+  if (existingLines.includes(trimmedLine)) {
+    return existingLines.join("\n")
+  }
+
+  return [...existingLines, trimmedLine].join("\n")
+}
+
+function composeRevisionBriefLine(draft: RenderRevisionBriefDraft) {
+  return [
+    `${draft.title} targeted revision brief from ${draft.sourceLabel}${draft.scoreLabel ? ` (${draft.scoreLabel})` : ""}:`,
+    draft.failureSummary.trim() ? `What failed: ${draft.failureSummary.trim()}` : null,
+    draft.preserveNotes.trim() ? `Preserve: ${draft.preserveNotes.trim()}` : null,
+    draft.changeNotes.trim() ? `Change: ${draft.changeNotes.trim()}` : null,
+    draft.expectedResult.trim() ? `Expected result: ${draft.expectedResult.trim()}` : null
+  ]
+    .filter(Boolean)
+    .join(" ")
+}
+
 export default function ProjectRendersPage() {
   const params = useParams<{ id: string }>()
   const { toast } = useToast()
@@ -200,6 +229,7 @@ export default function ProjectRendersPage() {
     action: PendingRenderAction
   } | null>(null)
   const [pendingReviewRenderId, setPendingReviewRenderId] = useState<string | null>(null)
+  const [revisionBriefDraft, setRevisionBriefDraft] = useState<RenderRevisionBriefDraft | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
@@ -1367,24 +1397,56 @@ export default function ProjectRendersPage() {
     const nextLine = `Design output QA: ${fixes.trim()}`
 
     setRenderBrief((current) => {
-      const existingLines = current.revisionNotes
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-
-      if (existingLines.includes(nextLine)) {
-        return current
-      }
-
       return {
         ...current,
-        revisionNotes: [...existingLines, nextLine].join("\n")
+        revisionNotes: appendUniqueRevisionLine(current.revisionNotes, nextLine)
       }
     })
     toast("QA fixes added to the render brief", "info")
   }
 
-  async function handleRegenerateFromQA(renderId: string, fixes: string) {
+  function buildRevisionBriefDraft(
+    render: StoredRender,
+    fixes: string,
+    context: {
+      sourceLabel: string;
+      scoreLabel?: string;
+      failureSummary?: string;
+    }
+  ): RenderRevisionBriefDraft {
+    const styleLabel = getStyleLabel(render.style)
+    const viewLabel = RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle]
+    const preserveParts = [
+      `${styleLabel} direction`,
+      `${viewLabel} camera`,
+      `${render.settings.sidingMaterial} siding`,
+      `${render.settings.roofStyle} roof`,
+      `${render.settings.colorPalette} palette`
+    ]
+
+    return {
+      renderId: render.id,
+      title: `${styleLabel} ${viewLabel}`,
+      sourceLabel: context.sourceLabel,
+      scoreLabel: context.scoreLabel,
+      failureSummary: context.failureSummary?.trim() || "The render needs targeted revision before it can become the final design direction.",
+      preserveNotes: designDNA.dnaText
+        ? `Keep the project Design DNA: ${designDNA.dnaText}`
+        : `Keep the strongest existing design intent: ${preserveParts.join(", ")}.`,
+      changeNotes: fixes.trim() || "Regenerate from the weakest QA findings and correct the visible mismatch.",
+      expectedResult: "The next render should match the current floor plan and design spec, preserve the selected style direction, and clear the review queue."
+    }
+  }
+
+  function handleOpenRevisionBrief(
+    renderId: string,
+    fixes: string,
+    context?: {
+      sourceLabel?: string;
+      scoreLabel?: string;
+      failureSummary?: string;
+    }
+  ) {
     const render = renders.find((candidate) => candidate.id === renderId)
 
     if (!render) {
@@ -1392,22 +1454,75 @@ export default function ProjectRendersPage() {
       return
     }
 
-    const styleLabel = getStyleLabel(render.style)
-    const viewLabel = RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle]
-    const revisionLine = `${styleLabel} ${viewLabel} design output QA (${designOutputQA.score}/100): ${fixes.trim()}`
-    const renderBriefOverride = {
-      ...renderBrief,
-      revisionNotes: [renderBrief.revisionNotes.trim(), revisionLine].filter(Boolean).join("\n")
+    setRevisionBriefDraft(
+      buildRevisionBriefDraft(render, fixes, {
+        sourceLabel: context?.sourceLabel ?? "Design output QA",
+        scoreLabel: context?.scoreLabel ?? `${designOutputQA.score}/100 package QA`,
+        failureSummary: context?.failureSummary ?? designOutputQA.summary
+      })
+    )
+    toast("Revision brief is ready to edit", "info")
+    window.requestAnimationFrame(() => {
+      document.getElementById("render-revision-brief-panel")?.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      })
+    })
+  }
+
+  function handleOpenQueueRevisionBrief(renderId: string, fixes: string, item: RenderReviewQueueItem) {
+    handleOpenRevisionBrief(renderId, fixes, {
+      sourceLabel: item.isStale ? "Stale render review queue" : "Render review queue",
+      scoreLabel: `${item.score}/100 acceptance`,
+      failureSummary: item.detail
+    })
+  }
+
+  function handleApplyRevisionBriefDraft() {
+    if (!revisionBriefDraft) return
+
+    const revisionLine = composeRevisionBriefLine(revisionBriefDraft)
+    setRenderBrief((current) => ({
+      ...current,
+      revisionNotes: appendUniqueRevisionLine(current.revisionNotes, revisionLine)
+    }))
+    toast("Revision brief added to the main brief", "success")
+  }
+
+  async function handleRegenerateFromRevisionBrief() {
+    if (!revisionBriefDraft) return
+
+    const render = renders.find((candidate) => candidate.id === revisionBriefDraft.renderId)
+
+    if (!render) {
+      toast("Revision target render is no longer available", "warning")
+      setRevisionBriefDraft(null)
+      return
     }
 
-    setPendingRenderAction({ renderId, action: "qa-regenerate" })
+    if (!revisionBriefDraft.changeNotes.trim()) {
+      toast("Add the requested change before regenerating", "warning")
+      return
+    }
+
+    const revisionLine = composeRevisionBriefLine(revisionBriefDraft)
+    const renderBriefOverride = {
+      ...renderBrief,
+      revisionNotes: appendUniqueRevisionLine(renderBrief.revisionNotes, revisionLine)
+    }
+
+    setPendingRenderAction({ renderId: render.id, action: "qa-regenerate" })
 
     try {
-      await triggerGeneration(render.style, render.settings, {
+      const didGenerate = await triggerGeneration(render.style, render.settings, {
         renderBriefOverride,
         skipBriefSave: true,
-        parentRenderId: render.id
+        parentRenderId: render.id,
+        sourceCritiqueId: render.latestCritique?.id
       })
+      if (didGenerate) {
+        setRevisionBriefDraft(null)
+      }
     } finally {
       setPendingRenderAction(null)
     }
@@ -1945,7 +2060,8 @@ export default function ProjectRendersPage() {
           report={designOutputQA}
           onFocusRender={handleFocusQARender}
           onApplyFixes={handleApplyQAFixes}
-          onRegenerateFromQA={handleRegenerateFromQA}
+          onRegenerateFromQA={handleOpenRevisionBrief}
+          regenerateLabel="Build revision brief"
           isRegenerating={pendingRenderAction?.action === "qa-regenerate"}
         />
 
@@ -1954,8 +2070,20 @@ export default function ProjectRendersPage() {
           isBusy={isGenerationBusy || pendingRenderAction !== null}
           onFocusRender={handleFocusQARender}
           onRunVisualQA={handleRunVisualQAFromQueue}
-          onFixRender={handleRegenerateFromQA}
+          onFixRender={handleOpenQueueRevisionBrief}
         />
+
+        {revisionBriefDraft ? (
+          <RenderRevisionBriefPanel
+            draft={revisionBriefDraft}
+            isBusy={isGenerationBusy || pendingRenderAction?.action === "qa-regenerate"}
+            onChange={setRevisionBriefDraft}
+            onCancel={() => setRevisionBriefDraft(null)}
+            onFocusRender={handleFocusQARender}
+            onApplyToBrief={handleApplyRevisionBriefDraft}
+            onRegenerate={handleRegenerateFromRevisionBrief}
+          />
+        ) : null}
 
         <section className="panel render-finalization-panel">
           <div className="panel-header">

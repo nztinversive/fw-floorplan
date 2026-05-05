@@ -3228,6 +3228,108 @@ button:disabled,
   cursor: not-allowed;
 }
 
+.render-revision-brief-panel {
+  display: grid;
+  gap: 1rem;
+  border-color: rgba(27, 42, 74, 0.16);
+}
+
+.render-revision-brief-actions,
+.render-revision-brief-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.render-revision-brief-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.85rem;
+  align-items: center;
+  padding: 0.85rem;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.65rem;
+  background: rgba(248, 250, 252, 0.78);
+}
+
+.render-revision-brief-title {
+  margin-top: 0.16rem;
+  color: var(--fw-navy);
+  font-size: 0.95rem;
+  font-weight: 850;
+}
+
+.render-revision-brief-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  color: var(--fw-slate);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.render-revision-brief-source span,
+.render-revision-brief-source strong {
+  border-radius: 999px;
+  background: rgba(27, 42, 74, 0.06);
+  padding: 0.25rem 0.52rem;
+}
+
+.render-revision-brief-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.render-revision-brief-textarea {
+  min-height: 7.1rem;
+}
+
+.render-revision-brief-button,
+.render-revision-brief-icon-button {
+  display: inline-flex;
+  gap: 0.38rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(27, 42, 74, 0.12);
+  background: #ffffff;
+  color: var(--fw-navy);
+  border-radius: 999px;
+  padding: 0.42rem 0.68rem;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.render-revision-brief-icon-button {
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+}
+
+.render-revision-brief-button.is-primary {
+  border-color: rgba(27, 42, 74, 0.2);
+  background: var(--fw-navy);
+  color: #ffffff;
+}
+
+.render-revision-brief-button:hover,
+.render-revision-brief-icon-button:hover {
+  border-color: rgba(212, 168, 75, 0.55);
+  background: rgba(212, 168, 75, 0.12);
+}
+
+.render-revision-brief-button.is-primary:hover {
+  background: #22375e;
+}
+
+.render-revision-brief-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .render-finalization-panel {
   display: grid;
   gap: 1rem;
@@ -6737,6 +6839,7 @@ button.render-variant-row:disabled {
   .render-decision-score-grid,
   .render-decision-variant-grid,
   .render-review-queue-grid,
+  .render-revision-brief-grid,
   .render-finalization-grid,
   .floor-plan-comparison-grid {
     grid-template-columns: 1fr;
@@ -6765,6 +6868,7 @@ button.render-variant-row:disabled {
 
   .render-presets-save-row,
   .render-review-queue-next,
+  .render-revision-brief-summary,
   .floor-plan-compare-stats {
     grid-template-columns: 1fr;
   }
