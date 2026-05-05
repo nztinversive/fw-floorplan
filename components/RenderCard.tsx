@@ -32,6 +32,7 @@ type RenderCardProps = {
   childRenders?: StoredRender[];
   onCompareLineage?: (parentRenderId: string, childRenderId: string) => void;
   qualityReport?: RenderQualityReport;
+  parentQualityReport?: RenderQualityReport;
   comparisonMode?: boolean;
   isSelectedForComparison?: boolean;
   onSelectForComparison?: (renderId: string) => void;
@@ -69,6 +70,35 @@ function getStyleLabel(style: string) {
   return STYLE_PRESET_MAP[style as keyof typeof STYLE_PRESET_MAP]?.name ?? style;
 }
 
+function getQualityComparison(parentReport?: RenderQualityReport, childReport?: RenderQualityReport) {
+  if (!parentReport || !childReport) {
+    return null;
+  }
+
+  const childChecksById = new Map(childReport.checks.map((check) => [check.id, check]));
+  const improvedChecks = parentReport.checks
+    .map((parentCheck) => {
+      const childCheck = childChecksById.get(parentCheck.id);
+      if (!childCheck || childCheck.score <= parentCheck.score) {
+        return null;
+      }
+
+      return {
+        id: parentCheck.id,
+        title: childCheck.title,
+        delta: childCheck.score - parentCheck.score
+      };
+    })
+    .filter(Boolean) as Array<{ id: string; title: string; delta: number }>;
+  const openChecks = childReport.checks.filter((check) => check.status !== "strong");
+
+  return {
+    scoreDelta: childReport.score - parentReport.score,
+    improvedChecks,
+    openChecks
+  };
+}
+
 export default function RenderCard({
   render,
   isFavoriting,
@@ -90,6 +120,7 @@ export default function RenderCard({
   childRenders = [],
   onCompareLineage,
   qualityReport,
+  parentQualityReport,
   comparisonMode = false,
   isSelectedForComparison = false,
   onSelectForComparison,
@@ -104,6 +135,10 @@ export default function RenderCard({
   const sourceReview = render.sourceReview ?? null;
   const sourceCritique = render.sourceCritique ?? null;
   const latestCritique = render.latestCritique ?? null;
+  const qualityComparison = useMemo(
+    () => getQualityComparison(parentQualityReport, qualityReport),
+    [parentQualityReport, qualityReport]
+  );
   const reviewSummary = useMemo(
     () =>
       selectedReviewIssues
@@ -180,6 +215,7 @@ export default function RenderCard({
 
   return (
     <article
+      id={`render-${render.id}`}
       className={`render-card${comparisonMode ? " is-comparison-mode" : ""}${isSelectedForComparison ? " is-selected" : ""}`}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
@@ -319,6 +355,91 @@ export default function RenderCard({
                 Add suggested fixes
               </button>
             ) : null}
+          </div>
+        ) : null}
+
+        {parentRender && parentQualityReport && qualityReport && qualityComparison ? (
+          <div className="render-qa-compare-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="render-qa-compare-header">
+              <div>
+                <div className="field-label">Before/after QA</div>
+                <div className="render-qa-compare-hint">
+                  Compared with parent generated {formatRelativeTime(parentRender.createdAt)}
+                </div>
+              </div>
+              <span className={`badge render-qa-compare-badge${qualityComparison.scoreDelta >= 0 ? " is-positive" : " is-negative"}`}>
+                {qualityComparison.scoreDelta >= 0 ? "+" : ""}
+                {qualityComparison.scoreDelta}
+              </span>
+            </div>
+
+            <div className="render-qa-score-row">
+              <div>
+                <span>{parentQualityReport.score}</span>
+                <small>parent QA</small>
+              </div>
+              <div>
+                <span>{qualityReport.score}</span>
+                <small>child QA</small>
+              </div>
+            </div>
+
+            <div className="render-qa-compare-grid">
+              <div>
+                <div className="render-qa-compare-title">Improved</div>
+                {qualityComparison.improvedChecks.length > 0 ? (
+                  <div className="render-qa-chip-list">
+                    {qualityComparison.improvedChecks.slice(0, 3).map((check) => (
+                      <span key={check.id} className="badge render-qa-chip is-improved">
+                        {check.title} +{check.delta}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="render-qa-compare-empty">No QA checks improved yet.</div>
+                )}
+              </div>
+
+              <div>
+                <div className="render-qa-compare-title">Still open</div>
+                {qualityComparison.openChecks.length > 0 ? (
+                  <div className="render-qa-chip-list">
+                    {qualityComparison.openChecks.slice(0, 3).map((check) => (
+                      <span key={check.id} className={`badge render-qa-chip is-${check.status}`}>
+                        {check.title}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="render-qa-compare-empty">All QA checks are strong.</div>
+                )}
+              </div>
+            </div>
+
+            <div className="render-qa-compare-actions">
+              {onCompareLineage ? (
+                <button
+                  type="button"
+                  className="render-lineage-action"
+                  onClick={() => onCompareLineage(parentRender.id, render.id)}
+                  disabled={isCardBusy}
+                >
+                  Compare before/after
+                </button>
+              ) : null}
+              {!render.isFavorite ? (
+                <button
+                  type="button"
+                  className="render-lineage-action"
+                  onClick={() => onToggleFavorite(render.id)}
+                  disabled={comparisonMode || isCardBusy || isFavoriting}
+                >
+                  Promote child to favorite
+                </button>
+              ) : (
+                <span className="badge render-qa-chip is-improved">Favorited</span>
+              )}
+            </div>
           </div>
         ) : null}
 

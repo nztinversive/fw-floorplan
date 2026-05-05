@@ -7,6 +7,7 @@ import { Download, Expand, MapPin, User, Layers, Image as ImageIcon } from "luci
 import { useMemo, useState } from "react"
 
 import CommentsPanel from "@/components/CommentsPanel"
+import DesignOutputQAPanel from "@/components/DesignOutputQAPanel"
 import Lightbox from "@/components/Lightbox"
 import ProgressiveImage from "@/components/ProgressiveImage"
 import ShareLinkCard from "@/components/ShareLinkCard"
@@ -24,9 +25,26 @@ import {
 import { formatRelativeTime } from "@/lib/file-utils"
 import { STYLE_PRESET_MAP } from "@/lib/style-presets"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
-import type { PersistedFloorPlan, ProjectComment, ProjectMember, ProjectMemberRole } from "@/lib/types"
+import { analyzeDesignOutputQA } from "@/lib/design-output-qa"
+import { analyzeRenderQuality } from "@/lib/render-quality"
+import type {
+  PersistedFloorPlan,
+  ProjectComment,
+  ProjectMember,
+  ProjectMemberRole,
+  RenderBrief,
+  StoredRender,
+  StoredRenderCritique,
+  StoredRenderReview
+} from "@/lib/types"
 
 const EMPTY_COMMENTS: ProjectComment[] = []
+const EMPTY_RENDER_BRIEF: RenderBrief = {
+  designNotes: "",
+  mustHave: "",
+  avoid: "",
+  revisionNotes: ""
+}
 
 const ReadOnlyFloorPlanCanvas = dynamic(() => import("@/components/ReadOnlyFloorPlanCanvas"), {
   ssr: false
@@ -34,6 +52,91 @@ const ReadOnlyFloorPlanCanvas = dynamic(() => import("@/components/ReadOnlyFloor
 
 function getStyleLabel(style: string) {
   return STYLE_PRESET_MAP[style as keyof typeof STYLE_PRESET_MAP]?.name ?? style
+}
+
+type ConvexRenderReview = Omit<StoredRenderReview, "id"> & {
+  _id?: string;
+  id?: string;
+};
+
+type ConvexRenderCritique = Omit<StoredRenderCritique, "id"> & {
+  _id?: string;
+  id?: string;
+};
+
+type ShareRenderRecord = {
+  _id: string;
+  projectId: string;
+  style: string;
+  settings: StoredRender["settings"];
+  imageStorageId?: string;
+  imageUrl?: string | null;
+  prompt: string;
+  isFavorite: boolean;
+  createdAt: number;
+  parentRenderId?: string;
+  sourceReviewId?: string;
+  sourceCritiqueId?: string;
+  sourceReview?: ConvexRenderReview | null;
+  sourceCritique?: ConvexRenderCritique | null;
+  reviewHistory?: ConvexRenderReview[];
+  latestCritique?: ConvexRenderCritique | null;
+  critiqueHistory?: ConvexRenderCritique[];
+};
+
+function normalizeReview(review: ConvexRenderReview, fallbackId: string): StoredRenderReview {
+  return {
+    id: review.id ?? review._id ?? fallbackId,
+    projectId: review.projectId,
+    renderId: review.renderId,
+    issueKeys: review.issueKeys,
+    notes: review.notes,
+    authorEmail: review.authorEmail,
+    createdAt: review.createdAt
+  };
+}
+
+function normalizeCritique(critique: ConvexRenderCritique, fallbackId: string): StoredRenderCritique {
+  return {
+    id: critique.id ?? critique._id ?? fallbackId,
+    projectId: critique.projectId,
+    renderId: critique.renderId,
+    model: critique.model,
+    score: critique.score,
+    confidence: critique.confidence,
+    recommendation: critique.recommendation,
+    summary: critique.summary,
+    issues: critique.issues,
+    suggestedFixes: critique.suggestedFixes,
+    authorEmail: critique.authorEmail,
+    createdAt: critique.createdAt
+  };
+}
+
+function normalizeShareRender(render: ShareRenderRecord): StoredRender {
+  return {
+    id: render._id,
+    projectId: render.projectId,
+    style: render.style,
+    settings: render.settings,
+    imageStorageId: render.imageStorageId ?? "",
+    imageUrl: render.imageUrl,
+    prompt: render.prompt,
+    isFavorite: render.isFavorite,
+    createdAt: render.createdAt,
+    parentRenderId: render.parentRenderId,
+    sourceReviewId: render.sourceReviewId,
+    sourceCritiqueId: render.sourceCritiqueId,
+    sourceReview: render.sourceReview ? normalizeReview(render.sourceReview, `${render._id}-source-review`) : null,
+    sourceCritique: render.sourceCritique ? normalizeCritique(render.sourceCritique, `${render._id}-source-critique`) : null,
+    reviewHistory: (render.reviewHistory ?? []).map((review, index) =>
+      normalizeReview(review, `${render._id}-review-${index}`)
+    ),
+    latestCritique: render.latestCritique ? normalizeCritique(render.latestCritique, `${render._id}-latest-critique`) : null,
+    critiqueHistory: (render.critiqueHistory ?? []).map((critique, index) =>
+      normalizeCritique(critique, `${render._id}-critique-${index}`)
+    )
+  };
 }
 
 export default function ProjectSharePage() {
@@ -129,6 +232,43 @@ export default function ProjectSharePage() {
     const favs = renders.filter((render) => render.isFavorite)
     return favs.length > 0 ? favs : renders
   }, [renders])
+  const visibleStoredRenders = useMemo(
+    () => visibleRenders.map((render) => normalizeShareRender(render as ShareRenderRecord)),
+    [visibleRenders]
+  )
+  const childrenByRenderId = useMemo(() => {
+    return visibleStoredRenders.reduce<Record<string, StoredRender[]>>((childrenById, render) => {
+      if (!render.parentRenderId) {
+        return childrenById
+      }
+
+      return {
+        ...childrenById,
+        [render.parentRenderId]: [...(childrenById[render.parentRenderId] ?? []), render]
+      }
+    }, {})
+  }, [visibleStoredRenders])
+  const renderQualityById = useMemo(() => {
+    return visibleStoredRenders.reduce<Record<string, ReturnType<typeof analyzeRenderQuality>>>((qualityById, render) => {
+      qualityById[render.id] = analyzeRenderQuality({
+        render,
+        floorPlans,
+        renderBrief: project?.renderBrief ?? EMPTY_RENDER_BRIEF,
+        childRenders: childrenByRenderId[render.id] ?? []
+      })
+      return qualityById
+    }, {})
+  }, [childrenByRenderId, floorPlans, project?.renderBrief, visibleStoredRenders])
+  const designOutputQA = useMemo(
+    () =>
+      analyzeDesignOutputQA({
+        floorPlans,
+        renders: visibleStoredRenders,
+        qualityByRenderId: renderQualityById,
+        renderBrief: project?.renderBrief ?? EMPTY_RENDER_BRIEF
+      }),
+    [floorPlans, project?.renderBrief, renderQualityById, visibleStoredRenders]
+  )
 
   const lightboxImages = useMemo(
     () =>
@@ -404,6 +544,7 @@ export default function ProjectSharePage() {
               {visibleRenders.map((render, idx) => (
                 <article key={render._id} className="render-card share-render-card">
                   <div
+                    id={`share-render-${render._id}`}
                     className={`render-media${render.imageUrl ? " render-media-clickable" : ""}`}
                     onClick={() => {
                       if (!render.imageUrl) return
@@ -449,6 +590,21 @@ export default function ProjectSharePage() {
           )}
         </section>
       </div>
+
+      {!shareToken && isAuthenticated ? (
+        <DesignOutputQAPanel
+          report={designOutputQA}
+          title="Shared package QA"
+          subtitle="Readiness checks for the render set currently shown in this protected presentation."
+          compact
+          onFocusRender={(renderId) => {
+            document.getElementById(`share-render-${renderId}`)?.scrollIntoView({
+              behavior: "smooth",
+              block: "center"
+            })
+          }}
+        />
+      ) : null}
 
       <section className="panel" style={{ marginTop: "1.5rem" }}>
         <CommentsPanel

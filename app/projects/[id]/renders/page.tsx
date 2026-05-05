@@ -10,6 +10,7 @@ import { useDebounce } from "use-debounce"
 
 import Breadcrumb from "@/components/Breadcrumb"
 import ConfirmDialog from "@/components/ConfirmDialog"
+import DesignOutputQAPanel from "@/components/DesignOutputQAPanel"
 import Lightbox from "@/components/Lightbox"
 import RenderCard from "@/components/RenderCard"
 import RenderProgress from "@/components/RenderProgress"
@@ -40,10 +41,11 @@ import {
   type RenderConsistencyCheck,
   type RenderConsistencyStatus
 } from "@/lib/render-consistency"
+import { analyzeDesignOutputQA } from "@/lib/design-output-qa"
 import { analyzeRenderQuality } from "@/lib/render-quality"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
-type PendingRenderAction = "favorite" | "delete" | "regenerate" | "critique"
+type PendingRenderAction = "favorite" | "delete" | "regenerate" | "critique" | "qa-regenerate"
 type RenderReviewDraft = {
   issueKeys: string[]
   notes: string
@@ -289,6 +291,16 @@ export default function ProjectRendersPage() {
     const favoriteRenders = renders.filter((render) => render.isFavorite && render.imageUrl)
     return favoriteRenders.length > 0 ? favoriteRenders : renders.filter((render) => render.imageUrl)
   }, [renders])
+  const designOutputQA = useMemo(
+    () =>
+      analyzeDesignOutputQA({
+        floorPlans: project?.floorPlans ?? [],
+        renders: exportRenders,
+        qualityByRenderId: renderQualityById,
+        renderBrief: project?.renderBrief ?? EMPTY_RENDER_BRIEF
+      }),
+    [exportRenders, project?.floorPlans, project?.renderBrief, renderQualityById]
+  )
 
   const lightboxImages = useMemo(
     () =>
@@ -896,6 +908,67 @@ export default function ProjectRendersPage() {
     toast("Tweak added to the render brief", "info")
   }
 
+  function handleApplyQAFixes(fixes: string) {
+    const nextLine = `Design output QA: ${fixes.trim()}`
+
+    setRenderBrief((current) => {
+      const existingLines = current.revisionNotes
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+
+      if (existingLines.includes(nextLine)) {
+        return current
+      }
+
+      return {
+        ...current,
+        revisionNotes: [...existingLines, nextLine].join("\n")
+      }
+    })
+    toast("QA fixes added to the render brief", "info")
+  }
+
+  async function handleRegenerateFromQA(renderId: string, fixes: string) {
+    const render = renders.find((candidate) => candidate.id === renderId)
+
+    if (!render) {
+      toast("QA target render is no longer available", "warning")
+      return
+    }
+
+    const styleLabel = getStyleLabel(render.style)
+    const viewLabel = RENDER_VIEW_ANGLE_LABELS[render.settings.viewAngle]
+    const revisionLine = `${styleLabel} ${viewLabel} design output QA (${designOutputQA.score}/100): ${fixes.trim()}`
+    const renderBriefOverride = {
+      ...renderBrief,
+      revisionNotes: [renderBrief.revisionNotes.trim(), revisionLine].filter(Boolean).join("\n")
+    }
+
+    setPendingRenderAction({ renderId, action: "qa-regenerate" })
+
+    try {
+      await triggerGeneration(render.style, render.settings, {
+        renderBriefOverride,
+        skipBriefSave: true,
+        parentRenderId: render.id
+      })
+    } finally {
+      setPendingRenderAction(null)
+    }
+  }
+
+  function handleFocusQARender(renderId: string) {
+    setComparisonMode(false)
+    setSelectedRenderIds([])
+    window.requestAnimationFrame(() => {
+      document.getElementById(`render-${renderId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      })
+    })
+  }
+
   if ((projectId && project === undefined) || (projectId && rendersQuery === undefined)) {
     return (
       <main className="page-shell">
@@ -1317,6 +1390,14 @@ export default function ProjectRendersPage() {
           </aside>
         </div>
 
+        <DesignOutputQAPanel
+          report={designOutputQA}
+          onFocusRender={handleFocusQARender}
+          onApplyFixes={handleApplyQAFixes}
+          onRegenerateFromQA={handleRegenerateFromQA}
+          isRegenerating={pendingRenderAction?.action === "qa-regenerate"}
+        />
+
         <section className="panel">
           <div className="panel-header">
             <div>
@@ -1415,7 +1496,7 @@ export default function ProjectRendersPage() {
                   isRegenerating={
                     isGenerating &&
                     pendingRenderAction?.renderId === render.id &&
-                    pendingRenderAction.action === "regenerate"
+                    (pendingRenderAction.action === "regenerate" || pendingRenderAction.action === "qa-regenerate")
                   }
                   onToggleFavorite={handleToggleFavorite}
                   onDelete={handleDeleteRender}
@@ -1436,6 +1517,7 @@ export default function ProjectRendersPage() {
                   childRenders={childrenByRenderId[render.id] ?? []}
                   onCompareLineage={handleCompareLineage}
                   qualityReport={renderQualityById[render.id]}
+                  parentQualityReport={render.parentRenderId ? renderQualityById[render.parentRenderId] : undefined}
                   comparisonMode={comparisonMode}
                   isSelectedForComparison={selectedRenderIds.includes(render.id)}
                   onSelectForComparison={handleComparisonSelect}
