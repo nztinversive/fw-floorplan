@@ -10,6 +10,7 @@ import { useDebounce } from "use-debounce"
 
 import Breadcrumb from "@/components/Breadcrumb"
 import ConfirmDialog from "@/components/ConfirmDialog"
+import DesignDNAPanel from "@/components/DesignDNAPanel"
 import DesignOutputQAPanel from "@/components/DesignOutputQAPanel"
 import Lightbox from "@/components/Lightbox"
 import RenderCard from "@/components/RenderCard"
@@ -35,6 +36,7 @@ import {
   type StylePresetDefaults,
   type StylePresetId
 } from "@/lib/style-presets"
+import { buildProjectDesignDNAReport } from "@/lib/design-dna"
 import { buildRenderStyleLockRevision, type RenderStyleLockKey } from "@/lib/render-style-locks"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
 import { sortFloors } from "@/lib/floor-utils"
@@ -72,17 +74,16 @@ const EMPTY_RENDER_BRIEF: RenderBrief = {
   revisionNotes: ""
 }
 const ROOM_DESIGN_DIRECTIONS_HEADING = "Room-by-room design directions:"
+const PROJECT_DESIGN_DNA_HEADING = "Project Design DNA:"
 
-function mergeRoomDesignDirections(existingText: string, directionText: string) {
-  const nextBlock = [
-    ROOM_DESIGN_DIRECTIONS_HEADING,
-    ...directionText
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-  ].join("\n")
+function mergeDesignBriefBlock(existingText: string, heading: string, blockText: string) {
+  const nextBlock = blockText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n")
   const lines = existingText.split("\n")
-  const startIndex = lines.findIndex((line) => line.trim() === ROOM_DESIGN_DIRECTIONS_HEADING)
+  const startIndex = lines.findIndex((line) => line.trim() === heading)
 
   if (startIndex === -1) {
     return [existingText.trim(), nextBlock].filter(Boolean).join("\n\n")
@@ -101,6 +102,18 @@ function mergeRoomDesignDirections(existingText: string, directionText: string) 
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
+}
+
+function mergeRoomDesignDirections(existingText: string, directionText: string) {
+  const nextBlock = [
+    ROOM_DESIGN_DIRECTIONS_HEADING,
+    ...directionText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+  ].join("\n")
+
+  return mergeDesignBriefBlock(existingText, ROOM_DESIGN_DIRECTIONS_HEADING, nextBlock)
 }
 
 function getDefaultSettings(
@@ -334,6 +347,10 @@ export default function ProjectRendersPage() {
       }),
     [exportRenders, project?.floorPlans, project?.renderBrief, renderQualityById]
   )
+  const designDNA = useMemo(
+    () => buildProjectDesignDNAReport({ renders }),
+    [renders]
+  )
 
   const lightboxImages = useMemo(
     () =>
@@ -406,6 +423,25 @@ export default function ProjectRendersPage() {
       designNotes: mergeRoomDesignDirections(current.designNotes, cleanedDirectionText)
     }))
     toast("Room directions added to the design brief", "info")
+  }
+
+  function handleApplyDesignDNA(dnaText: string) {
+    const cleanedDNAText = dnaText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join("\n")
+
+    if (!cleanedDNAText) {
+      toast("Favorite a strong render before applying design DNA", "warning")
+      return
+    }
+
+    setRenderBrief((current) => ({
+      ...current,
+      designNotes: mergeDesignBriefBlock(current.designNotes, PROJECT_DESIGN_DNA_HEADING, cleanedDNAText)
+    }))
+    toast("Project design DNA added to the brief", "info")
   }
 
   function getConsistencyStatusLabel(status: RenderConsistencyStatus) {
@@ -1202,6 +1238,13 @@ export default function ProjectRendersPage() {
             Generate and batch generate automatically use the current brief. Unsaved brief edits are saved before generation starts.
           </div>
         </section>
+
+        <DesignDNAPanel
+          report={designDNA}
+          disabled={isGenerationBusy || isSavingBrief}
+          onApplyDNA={handleApplyDesignDNA}
+          onFocusRender={handleFocusQARender}
+        />
 
         <RoomDesignDirectionsPanel
           floorPlans={project.floorPlans}
