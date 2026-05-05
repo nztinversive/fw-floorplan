@@ -17,6 +17,7 @@ import RenderDesignSpecPanel from "@/components/RenderDesignSpecPanel"
 import RenderDecisionPanel from "@/components/RenderDecisionPanel"
 import RenderCard from "@/components/RenderCard"
 import RenderProgress from "@/components/RenderProgress"
+import RenderReviewQueuePanel from "@/components/RenderReviewQueuePanel"
 import RoomDesignDirectionsPanel from "@/components/RoomDesignDirectionsPanel"
 import SettingTooltip, { SETTING_TOOLTIPS } from "@/components/SettingTooltip"
 import { SkeletonPanel } from "@/components/Skeleton"
@@ -67,6 +68,7 @@ import {
   type RenderSpecDeltaReport
 } from "@/lib/render-spec-delta"
 import { buildRenderVisualQARevision, type RenderVisualQAFix } from "@/lib/render-visual-qa"
+import { buildRenderReviewQueueReport } from "@/lib/render-review-queue"
 import { buildWinnerVariantRevision, type RenderWinnerVariantKey } from "@/lib/render-variants"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
@@ -402,6 +404,25 @@ export default function ProjectRendersPage() {
       return acceptanceById
     }, {})
   }, [renderQualityById, renderSpecDeltaById, renders])
+  const renderSourceUpdatedAt = useMemo(() => {
+    const floorPlanUpdatedAt = (project?.floorPlans ?? []).reduce((latest, floorPlan) => {
+      const childDataUpdatedAt = (floorPlan as PersistedFloorPlan & { childDataUpdatedAt?: number }).childDataUpdatedAt ?? 0
+      return Math.max(latest, childDataUpdatedAt)
+    }, 0)
+
+    return floorPlanUpdatedAt || undefined
+  }, [project?.floorPlans])
+  const renderReviewQueue = useMemo(
+    () =>
+      buildRenderReviewQueueReport({
+        renders,
+        acceptanceByRenderId: renderAcceptanceById,
+        qualityByRenderId: renderQualityById,
+        specDeltaByRenderId: renderSpecDeltaById,
+        sourceUpdatedAt: renderSourceUpdatedAt
+      }),
+    [renderAcceptanceById, renderQualityById, renderSourceUpdatedAt, renderSpecDeltaById, renders]
+  )
 
   const finalRender = useMemo(
     () => renders.find((render) => render.isFinal && render.imageUrl) ?? null,
@@ -1055,6 +1076,16 @@ export default function ProjectRendersPage() {
     } finally {
       setPendingRenderAction(null)
     }
+  }
+
+  async function handleRunVisualQAFromQueue(renderId: string) {
+    const render = renders.find((candidate) => candidate.id === renderId)
+    if (!render) {
+      toast("Queue render is no longer available", "warning")
+      return
+    }
+
+    await handleCritiqueRender(render)
   }
 
   function buildRenderReviewRevision(render: StoredRender, review: RenderReviewDraft) {
@@ -1916,6 +1947,14 @@ export default function ProjectRendersPage() {
           onApplyFixes={handleApplyQAFixes}
           onRegenerateFromQA={handleRegenerateFromQA}
           isRegenerating={pendingRenderAction?.action === "qa-regenerate"}
+        />
+
+        <RenderReviewQueuePanel
+          report={renderReviewQueue}
+          isBusy={isGenerationBusy || pendingRenderAction !== null}
+          onFocusRender={handleFocusQARender}
+          onRunVisualQA={handleRunVisualQAFromQueue}
+          onFixRender={handleRegenerateFromQA}
         />
 
         <section className="panel render-finalization-panel">
