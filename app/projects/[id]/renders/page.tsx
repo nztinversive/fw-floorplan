@@ -60,10 +60,15 @@ import {
   buildRenderDesignSpecReport,
   type RenderDesignSpecAction
 } from "@/lib/render-design-spec"
+import {
+  analyzeRenderSpecDelta,
+  buildRenderSpecDeltaRevision,
+  type RenderSpecDeltaReport
+} from "@/lib/render-spec-delta"
 import { buildWinnerVariantRevision, type RenderWinnerVariantKey } from "@/lib/render-variants"
 import type { PersistedFloorPlan, RenderBrief, RenderSettings, StoredRender, StoredRenderPreset } from "@/lib/types"
 
-type PendingRenderAction = "favorite" | "final" | "delete" | "regenerate" | "critique" | "qa-regenerate" | "locked-regenerate" | "dna-regenerate" | "variant-regenerate"
+type PendingRenderAction = "favorite" | "final" | "delete" | "regenerate" | "critique" | "qa-regenerate" | "locked-regenerate" | "dna-regenerate" | "variant-regenerate" | "spec-regenerate"
 type RenderReviewDraft = {
   issueKeys: string[]
   notes: string
@@ -364,6 +369,26 @@ export default function ProjectRendersPage() {
       return qualityById
     }, {})
   }, [childrenByRenderId, project, renders])
+  const renderSpecDeltaById = useMemo(() => {
+    if (!project) {
+      return {}
+    }
+
+    return renders.reduce<Record<string, RenderSpecDeltaReport>>((deltaById, render) => {
+      const renderSpecificSpec = buildRenderDesignSpecReport({
+        floorPlans: project.floorPlans,
+        renderBrief,
+        settings: render.settings,
+        styleLabel: getStyleLabel(render.style)
+      })
+
+      deltaById[render.id] = analyzeRenderSpecDelta({
+        render,
+        designSpec: renderSpecificSpec
+      })
+      return deltaById
+    }, {})
+  }, [project, renderBrief, renders])
 
   const finalRender = useMemo(
     () => renders.find((render) => render.isFinal && render.imageUrl) ?? null,
@@ -1078,6 +1103,31 @@ export default function ProjectRendersPage() {
     }
 
     setPendingRenderAction({ renderId: render.id, action: "locked-regenerate" })
+
+    try {
+      await triggerGeneration(render.style, render.settings, {
+        renderBriefOverride,
+        skipBriefSave: true,
+        parentRenderId: render.id
+      })
+    } finally {
+      setPendingRenderAction(null)
+    }
+  }
+
+  async function handleRegenerateWithSpecDelta(render: StoredRender, report: RenderSpecDeltaReport) {
+    if (!report.suggestedFixes.trim()) {
+      toast("No spec drift found for this render", "info")
+      return
+    }
+
+    const revisionLine = buildRenderSpecDeltaRevision(report)
+    const renderBriefOverride = {
+      ...renderBrief,
+      revisionNotes: [renderBrief.revisionNotes.trim(), revisionLine].filter(Boolean).join("\n")
+    }
+
+    setPendingRenderAction({ renderId: render.id, action: "spec-regenerate" })
 
     try {
       await triggerGeneration(render.style, render.settings, {
@@ -1974,7 +2024,8 @@ export default function ProjectRendersPage() {
                       pendingRenderAction.action === "qa-regenerate" ||
                       pendingRenderAction.action === "locked-regenerate" ||
                       pendingRenderAction.action === "dna-regenerate" ||
-                      pendingRenderAction.action === "variant-regenerate"
+                      pendingRenderAction.action === "variant-regenerate" ||
+                      pendingRenderAction.action === "spec-regenerate"
                     )
                   }
                   onToggleFavorite={handleToggleFavorite}
@@ -1993,12 +2044,14 @@ export default function ProjectRendersPage() {
                   onRegenerateWithReview={handleRegenerateWithReview}
                   onRegenerateWithCritique={handleRegenerateWithCritique}
                   onRegenerateWithStyleLocks={handleRegenerateWithStyleLocks}
+                  onRegenerateWithSpecDelta={handleRegenerateWithSpecDelta}
                   isSavingReview={pendingReviewRenderId === render.id}
                   parentRender={render.parentRenderId ? renders.find((candidate) => candidate.id === render.parentRenderId) : undefined}
                   childRenders={childrenByRenderId[render.id] ?? []}
                   childQualityReports={renderQualityById}
                   onCompareLineage={handleCompareLineage}
                   qualityReport={renderQualityById[render.id]}
+                  specDeltaReport={renderSpecDeltaById[render.id]}
                   parentQualityReport={render.parentRenderId ? renderQualityById[render.parentRenderId] : undefined}
                   comparisonMode={comparisonMode}
                   isSelectedForComparison={selectedRenderIds.includes(render.id)}

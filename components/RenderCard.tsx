@@ -7,6 +7,7 @@ import ProgressiveImage from "@/components/ProgressiveImage";
 import { RENDER_VIEW_ANGLE_LABELS } from "@/lib/render-angles";
 import type { RenderQualityReport } from "@/lib/render-quality";
 import { RENDER_REVIEW_ISSUES, getRenderReviewIssueLabel } from "@/lib/render-review";
+import type { RenderSpecDeltaReport } from "@/lib/render-spec-delta";
 import {
   DEFAULT_RENDER_STYLE_LOCK_KEYS,
   RENDER_STYLE_LOCK_LABELS,
@@ -38,12 +39,14 @@ type RenderCardProps = {
   onRegenerateWithReview?: (render: StoredRender, review: { issueKeys: string[]; notes: string }) => Promise<void> | void;
   onRegenerateWithCritique?: (render: StoredRender) => Promise<void> | void;
   onRegenerateWithStyleLocks?: (render: StoredRender, lockKeys: RenderStyleLockKey[]) => Promise<void> | void;
+  onRegenerateWithSpecDelta?: (render: StoredRender, report: RenderSpecDeltaReport) => Promise<void> | void;
   isSavingReview?: boolean;
   parentRender?: StoredRender;
   childRenders?: StoredRender[];
   childQualityReports?: Record<string, RenderQualityReport | undefined>;
   onCompareLineage?: (parentRenderId: string, childRenderId: string) => void;
   qualityReport?: RenderQualityReport;
+  specDeltaReport?: RenderSpecDeltaReport;
   parentQualityReport?: RenderQualityReport;
   comparisonMode?: boolean;
   isSelectedForComparison?: boolean;
@@ -130,12 +133,14 @@ export default function RenderCard({
   onRegenerateWithReview,
   onRegenerateWithCritique,
   onRegenerateWithStyleLocks,
+  onRegenerateWithSpecDelta,
   isSavingReview = false,
   parentRender,
   childRenders = [],
   childQualityReports = {},
   onCompareLineage,
   qualityReport,
+  specDeltaReport,
   parentQualityReport,
   comparisonMode = false,
   isSelectedForComparison = false,
@@ -413,6 +418,55 @@ export default function RenderCard({
                 disabled={comparisonMode || isCardBusy}
               >
                 Add suggested fixes
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {specDeltaReport ? (
+          <div className={`render-spec-delta-panel is-${specDeltaReport.status}`} onClick={(event) => event.stopPropagation()}>
+            <div className="render-spec-delta-summary">
+              <div>
+                <div className="render-spec-delta-score">{specDeltaReport.score}</div>
+                <div className="render-spec-delta-score-label">spec</div>
+              </div>
+              <div>
+                <div className="render-spec-delta-heading">
+                  <span className={`badge render-spec-delta-badge is-${specDeltaReport.status}`}>
+                    {specDeltaReport.label}
+                  </span>
+                  <span>Spec-to-render delta</span>
+                </div>
+                <div className="render-spec-delta-copy">{specDeltaReport.summary}</div>
+              </div>
+            </div>
+
+            <div className="render-spec-delta-checks">
+              {specDeltaReport.checks.filter((check) => check.status !== "match").slice(0, 4).map((check) => (
+                <div key={check.id} className="render-spec-delta-check">
+                  <span className={`badge render-spec-delta-badge is-${check.status}`}>
+                    {check.status === "drift" ? "drift" : "review"}
+                  </span>
+                  <div>
+                    <div className="render-spec-delta-title">{check.title}</div>
+                    <div className="render-spec-delta-detail">{check.detail}</div>
+                  </div>
+                </div>
+              ))}
+              {specDeltaReport.checks.every((check) => check.status === "match") ? (
+                <div className="render-spec-delta-empty">No spec drift detected.</div>
+              ) : null}
+            </div>
+
+            {onRegenerateWithSpecDelta && specDeltaReport.suggestedFixes ? (
+              <button
+                type="button"
+                className="render-spec-delta-action"
+                onClick={() => void onRegenerateWithSpecDelta(render, specDeltaReport)}
+                disabled={comparisonMode || isCardBusy}
+              >
+                <RefreshCw size={15} />
+                {isRegenerating ? "Generating..." : "Regenerate to match spec"}
               </button>
             ) : null}
           </div>
