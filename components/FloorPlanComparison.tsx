@@ -1,8 +1,8 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { useEffect, useMemo, useState } from "react"
 
-import ReadOnlyFloorPlanCanvas from "@/components/ReadOnlyFloorPlanCanvas"
 import { formatDate } from "@/lib/file-utils"
 import { summarizeRoomAreas } from "@/lib/floor-plan-analysis"
 import { formatFloorLabel } from "@/lib/floor-utils"
@@ -36,6 +36,10 @@ type FloorPlanStats = {
   wallCount: number
   totalAreaSqFt: number
 }
+
+const ReadOnlyFloorPlanCanvas = dynamic(() => import("@/components/ReadOnlyFloorPlanCanvas"), {
+  ssr: false
+})
 
 function getOptionStats(option: ComparisonOption): FloorPlanStats {
   const summary = summarizeRoomAreas([{ floor: option.floor, data: option.data }])

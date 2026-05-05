@@ -19,6 +19,7 @@ type CanvasSize = {
 };
 
 const ROOM_COLORS = ["rgba(212, 168, 75, 0.18)", "rgba(100, 116, 139, 0.12)", "rgba(27, 42, 74, 0.08)"];
+const EMPTY_COMMENTS: ProjectComment[] = [];
 
 function getContentBounds(data: FloorPlanData, comments: ProjectComment[]) {
   const points = [
@@ -45,12 +46,20 @@ function getContentBounds(data: FloorPlanData, comments: ProjectComment[]) {
   };
 }
 
-export default function ReadOnlyFloorPlanCanvas({ data, comments = [] }: ReadOnlyFloorPlanCanvasProps) {
+export default function ReadOnlyFloorPlanCanvas({ data, comments = EMPTY_COMMENTS }: ReadOnlyFloorPlanCanvasProps) {
   const stageRef = useRef<Konva.Stage>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<CanvasSize>({ width: 960, height: 640 });
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
+  const sizeRef = useRef<CanvasSize>({ width: 960, height: 640 });
+  const zoomRef = useRef(1);
+  const panRef = useRef<Point>({ x: 0, y: 0 });
+  const contentBounds = useMemo(() => getContentBounds(data, comments), [comments, data]);
+  const contentMinX = contentBounds?.minX ?? null;
+  const contentMaxX = contentBounds?.maxX ?? null;
+  const contentMinY = contentBounds?.minY ?? null;
+  const contentMaxY = contentBounds?.maxY ?? null;
 
   useEffect(() => {
     const element = frameRef.current;
@@ -60,10 +69,17 @@ export default function ReadOnlyFloorPlanCanvas({ data, comments = [] }: ReadOnl
 
     const updateSize = () => {
       const bounds = element.getBoundingClientRect();
-      setSize({
+      const nextSize = {
         width: Math.max(320, Math.floor(bounds.width)),
         height: Math.max(360, Math.floor(bounds.height))
-      });
+      };
+
+      if (sizeRef.current.width === nextSize.width && sizeRef.current.height === nextSize.height) {
+        return;
+      }
+
+      sizeRef.current = nextSize;
+      setSize(nextSize);
     };
 
     updateSize();
@@ -74,15 +90,20 @@ export default function ReadOnlyFloorPlanCanvas({ data, comments = [] }: ReadOnl
   }, []);
 
   useEffect(() => {
-    const bounds = getContentBounds(data, comments);
-    if (!bounds) {
-      setZoom(1);
-      setPan({ x: 0, y: 0 });
+    if (contentMinX === null || contentMaxX === null || contentMinY === null || contentMaxY === null) {
+      if (zoomRef.current !== 1) {
+        zoomRef.current = 1;
+        setZoom(1);
+      }
+      if (panRef.current.x !== 0 || panRef.current.y !== 0) {
+        panRef.current = { x: 0, y: 0 };
+        setPan(panRef.current);
+      }
       return;
     }
 
-    const width = Math.max(bounds.maxX - bounds.minX, 1);
-    const height = Math.max(bounds.maxY - bounds.minY, 1);
+    const width = Math.max(contentMaxX - contentMinX, 1);
+    const height = Math.max(contentMaxY - contentMinY, 1);
     const padding = 48;
     const nextZoom = clamp(
       Math.min((size.width - padding * 2) / width, (size.height - padding * 2) / height),
@@ -90,12 +111,21 @@ export default function ReadOnlyFloorPlanCanvas({ data, comments = [] }: ReadOnl
       2.5
     );
 
-    setZoom(nextZoom);
-    setPan({
-      x: size.width / 2 - ((bounds.minX + bounds.maxX) / 2) * nextZoom,
-      y: size.height / 2 - ((bounds.minY + bounds.maxY) / 2) * nextZoom
-    });
-  }, [comments, data, size.height, size.width]);
+    const nextPan = {
+      x: size.width / 2 - ((contentMinX + contentMaxX) / 2) * nextZoom,
+      y: size.height / 2 - ((contentMinY + contentMaxY) / 2) * nextZoom
+    };
+
+    if (Math.abs(zoomRef.current - nextZoom) >= 0.001) {
+      zoomRef.current = nextZoom;
+      setZoom(nextZoom);
+    }
+
+    if (Math.abs(panRef.current.x - nextPan.x) >= 0.001 || Math.abs(panRef.current.y - nextPan.y) >= 0.001) {
+      panRef.current = nextPan;
+      setPan(nextPan);
+    }
+  }, [contentMaxX, contentMaxY, contentMinX, contentMinY, size.height, size.width]);
 
   const gridSpacing = useMemo(
     () => (data.scale * data.gridSize) / 12,
@@ -119,11 +149,16 @@ export default function ReadOnlyFloorPlanCanvas({ data, comments = [] }: ReadOnl
     };
     const nextZoom = clamp(event.evt.deltaY > 0 ? oldZoom / scaleBy : oldZoom * scaleBy, 0.3, 4);
 
-    setZoom(Number(nextZoom.toFixed(3)));
-    setPan({
+    const roundedZoom = Number(nextZoom.toFixed(3));
+    const nextPan = {
       x: pointer.x - mousePointTo.x * nextZoom,
       y: pointer.y - mousePointTo.y * nextZoom
-    });
+    };
+
+    zoomRef.current = roundedZoom;
+    panRef.current = nextPan;
+    setZoom(roundedZoom);
+    setPan(nextPan);
   }
 
   return (
@@ -138,7 +173,11 @@ export default function ReadOnlyFloorPlanCanvas({ data, comments = [] }: ReadOnl
           scaleX={zoom}
           scaleY={zoom}
           draggable
-          onDragEnd={(event) => setPan({ x: event.target.x(), y: event.target.y() })}
+          onDragEnd={(event) => {
+            const nextPan = { x: event.target.x(), y: event.target.y() };
+            panRef.current = nextPan;
+            setPan(nextPan);
+          }}
           onWheel={handleWheel}
         >
           <Layer listening={false}>

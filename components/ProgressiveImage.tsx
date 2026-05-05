@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { useState } from "react"
+import { useRef, useState } from "react"
 
 type ProgressiveImageProps = {
   src: string
@@ -23,6 +23,16 @@ export default function ProgressiveImage({
   style
 }: ProgressiveImageProps) {
   const [loaded, setLoaded] = useState(false)
+  const loadedRef = useRef(false)
+
+  function handleLoad() {
+    if (loadedRef.current) {
+      return
+    }
+
+    loadedRef.current = true
+    setLoaded(true)
+  }
 
   return (
     <div className={`progressive-image${loaded ? " is-loaded" : ""}${className ? ` ${className}` : ""}`} onClick={onClick} style={style}>
@@ -33,7 +43,7 @@ export default function ProgressiveImage({
         fill={fill}
         sizes={sizes}
         unoptimized
-        onLoad={() => setLoaded(true)}
+        onLoad={handleLoad}
         style={{ objectFit: "cover" }}
         draggable={false}
       />

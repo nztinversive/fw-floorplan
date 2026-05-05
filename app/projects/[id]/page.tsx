@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useMutation, useQuery } from "convex/react"
 import { AlertTriangle, CalendarDays, CheckCircle2, DraftingCompass, Download, Image as ImageIcon, Info, Layers, Link2, MapPin, MessageSquare, Pencil, RotateCw, Trash2, User, X } from "lucide-react"
@@ -13,7 +14,6 @@ import ConfirmDialog from "@/components/ConfirmDialog"
 import CostEstimator from "@/components/CostEstimator"
 import DesignReviewPanel from "@/components/DesignReviewPanel"
 import FloorPlanComparison from "@/components/FloorPlanComparison"
-import ReadOnlyFloorPlanCanvas from "@/components/ReadOnlyFloorPlanCanvas"
 import RoomAreaSummaryDashboard from "@/components/RoomAreaSummaryDashboard"
 import RoomSchedule from "@/components/RoomSchedule"
 import ShareLinkCard from "@/components/ShareLinkCard"
@@ -32,6 +32,10 @@ import { downloadSvg, generateSvg } from "@/lib/svg-export"
 import type { PersistedFloorPlan, ProjectComment } from "@/lib/types"
 
 type OverviewInsightsTab = "summary" | "design" | "cost" | "schedule" | "compliance"
+
+const ReadOnlyFloorPlanCanvas = dynamic(() => import("@/components/ReadOnlyFloorPlanCanvas"), {
+  ssr: false
+})
 
 function sanitizeFileStem(value: string) {
   return (

@@ -33,6 +33,8 @@ export default function SharePermissionsPanel({
       await onInvite(email, role);
       setEmail("");
       setRole("viewer");
+    } catch {
+      // Parent handlers surface the user-facing error toast.
     } finally {
       setIsInviting(false);
     }
@@ -42,6 +44,8 @@ export default function SharePermissionsPanel({
     setActiveMemberId(memberId);
     try {
       await onUpdateRole(memberId, nextRole);
+    } catch {
+      // Parent handlers surface the user-facing error toast.
     } finally {
       setActiveMemberId(null);
     }
@@ -51,6 +55,8 @@ export default function SharePermissionsPanel({
     setActiveMemberId(memberId);
     try {
       await onRemove(memberId);
+    } catch {
+      // Parent handlers surface the user-facing error toast.
     } finally {
       setActiveMemberId(null);
     }

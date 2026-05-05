@@ -1,15 +1,16 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { useParams, useSearchParams } from "next/navigation"
-import { useConvexAuth, useQuery } from "convex/react"
+import { useConvexAuth, useMutation, useQuery } from "convex/react"
 import { Download, Expand, MapPin, User, Layers, Image as ImageIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 
 import CommentsPanel from "@/components/CommentsPanel"
 import Lightbox from "@/components/Lightbox"
 import ProgressiveImage from "@/components/ProgressiveImage"
-import ReadOnlyFloorPlanCanvas from "@/components/ReadOnlyFloorPlanCanvas"
 import ShareLinkCard from "@/components/ShareLinkCard"
+import SharePermissionsPanel from "@/components/SharePermissionsPanel"
 import { SkeletonPanel } from "@/components/Skeleton"
 import { useToast } from "@/components/Toast"
 import { api } from "@/convex/_generated/api"
@@ -23,7 +24,13 @@ import {
 import { formatRelativeTime } from "@/lib/file-utils"
 import { STYLE_PRESET_MAP } from "@/lib/style-presets"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
-import type { PersistedFloorPlan, ProjectComment } from "@/lib/types"
+import type { PersistedFloorPlan, ProjectComment, ProjectMember, ProjectMemberRole } from "@/lib/types"
+
+const EMPTY_COMMENTS: ProjectComment[] = []
+
+const ReadOnlyFloorPlanCanvas = dynamic(() => import("@/components/ReadOnlyFloorPlanCanvas"), {
+  ssr: false
+})
 
 function getStyleLabel(style: string) {
   return STYLE_PRESET_MAP[style as keyof typeof STYLE_PRESET_MAP]?.name ?? style
@@ -52,9 +59,23 @@ export default function ProjectSharePage() {
     api.comments.listComments,
     projectId && !shareToken && isAuthenticated ? { projectId } : "skip"
   )
+  const currentMember = useQuery(
+    api.members.currentMember,
+    projectId && !shareToken && isAuthenticated ? { projectId } : "skip"
+  )
+  const membersQuery = useQuery(
+    api.members.listMembers,
+    projectId && !shareToken && isAuthenticated && currentMember?.role === "owner"
+      ? { projectId }
+      : "skip"
+  )
+  const inviteMember = useMutation(api.members.inviteMember)
+  const removeMember = useMutation(api.members.removeMember)
+  const updateRole = useMutation(api.members.updateRole)
   const [isExporting, setIsExporting] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const project = shareToken ? publicShare?.project : protectedProject
+  const canManageMembers = !shareToken && currentMember?.role === "owner"
   const shareUrl = typeof window !== "undefined"
     ? window.location.href
     : `/projects/${projectId}/share${shareToken ? `?token=${shareToken}` : ""}`
@@ -78,6 +99,21 @@ export default function ProjectSharePage() {
     () => comments.filter((comment) => comment.status !== "resolved").length,
     [comments]
   )
+  const commentsByFloorPlanId = useMemo(() => {
+    const groupedComments: Record<string, ProjectComment[]> = {}
+
+    for (const comment of comments) {
+      if (!comment.floorPlanId) {
+        continue
+      }
+
+      const floorComments = groupedComments[comment.floorPlanId] ?? []
+      floorComments.push(comment)
+      groupedComments[comment.floorPlanId] = floorComments
+    }
+
+    return groupedComments
+  }, [comments])
   const renders = useMemo(
     () =>
       ((shareToken ? publicShare?.renders : rendersQuery) ?? []).map((render) => ({
@@ -111,6 +147,54 @@ export default function ProjectSharePage() {
     const favs = renders.filter((r) => r.isFavorite && r.imageUrl)
     return favs.length > 0 ? favs : renders.filter((r) => r.imageUrl)
   }, [renders])
+  const projectMembers = useMemo(
+    () => (membersQuery ?? []) as ProjectMember[],
+    [membersQuery]
+  )
+
+  async function handleInviteMember(email: string, role: ProjectMemberRole) {
+    if (!projectId) return
+
+    try {
+      await inviteMember({
+        projectId,
+        email,
+        role
+      })
+      toast("Project member invited", "success")
+    } catch (error) {
+      console.error("Unable to invite project member.", error)
+      toast("Unable to invite that member", "error")
+      throw error
+    }
+  }
+
+  async function handleRemoveMember(memberId: string) {
+    try {
+      await removeMember({
+        memberId: memberId as Id<"members">
+      })
+      toast("Project member removed", "success")
+    } catch (error) {
+      console.error("Unable to remove project member.", error)
+      toast("Unable to remove that member", "error")
+      throw error
+    }
+  }
+
+  async function handleUpdateMemberRole(memberId: string, role: ProjectMemberRole) {
+    try {
+      await updateRole({
+        memberId: memberId as Id<"members">,
+        role
+      })
+      toast("Project member role updated", "success")
+    } catch (error) {
+      console.error("Unable to update project member role.", error)
+      toast("Unable to update that role", "error")
+      throw error
+    }
+  }
 
   async function handleExportPdf() {
     if (!project || isExporting) return
@@ -258,6 +342,19 @@ export default function ProjectSharePage() {
         }
       />
 
+      {canManageMembers ? (
+        membersQuery === undefined ? (
+          <SkeletonPanel height="260px" />
+        ) : (
+          <SharePermissionsPanel
+            members={projectMembers}
+            onInvite={handleInviteMember}
+            onRemove={handleRemoveMember}
+            onUpdateRole={handleUpdateMemberRole}
+          />
+        )
+      ) : null}
+
       <div className="share-grid">
         <section className="panel">
           <div className="panel-header">
@@ -277,7 +374,7 @@ export default function ProjectSharePage() {
                   </div>
                   <ReadOnlyFloorPlanCanvas
                     data={floorPlan.data}
-                    comments={comments.filter((comment) => comment.floorPlanId === floorPlan._id)}
+                    comments={commentsByFloorPlanId[floorPlan._id] ?? EMPTY_COMMENTS}
                   />
                 </article>
               ))}
