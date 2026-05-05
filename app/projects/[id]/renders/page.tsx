@@ -14,6 +14,7 @@ import DesignOutputQAPanel from "@/components/DesignOutputQAPanel"
 import Lightbox from "@/components/Lightbox"
 import RenderCard from "@/components/RenderCard"
 import RenderProgress from "@/components/RenderProgress"
+import RoomDesignDirectionsPanel from "@/components/RoomDesignDirectionsPanel"
 import SettingTooltip, { SETTING_TOOLTIPS } from "@/components/SettingTooltip"
 import { SkeletonPanel } from "@/components/Skeleton"
 import StyleSelector from "@/components/StyleSelector"
@@ -68,6 +69,37 @@ const EMPTY_RENDER_BRIEF: RenderBrief = {
   mustHave: "",
   avoid: "",
   revisionNotes: ""
+}
+const ROOM_DESIGN_DIRECTIONS_HEADING = "Room-by-room design directions:"
+
+function mergeRoomDesignDirections(existingText: string, directionText: string) {
+  const nextBlock = [
+    ROOM_DESIGN_DIRECTIONS_HEADING,
+    ...directionText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+  ].join("\n")
+  const lines = existingText.split("\n")
+  const startIndex = lines.findIndex((line) => line.trim() === ROOM_DESIGN_DIRECTIONS_HEADING)
+
+  if (startIndex === -1) {
+    return [existingText.trim(), nextBlock].filter(Boolean).join("\n\n")
+  }
+
+  let endIndex = startIndex + 1
+  while (endIndex < lines.length && lines[endIndex].trim().length > 0) {
+    endIndex += 1
+  }
+
+  return [
+    ...lines.slice(0, startIndex),
+    ...nextBlock.split("\n"),
+    ...lines.slice(endIndex)
+  ]
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
 }
 
 function getDefaultSettings(
@@ -324,6 +356,7 @@ export default function ProjectRendersPage() {
       : null
   const loadedProjectId = project?._id
   const loadedRenderBrief = project?.renderBrief
+  const loadedRenderBriefKey = JSON.stringify(loadedRenderBrief ?? EMPTY_RENDER_BRIEF)
   const persistedRenderBrief = project?.renderBrief ?? EMPTY_RENDER_BRIEF
   const isRenderBriefDirty = useMemo(
     () => JSON.stringify(renderBrief) !== JSON.stringify(persistedRenderBrief),
@@ -344,15 +377,34 @@ export default function ProjectRendersPage() {
 
   useEffect(() => {
     if (loadedProjectId) {
-      setRenderBrief(loadedRenderBrief ?? EMPTY_RENDER_BRIEF)
+      setRenderBrief(JSON.parse(loadedRenderBriefKey) as RenderBrief)
     }
-  }, [loadedProjectId, loadedRenderBrief])
+  }, [loadedProjectId, loadedRenderBriefKey])
 
   function updateRenderBriefField(key: keyof RenderBrief, value: string) {
     setRenderBrief((current) => ({
       ...current,
       [key]: value
     }))
+  }
+
+  function handleApplyRoomDesignDirections(directionText: string) {
+    const cleanedDirectionText = directionText
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join("\n")
+
+    if (!cleanedDirectionText) {
+      toast("Add at least one room direction before applying", "warning")
+      return
+    }
+
+    setRenderBrief((current) => ({
+      ...current,
+      designNotes: mergeRoomDesignDirections(current.designNotes, cleanedDirectionText)
+    }))
+    toast("Room directions added to the design brief", "info")
   }
 
   function getConsistencyStatusLabel(status: RenderConsistencyStatus) {
@@ -1124,6 +1176,13 @@ export default function ProjectRendersPage() {
             Generate and batch generate automatically use the current brief. Unsaved brief edits are saved before generation starts.
           </div>
         </section>
+
+        <RoomDesignDirectionsPanel
+          floorPlans={project.floorPlans}
+          styleLabel={getStyleLabel(selectedStyle)}
+          disabled={isGenerationBusy || isSavingBrief}
+          onApplyDirections={handleApplyRoomDesignDirections}
+        />
 
         <section className="panel prompt-preview-panel">
           <div className="panel-header">
