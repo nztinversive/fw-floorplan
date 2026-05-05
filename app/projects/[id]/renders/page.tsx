@@ -181,6 +181,7 @@ export default function ProjectRendersPage() {
   const [renderBrief, setRenderBrief] = useState<RenderBrief>(EMPTY_RENDER_BRIEF)
   const [presetName, setPresetName] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isAutoVisualQARunning, setIsAutoVisualQARunning] = useState(false)
   const [isBatchGenerating, setIsBatchGenerating] = useState(false)
   const [isSavingBrief, setIsSavingBrief] = useState(false)
   const [isSavingPreset, setIsSavingPreset] = useState(false)
@@ -718,6 +719,7 @@ export default function ProjectRendersPage() {
     options: {
       renderBriefOverride?: RenderBrief;
       skipBriefSave?: boolean;
+      skipAutoVisualQA?: boolean;
       parentRenderId?: string;
       sourceReviewId?: string;
       sourceCritiqueId?: string;
@@ -754,7 +756,7 @@ export default function ProjectRendersPage() {
       if (isRenderBriefDirty && !options.skipBriefSave) {
         await saveRenderBrief({ silent: true })
       }
-      await generateRender({
+      const renderId = await generateRender({
         projectId,
         style: nextStyle,
         viewAngle: nextSettings.viewAngle,
@@ -767,7 +769,20 @@ export default function ProjectRendersPage() {
         sourceReviewId: options.sourceReviewId as Id<"renderReviews"> | undefined,
         sourceCritiqueId: options.sourceCritiqueId as Id<"renderCritiques"> | undefined
       })
-      toast("Render generated successfully", "success")
+      if (!options.skipAutoVisualQA && renderId) {
+        setIsAutoVisualQARunning(true)
+        toast("Render generated. Running visual QA...", "info")
+        try {
+          await critiqueRender({ renderId })
+          toast("Render generated and visual QA completed", "success")
+        } catch (visualQAError) {
+          console.error("Unable to run automatic visual QA.", visualQAError)
+          setErrorMessage("Render generated, but automatic visual QA could not complete. You can run visual QA from the render card.")
+          toast("Render generated, but visual QA failed", "warning")
+        }
+      } else {
+        toast("Render generated successfully", "success")
+      }
       return true
     } catch (error) {
       console.error("Unable to generate render.", error)
@@ -775,6 +790,7 @@ export default function ProjectRendersPage() {
       toast("Render generation failed", "error")
       return false
     } finally {
+      setIsAutoVisualQARunning(false)
       setIsGenerating(false)
     }
   }
@@ -920,13 +936,20 @@ export default function ProjectRendersPage() {
         : renderBrief
 
       try {
-        await generateRender({
+        const renderId = await generateRender({
           projectId,
           style: combination.styleId,
           viewAngle: combination.viewAngle,
           settings: batchSettings,
           renderBrief: batchRenderBrief
         })
+        if (renderId) {
+          try {
+            await critiqueRender({ renderId })
+          } catch (visualQAError) {
+            console.error("Unable to run automatic visual QA for batch render.", visualQAError)
+          }
+        }
       } catch (error) {
         failed += 1
         console.error("Unable to generate batch render.", error)
@@ -1846,7 +1869,7 @@ export default function ProjectRendersPage() {
                 disabled={isGenerationBusy}
               >
                 <ImagePlus size={18} />
-                {isGenerating ? "Generating..." : "Generate Render"}
+                {isAutoVisualQARunning ? "Running visual QA..." : isGenerating ? "Generating..." : "Generate Render"}
               </button>
               <button
                 type="button"
@@ -1859,6 +1882,9 @@ export default function ProjectRendersPage() {
               </button>
 
               <RenderProgress isGenerating={isGenerating} />
+              {isAutoVisualQARunning ? (
+                <div className="muted">Image-based visual QA is reviewing the new render before it enters the queue.</div>
+              ) : null}
 
               {isBatchGenerating && batchProgressLabel ? (
                 <div className="batch-progress-card">

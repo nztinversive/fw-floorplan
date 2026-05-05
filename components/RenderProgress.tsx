@@ -7,6 +7,7 @@ const STEPS = [
   { label: "Composing architectural description", duration: 4000 },
   { label: "Generating exterior image", duration: 18000 },
   { label: "Storing render", duration: 3000 },
+  { label: "Running image-based visual QA", duration: 12000 },
 ]
 
 const TOTAL_DURATION = STEPS.reduce((sum, s) => sum + s.duration, 0)
