@@ -199,8 +199,8 @@ export default function ProjectOverviewPage() {
       await updateProject({
         id: projectId,
         name: editName.trim(),
-        address: editAddress.trim() || undefined,
-        clientName: editClient.trim() || undefined
+        address: editAddress.trim(),
+        clientName: editClient.trim()
       })
       setIsEditing(false)
       toast("Project details updated", "success")

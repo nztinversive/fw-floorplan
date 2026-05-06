@@ -28,6 +28,10 @@ function hasArg<T extends object, K extends PropertyKey>(
   return Object.prototype.hasOwnProperty.call(args, key);
 }
 
+function normalizeProjectText(value: unknown) {
+  return typeof value === "string" ? value.trim() : undefined;
+}
+
 async function getPresentationProject(ctx: QueryCtx, projectId: Id<"projects">) {
   const project = await ctx.db.get(projectId);
   if (!project) {
@@ -245,8 +249,8 @@ export const update = mutationGeneric({
 
     await ctx.db.patch(args.id, {
       name: args.name ?? project.name,
-      address: hasArg(args, "address") ? args.address || undefined : project.address,
-      clientName: hasArg(args, "clientName") ? args.clientName || undefined : project.clientName,
+      address: hasArg(args, "address") ? normalizeProjectText(args.address) : project.address,
+      clientName: hasArg(args, "clientName") ? normalizeProjectText(args.clientName) : project.clientName,
       thumbnail: args.thumbnail ?? project.thumbnail,
       updatedAt: Date.now()
     });

@@ -204,6 +204,11 @@ export const extractFloorPlan = actionGeneric({
     storageId: v.id("_storage")
   },
   handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
     const imageUrl = await ctx.storage.getUrl(args.storageId);
     if (!imageUrl) {
       throw new Error("Unable to resolve uploaded image URL");
@@ -274,4 +279,3 @@ export const extractFloorPlan = actionGeneric({
     return parsed;
   }
 });
-
