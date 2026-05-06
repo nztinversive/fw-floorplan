@@ -7,9 +7,21 @@ export type PlanEditProposal = {
   focus: string
   summary: string
   data: FloorPlanData
+  scores: PlanEditScores
   changes: string[]
   checks: string[]
   confidence: number
+  isRecommended: boolean
+  recommendationReason: string
+}
+
+export type PlanEditScores = {
+  privacy: number
+  flow: number
+  programFit: number
+  outdoorConnection: number
+  renderReadiness: number
+  overall: number
 }
 
 type PlanEditVariant = "balanced" | "privacy" | "entertaining"
@@ -168,6 +180,10 @@ function hasRoom(data: FloorPlanData, pattern: RegExp) {
   return Boolean(findRoom(data, pattern))
 }
 
+function countRooms(data: FloorPlanData, pattern: RegExp) {
+  return data.rooms.filter((room) => pattern.test(room.label)).length
+}
+
 function expandRoom(builder: EditBuilder, pattern: RegExp, label: string, growX: number, growY: number) {
   const room = findRoom(builder.data, pattern)
   if (!room) {
@@ -229,6 +245,92 @@ function getVariantFocus(variant: PlanEditVariant) {
   if (variant === "privacy") return "Privacy"
   if (variant === "entertaining") return "Entertaining"
   return "Balanced"
+}
+
+function scoreHasIntent(prompt: string, pattern: RegExp) {
+  return pattern.test(prompt)
+}
+
+function clampScore(value: number) {
+  return Math.max(45, Math.min(98, Math.round(value)))
+}
+
+function calculatePlanEditScores(data: FloorPlanData, prompt: string, variant: PlanEditVariant, changes: string[]): PlanEditScores {
+  const bedrooms = countRooms(data, /bedroom|guest|primary|suite/i)
+  const hasOffice = hasRoom(data, /office|study|flex|work/i)
+  const hasMudroom = hasRoom(data, /mudroom|laundry|drop zone/i)
+  const hasKitchen = hasRoom(data, /kitchen|dining/i)
+  const hasOutdoor = hasRoom(data, /patio|porch|deck|outdoor/i)
+  const hasPrimary = hasRoom(data, /primary|suite/i)
+  const exteriorOpenings = data.windows.length + data.doors.filter((door) => door.type === "sliding" || door.type === "double").length
+  const roomCount = data.rooms.length
+
+  const wantsOffice = scoreHasIntent(prompt, /office|study|work|flex/)
+  const wantsMudroom = scoreHasIntent(prompt, /mudroom|mud room|laundry|drop zone|entry/)
+  const wantsKitchen = scoreHasIntent(prompt, /kitchen|dining|cook|island|pantry/)
+  const wantsOutdoor = scoreHasIntent(prompt, /patio|porch|deck|outdoor|indoor-outdoor/)
+  const wantsPrivacy = scoreHasIntent(prompt, /private|privacy|split|separate|suite/)
+  const wantsBedroom = scoreHasIntent(prompt, /bedroom|bed room|4-bed|four bed|guest/)
+
+  let programFit = 62 + changes.length * 4
+  if (!wantsOffice || hasOffice) programFit += 7
+  if (!wantsMudroom || hasMudroom) programFit += 7
+  if (!wantsKitchen || hasKitchen) programFit += 7
+  if (!wantsOutdoor || hasOutdoor) programFit += 5
+  if (!wantsBedroom || bedrooms >= 3) programFit += 5
+
+  let privacy = 58 + bedrooms * 3 + (hasPrimary ? 8 : 0)
+  if (variant === "privacy") privacy += 14
+  if (wantsPrivacy && variant !== "privacy") privacy -= 5
+  if (hasOffice) privacy += 3
+
+  let flow = 68 + (hasKitchen ? 7 : 0) + (hasMudroom ? 4 : 0) - Math.max(0, roomCount - 9) * 2
+  if (variant === "balanced") flow += 8
+  if (variant === "entertaining") flow += 5
+
+  let outdoorConnection = 54 + exteriorOpenings * 3
+  if (hasOutdoor) outdoorConnection += 24
+  if (variant === "entertaining") outdoorConnection += 10
+  if (wantsOutdoor && !hasOutdoor) outdoorConnection -= 8
+
+  let renderReadiness = 64 + data.windows.length * 2 + data.doors.length + Math.min(roomCount, 8)
+  if (hasOutdoor) renderReadiness += 5
+  if (variant === "balanced") renderReadiness += 3
+
+  privacy = clampScore(privacy)
+  flow = clampScore(flow)
+  programFit = clampScore(programFit)
+  outdoorConnection = clampScore(outdoorConnection)
+  renderReadiness = clampScore(renderReadiness)
+
+  const outdoorWeight = wantsOutdoor ? 1.25 : 0.85
+  const privacyWeight = wantsPrivacy ? 1.25 : 0.95
+  const overall = clampScore(
+    (privacy * privacyWeight + flow + programFit * 1.3 + outdoorConnection * outdoorWeight + renderReadiness) /
+      (privacyWeight + 1 + 1.3 + outdoorWeight + 1)
+  )
+
+  return {
+    privacy,
+    flow,
+    programFit,
+    outdoorConnection,
+    renderReadiness,
+    overall
+  }
+}
+
+function makeRecommendationReason(proposal: Pick<PlanEditProposal, "focus" | "scores" | "changes">) {
+  const scoreEntries: Array<[string, number]> = [
+    ["program fit", proposal.scores.programFit],
+    ["privacy", proposal.scores.privacy],
+    ["flow", proposal.scores.flow],
+    ["outdoor connection", proposal.scores.outdoorConnection],
+    ["render readiness", proposal.scores.renderReadiness]
+  ]
+  const strongestScore = scoreEntries.sort((left, right) => right[1] - left[1])[0]?.[0]
+
+  return `${proposal.focus} option is strongest on ${strongestScore} while covering ${proposal.changes.length} requested change${proposal.changes.length === 1 ? "" : "s"}.`
 }
 
 function addVariantIntent(builder: EditBuilder, variant: PlanEditVariant) {
@@ -341,9 +443,17 @@ export function generatePlanEditProposal(
   builder.checks.push("Use the editor to resolve any structural wall alignment before sending to renders.")
 
   const data = syncDerivedData(builder.data)
+  const scores = calculatePlanEditScores(data, normalizedPrompt, variant, builder.changes)
   const confidence = Math.min(97, 72 + builder.changes.length * 5 + (variant === "balanced" ? 2 : 0))
   const title = makeTitle(normalizedPrompt, builder.changes, variant)
   const focus = getVariantFocus(variant)
+  const uniqueChanges = [...new Set(builder.changes)]
+  const uniqueChecks = [...new Set(builder.checks)]
+  const recommendationReason = makeRecommendationReason({
+    focus,
+    scores,
+    changes: uniqueChanges
+  })
 
   return {
     id: `proposal-${variant}-${Date.now()}`,
@@ -351,16 +461,25 @@ export function generatePlanEditProposal(
     focus,
     summary: `${focus} interpretation of: "${prompt.trim()}". Save as a new floor so the current plan stays intact.`,
     data,
-    changes: [...new Set(builder.changes)],
-    checks: [...new Set(builder.checks)],
-    confidence
+    scores,
+    changes: uniqueChanges,
+    checks: uniqueChecks,
+    confidence,
+    isRecommended: false,
+    recommendationReason
   }
 }
 
 export function generatePlanEditProposals(source: FloorPlanData, prompt: string): PlanEditProposal[] {
-  return [
+  const proposals = [
     generatePlanEditProposal(source, prompt, "balanced"),
     generatePlanEditProposal(source, prompt, "privacy"),
     generatePlanEditProposal(source, prompt, "entertaining")
-  ].sort((left, right) => right.confidence - left.confidence)
+  ].sort((left, right) => right.scores.overall - left.scores.overall)
+  const recommendedId = proposals[0]?.id
+
+  return proposals.map((proposal) => ({
+    ...proposal,
+    isRecommended: proposal.id === recommendedId
+  }))
 }

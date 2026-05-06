@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowRight, Bot, CheckCircle2, MessageSquareText, Plus, WandSparkles } from "lucide-react"
+import { ArrowRight, Bot, CheckCircle2, MessageSquareText, Plus, Trophy, WandSparkles } from "lucide-react"
 import { useState } from "react"
 
 import FloorPlanPreviewSvg from "@/components/FloorPlanPreviewSvg"
@@ -21,6 +21,14 @@ const EXAMPLE_PROMPTS = [
   "Add a mudroom and outdoor patio connection"
 ]
 
+const SCORE_LABELS = [
+  { key: "programFit", label: "Program" },
+  { key: "flow", label: "Flow" },
+  { key: "privacy", label: "Privacy" },
+  { key: "outdoorConnection", label: "Outdoor" },
+  { key: "renderReadiness", label: "Render ready" }
+] as const
+
 export default function PlanEditAssistantPanel({
   floorLabel,
   sourceData,
@@ -31,6 +39,7 @@ export default function PlanEditAssistantPanel({
   const [proposals, setProposals] = useState<PlanEditProposal[]>([])
   const [selectedProposalId, setSelectedProposalId] = useState("")
   const selectedProposal = proposals.find((proposal) => proposal.id === selectedProposalId) ?? proposals[0] ?? null
+  const recommendedProposal = proposals.find((proposal) => proposal.isRecommended) ?? proposals[0] ?? null
 
   function handlePreview() {
     if (!sourceData || !prompt.trim()) {
@@ -104,12 +113,40 @@ export default function PlanEditAssistantPanel({
               <Plus size={17} />
               {isSaving ? "Saving..." : "Save selected option"}
             </button>
+            <button
+              type="button"
+              className="button-ghost"
+              onClick={() => recommendedProposal && onSaveProposal(recommendedProposal)}
+              disabled={!recommendedProposal || isSaving}
+            >
+              <Trophy size={17} />
+              Save recommended
+            </button>
           </div>
         </div>
 
         <div className="plan-edit-preview-card">
           {selectedProposal ? (
             <>
+              {recommendedProposal ? (
+                <div className="plan-edit-recommendation">
+                  <div className="plan-edit-recommendation-icon">
+                    <Trophy size={18} />
+                  </div>
+                  <div>
+                    <strong>Recommended: {recommendedProposal.title}</strong>
+                    <span>{recommendedProposal.recommendationReason}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="plan-edit-recommendation-button"
+                    onClick={() => setSelectedProposalId(recommendedProposal.id)}
+                  >
+                    View winner
+                  </button>
+                </div>
+              ) : null}
+
               <div className="plan-edit-options-grid" aria-label="Generated plan edit options">
                 {proposals.map((proposal) => {
                   const isSelected = proposal.id === selectedProposal.id
@@ -125,9 +162,12 @@ export default function PlanEditAssistantPanel({
                         <FloorPlanPreviewSvg data={proposal.data} label={`${proposal.title} preview`} />
                       </div>
                       <div className="plan-edit-option-meta">
-                        <span className="badge">{proposal.focus}</span>
+                        <div className="plan-edit-option-badges">
+                          <span className="badge">{proposal.focus}</span>
+                          {proposal.isRecommended ? <span className="badge is-success">winner</span> : null}
+                        </div>
                         <strong>{proposal.title}</strong>
-                        <span>{proposal.confidence}% match</span>
+                        <span>{proposal.scores.overall}% score · {proposal.confidence}% match</span>
                       </div>
                     </button>
                   )
@@ -140,7 +180,21 @@ export default function PlanEditAssistantPanel({
                     <div className="plan-edit-preview-title">{selectedProposal.title}</div>
                     <div className="muted">{selectedProposal.summary}</div>
                   </div>
-                  <span className="badge">{selectedProposal.confidence}% match</span>
+                  <span className="badge">{selectedProposal.scores.overall}% score</span>
+                </div>
+
+                <div className="plan-edit-score-grid" aria-label="Selected option scores">
+                  {SCORE_LABELS.map((score) => (
+                    <div key={score.key} className="plan-edit-score-item">
+                      <div className="plan-edit-score-meta">
+                        <span>{score.label}</span>
+                        <strong>{selectedProposal.scores[score.key]}</strong>
+                      </div>
+                      <div className="plan-edit-score-bar">
+                        <span style={{ width: `${selectedProposal.scores[score.key]}%` }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 <div className="plan-edit-list">

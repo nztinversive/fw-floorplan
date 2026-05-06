@@ -882,6 +882,57 @@ button:disabled,
   background: rgba(248, 250, 252, 0.7);
 }
 
+.plan-edit-recommendation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  border-bottom: 1px solid rgba(212, 168, 75, 0.22);
+  background: rgba(255, 251, 235, 0.72);
+  padding: 0.85rem;
+}
+
+.plan-edit-recommendation-icon {
+  display: grid;
+  place-items: center;
+  width: 2.3rem;
+  height: 2.3rem;
+  border-radius: 999px;
+  background: rgba(212, 168, 75, 0.18);
+  color: #735419;
+}
+
+.plan-edit-recommendation strong,
+.plan-edit-recommendation span {
+  display: block;
+}
+
+.plan-edit-recommendation strong {
+  color: var(--fw-navy);
+  font-size: 0.9rem;
+}
+
+.plan-edit-recommendation span {
+  margin-top: 0.2rem;
+  color: var(--fw-slate);
+  font-size: 0.78rem;
+  line-height: 1.38;
+}
+
+.plan-edit-recommendation-button {
+  border: 1px solid rgba(212, 168, 75, 0.38);
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: var(--fw-navy);
+  padding: 0.48rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.plan-edit-recommendation-button:hover {
+  background: rgba(212, 168, 75, 0.14);
+}
+
 .plan-edit-options-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -927,6 +978,12 @@ button:disabled,
   padding: 0.6rem;
 }
 
+.plan-edit-option-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
 .plan-edit-option-meta strong {
   color: var(--fw-navy);
   font-size: 0.84rem;
@@ -966,6 +1023,49 @@ button:disabled,
   color: var(--fw-navy);
   font-size: 1.02rem;
   font-weight: 900;
+}
+
+.plan-edit-score-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.plan-edit-score-item {
+  display: grid;
+  gap: 0.32rem;
+  min-width: 0;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.5rem;
+  background: #ffffff;
+  padding: 0.58rem;
+}
+
+.plan-edit-score-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.35rem;
+  color: var(--fw-slate);
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.plan-edit-score-meta strong {
+  color: var(--fw-navy);
+}
+
+.plan-edit-score-bar {
+  overflow: hidden;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: rgba(27, 42, 74, 0.08);
+}
+
+.plan-edit-score-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--fw-amber), #8aa77f);
 }
 
 .plan-edit-list {
@@ -8040,6 +8140,7 @@ button.render-variant-row:disabled {
   .panel-header,
   .plan-edit-assistant-header,
   .plan-edit-preview-title-row,
+  .plan-edit-recommendation,
   .canvas-caption,
   .comparison-header,
   .share-brand-row,
@@ -8066,6 +8167,7 @@ button.render-variant-row:disabled {
   .overview-readiness-grid,
   .concept-brief-fields,
   .plan-edit-options-grid,
+  .plan-edit-score-grid,
   .plan-quality-gates-list,
   .render-workflow-steps {
     grid-template-columns: 1fr;
