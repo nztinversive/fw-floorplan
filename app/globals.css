@@ -2838,6 +2838,217 @@ button:disabled,
   cursor: not-allowed;
 }
 
+.design-control-center-panel {
+  display: grid;
+  gap: 1rem;
+  border-color: rgba(27, 42, 74, 0.14);
+}
+
+.design-control-center-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(16rem, 0.42fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.design-control-center-score {
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  min-width: 5.6rem;
+  border-radius: 0.75rem;
+  background: var(--fw-navy);
+  color: #ffffff;
+}
+
+.design-control-center-score span {
+  font-size: 2rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.design-control-center-score small {
+  margin-top: 0.2rem;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.66rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.design-control-center-copy {
+  display: grid;
+  gap: 0.42rem;
+  min-width: 0;
+}
+
+.design-control-center-status {
+  color: var(--fw-navy);
+  font-size: 1.08rem;
+  font-weight: 850;
+}
+
+.design-control-center-focus {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 0.35rem;
+}
+
+.design-control-center-focus > div,
+.design-control-center-action-card {
+  min-width: 0;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.65rem;
+  background: rgba(248, 250, 252, 0.78);
+  padding: 0.75rem;
+}
+
+.design-control-center-focus strong {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--fw-navy);
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.design-control-center-focus span {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--fw-slate);
+  font-size: 0.78rem;
+  line-height: 1.42;
+}
+
+.design-control-center-action-card {
+  display: grid;
+  gap: 0.65rem;
+  align-content: center;
+}
+
+.design-control-center-primary {
+  width: 100%;
+}
+
+.design-control-center-signals {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.design-control-center-signal {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem;
+  min-width: 0;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.74);
+  padding: 0.72rem;
+}
+
+.design-control-center-signal.is-ready {
+  background: rgba(240, 253, 244, 0.58);
+}
+
+.design-control-center-signal.is-review {
+  background: rgba(255, 251, 235, 0.56);
+}
+
+.design-control-center-signal.is-blocked {
+  background: rgba(254, 242, 242, 0.56);
+}
+
+.design-control-center-signal-icon {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: rgba(27, 42, 74, 0.07);
+  color: var(--fw-navy);
+}
+
+.design-control-center-signal.is-ready .design-control-center-signal-icon {
+  color: #166534;
+}
+
+.design-control-center-signal.is-review .design-control-center-signal-icon {
+  color: #7c5a16;
+}
+
+.design-control-center-signal.is-blocked .design-control-center-signal-icon {
+  color: #991b1b;
+}
+
+.design-control-center-signal-label {
+  color: var(--fw-slate);
+  font-size: 0.66rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.design-control-center-signal strong {
+  display: block;
+  margin-top: 0.12rem;
+  color: var(--fw-navy);
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+
+.design-control-center-signal span {
+  display: block;
+  margin-top: 0.22rem;
+  color: var(--fw-slate);
+  font-size: 0.74rem;
+  line-height: 1.38;
+}
+
+.design-control-center-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.design-control-center-queue,
+.design-control-center-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.design-control-center-queue {
+  color: var(--fw-slate);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.design-control-center-secondary-action {
+  display: inline-flex;
+  gap: 0.32rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(27, 42, 74, 0.12);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--fw-navy);
+  padding: 0.38rem 0.58rem;
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.design-control-center-secondary-action:hover {
+  border-color: rgba(212, 168, 75, 0.55);
+  background: rgba(212, 168, 75, 0.12);
+}
+
+.design-control-center-secondary-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .design-output-qa-panel {
   display: grid;
   gap: 0.9rem;
@@ -6835,6 +7046,9 @@ button.render-variant-row:disabled {
   .overview-grid,
   .editor-grid,
   .render-controls,
+  .design-control-center-main,
+  .design-control-center-focus,
+  .design-control-center-signals,
   .comparison-grid,
   .render-decision-score-grid,
   .render-decision-variant-grid,

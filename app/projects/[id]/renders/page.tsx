@@ -11,6 +11,10 @@ import { useDebounce } from "use-debounce"
 import Breadcrumb from "@/components/Breadcrumb"
 import ConfirmDialog from "@/components/ConfirmDialog"
 import DesignDNAPanel from "@/components/DesignDNAPanel"
+import DesignControlCenterPanel, {
+  type DesignControlCenterAction,
+  type DesignControlCenterSignal
+} from "@/components/DesignControlCenterPanel"
 import DesignOutputQAPanel from "@/components/DesignOutputQAPanel"
 import Lightbox from "@/components/Lightbox"
 import RenderDesignSpecPanel from "@/components/RenderDesignSpecPanel"
@@ -576,6 +580,57 @@ export default function ProjectRendersPage() {
         : null,
     [comparisonRenders, designDNA, renderQualityById]
   )
+  const designControlSignals = useMemo<DesignControlCenterSignal[]>(() => {
+    const planRoomCount = (project?.floorPlans ?? []).reduce(
+      (total, floorPlan) => total + floorPlan.data.rooms.length,
+      0
+    )
+    const hasPlan = planRoomCount > 0
+    const renderCount = renders.filter((render) => render.imageUrl).length
+    const hasBrief = hasRenderBriefContent
+    const hasFinal = Boolean(finalRender)
+    const specStatus = renderDesignSpec?.status ?? "review"
+    const queueNeedsWork = renderReviewQueue.stats.needsRevision + renderReviewQueue.stats.review
+
+    return [
+      {
+        label: "Plan",
+        value: hasPlan ? `${planRoomCount} rooms` : "Missing",
+        detail: hasPlan ? "Saved floor plan can drive render constraints." : "Save room-labeled plan data first.",
+        status: hasPlan ? "ready" : "blocked"
+      },
+      {
+        label: "Brief",
+        value: hasBrief ? "Ready" : "Empty",
+        detail: hasBrief ? "Design intent is captured for generation." : "Add style intent before generating.",
+        status: hasBrief ? "ready" : "review"
+      },
+      {
+        label: "Spec",
+        value: renderDesignSpec ? `${renderDesignSpec.score}/100` : "Pending",
+        detail: renderDesignSpec?.summary ?? "Preparing render-ready design spec.",
+        status: specStatus
+      },
+      {
+        label: "Renders",
+        value: `${renderCount}`,
+        detail: renderCount > 0 ? `${queueNeedsWork} waiting for review or revision.` : "Generate the first exterior concept.",
+        status: renderCount === 0 ? "idle" : queueNeedsWork > 0 ? "review" : "ready"
+      },
+      {
+        label: "Final",
+        value: hasFinal ? "Selected" : "Needed",
+        detail: hasFinal ? "Package export has a leading render." : "Pick a final after QA and comparison.",
+        status: hasFinal ? "ready" : "review"
+      }
+    ]
+  }, [finalRender, hasRenderBriefContent, project?.floorPlans, renderDesignSpec, renderReviewQueue, renders])
+  const designControlQueueSummary = useMemo(() => {
+    const { ready, review, needsRevision, stale, missingVisualQA } = renderReviewQueue.stats
+    const staleCopy = stale > 0 ? `, ${stale} stale` : ""
+    const visualCopy = missingVisualQA > 0 ? `, ${missingVisualQA} need visual QA` : ""
+    return `${ready} ready, ${review} in review, ${needsRevision} need revision${staleCopy}${visualCopy}.`
+  }, [renderReviewQueue.stats])
 
   useEffect(() => {
     if (loadedProjectId) {
@@ -1539,6 +1594,15 @@ export default function ProjectRendersPage() {
     })
   }
 
+  function handleScrollToRenderSection(sectionId: string) {
+    window.requestAnimationFrame(() => {
+      document.getElementById(sectionId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      })
+    })
+  }
+
   function getDecisionRender(renderId?: string) {
     if (!renderId) {
       return null
@@ -1657,6 +1721,113 @@ export default function ProjectRendersPage() {
     )
   }
 
+  const designControlFinalLabel = finalRender
+    ? `${getStyleLabel(finalRender.style)} | ${RENDER_VIEW_ANGLE_LABELS[finalRender.settings.viewAngle]}`
+    : undefined
+  const designControlNextIssue = renderReviewQueue.weakest
+    ? {
+      label: renderReviewQueue.weakest.label,
+      detail: renderReviewQueue.weakest.detail
+    }
+    : designOutputQA.regenerationTarget
+      ? {
+        label: designOutputQA.regenerationTarget.renderLabel,
+        detail: designOutputQA.regenerationTarget.fixes
+      }
+      : renderDesignSpec?.status === "blocked"
+        ? {
+          label: "Design spec is blocked",
+          detail: renderDesignSpec.summary
+        }
+        : finalRender
+          ? {
+            label: "Package can be finalized",
+            detail: designOutputQA.summary
+          }
+          : {
+            label: renders.length > 0 ? "Pick the final direction" : "Generate the first render",
+            detail: renders.length > 0 ? "Use QA and comparison to select a final render." : "Create the first exterior concept from the current brief."
+          }
+  const designControlPrimaryAction: DesignControlCenterAction =
+    renderDesignSpec?.status === "blocked"
+      ? {
+        label: "Review spec blockers",
+        detail: "Resolve blocked render-spec assumptions before generation.",
+        onClick: () => handleScrollToRenderSection("render-design-spec-section"),
+        disabled: isGenerationBusy
+      }
+      : renders.length === 0
+        ? {
+          label: isGenerating ? "Generating..." : "Generate first render",
+          detail: "Create the first exterior concept from the current plan and brief.",
+          onClick: handleGenerateRender,
+          disabled: isGenerationBusy
+        }
+        : renderReviewQueue.weakest
+          ? {
+            label: "Fix next issue",
+            detail: "Open an editable revision brief for the weakest queued render.",
+            onClick: () =>
+              handleOpenQueueRevisionBrief(
+                renderReviewQueue.weakest!.render.id,
+                renderReviewQueue.weakest!.suggestedFixes,
+                renderReviewQueue.weakest!
+              ),
+            disabled: isGenerationBusy || pendingRenderAction !== null
+          }
+          : designOutputQA.regenerationTarget
+            ? {
+              label: "Build QA brief",
+              detail: "Turn package QA findings into a targeted regeneration brief.",
+              onClick: () =>
+                handleOpenRevisionBrief(
+                  designOutputQA.regenerationTarget!.renderId,
+                  designOutputQA.regenerationTarget!.fixes
+                ),
+              disabled: isGenerationBusy || pendingRenderAction !== null
+            }
+            : !finalRender
+              ? {
+                label: "Choose final render",
+                detail: "Jump to the gallery and mark the strongest direction as final.",
+                onClick: () => handleScrollToRenderSection("render-gallery-section"),
+                disabled: false
+              }
+              : {
+                label: isExportingPackage ? "Exporting..." : "Export package",
+                detail: "Create the client-ready PDF package from the final render and floor plan.",
+                onClick: handleExportClientPackage,
+                disabled: isExportingPackage
+              }
+  const designControlSecondaryActions: DesignControlCenterAction[] = [
+    {
+      label: "Brief",
+      detail: "Jump to the design brief inputs.",
+      onClick: () => handleScrollToRenderSection("render-brief-section")
+    },
+    {
+      label: "Spec",
+      detail: "Review the render-ready design spec.",
+      onClick: () => handleScrollToRenderSection("render-design-spec-section"),
+      disabled: !renderDesignSpec
+    },
+    {
+      label: "QA",
+      detail: "Review package QA checks.",
+      onClick: () => handleScrollToRenderSection("design-output-qa-section")
+    },
+    {
+      label: "Queue",
+      detail: "Open the render review queue.",
+      onClick: () => handleScrollToRenderSection("render-review-queue-section")
+    },
+    {
+      label: "Gallery",
+      detail: "Jump to saved renders.",
+      onClick: () => handleScrollToRenderSection("render-gallery-section")
+    }
+  ]
+
   return (
     <main className="page-shell">
       <Breadcrumb items={[
@@ -1689,7 +1860,20 @@ export default function ProjectRendersPage() {
       </div>
 
       <div className="render-stack">
-        <section className="panel">
+        <DesignControlCenterPanel
+          packageScore={designOutputQA.score}
+          packageLabel={designOutputQA.label}
+          packageSummary={designOutputQA.summary}
+          finalRenderLabel={designControlFinalLabel}
+          nextIssueLabel={designControlNextIssue.label}
+          nextIssueDetail={designControlNextIssue.detail}
+          queueSummary={designControlQueueSummary}
+          signals={designControlSignals}
+          primaryAction={designControlPrimaryAction}
+          secondaryActions={designControlSecondaryActions}
+        />
+
+        <section id="render-brief-section" className="panel">
           <div className="panel-header">
             <div>
               <div className="section-title">Render brief</div>
@@ -1781,11 +1965,13 @@ export default function ProjectRendersPage() {
         />
 
         {renderDesignSpec ? (
-          <RenderDesignSpecPanel
-            report={renderDesignSpec}
-            disabled={isGenerationBusy || isSavingBrief}
-            onApplyAction={handleApplyDesignSpecAction}
-          />
+          <div id="render-design-spec-section">
+            <RenderDesignSpecPanel
+              report={renderDesignSpec}
+              disabled={isGenerationBusy || isSavingBrief}
+              onApplyAction={handleApplyDesignSpecAction}
+            />
+          </div>
         ) : null}
 
         <section className="panel prompt-preview-panel">
@@ -2056,22 +2242,26 @@ export default function ProjectRendersPage() {
           </aside>
         </div>
 
-        <DesignOutputQAPanel
-          report={designOutputQA}
-          onFocusRender={handleFocusQARender}
-          onApplyFixes={handleApplyQAFixes}
-          onRegenerateFromQA={handleOpenRevisionBrief}
-          regenerateLabel="Build revision brief"
-          isRegenerating={pendingRenderAction?.action === "qa-regenerate"}
-        />
+        <div id="design-output-qa-section">
+          <DesignOutputQAPanel
+            report={designOutputQA}
+            onFocusRender={handleFocusQARender}
+            onApplyFixes={handleApplyQAFixes}
+            onRegenerateFromQA={handleOpenRevisionBrief}
+            regenerateLabel="Build revision brief"
+            isRegenerating={pendingRenderAction?.action === "qa-regenerate"}
+          />
+        </div>
 
-        <RenderReviewQueuePanel
-          report={renderReviewQueue}
-          isBusy={isGenerationBusy || pendingRenderAction !== null}
-          onFocusRender={handleFocusQARender}
-          onRunVisualQA={handleRunVisualQAFromQueue}
-          onFixRender={handleOpenQueueRevisionBrief}
-        />
+        <div id="render-review-queue-section">
+          <RenderReviewQueuePanel
+            report={renderReviewQueue}
+            isBusy={isGenerationBusy || pendingRenderAction !== null}
+            onFocusRender={handleFocusQARender}
+            onRunVisualQA={handleRunVisualQAFromQueue}
+            onFixRender={handleOpenQueueRevisionBrief}
+          />
+        </div>
 
         {revisionBriefDraft ? (
           <RenderRevisionBriefPanel
@@ -2085,7 +2275,7 @@ export default function ProjectRendersPage() {
           />
         ) : null}
 
-        <section className="panel render-finalization-panel">
+        <section id="render-finalization-section" className="panel render-finalization-panel">
           <div className="panel-header">
             <div>
               <div className="section-title">Final design package</div>
@@ -2142,7 +2332,7 @@ export default function ProjectRendersPage() {
           </div>
         </section>
 
-        <section className="panel">
+        <section id="render-gallery-section" className="panel">
           <div className="panel-header">
             <div>
               <div className="section-title">Render gallery</div>
