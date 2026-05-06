@@ -15,6 +15,7 @@ import CostEstimator from "@/components/CostEstimator"
 import DesignReviewPanel from "@/components/DesignReviewPanel"
 import FloorPlanConceptStudio from "@/components/FloorPlanConceptStudio"
 import FloorPlanComparison from "@/components/FloorPlanComparison"
+import PlanEditAssistantPanel from "@/components/PlanEditAssistantPanel"
 import RoomAreaSummaryDashboard from "@/components/RoomAreaSummaryDashboard"
 import RoomSchedule from "@/components/RoomSchedule"
 import ShareLinkCard from "@/components/ShareLinkCard"
@@ -30,6 +31,7 @@ import { formatFloorLabel, getNextFloorNumber, getPrimaryFloor, sortFloors } fro
 import { createSeedFloorPlan } from "@/lib/geometry"
 import { downloadJson, generateFloorPlanJson } from "@/lib/json-export"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
+import type { PlanEditProposal } from "@/lib/plan-edit-assistant"
 import { downloadSvg, generateSvg } from "@/lib/svg-export"
 import type { PersistedFloorPlan, ProjectComment } from "@/lib/types"
 
@@ -72,6 +74,7 @@ export default function ProjectOverviewPage() {
   const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [isCreatingFloor, setIsCreatingFloor] = useState(false)
   const [isSavingConceptFloor, setIsSavingConceptFloor] = useState(false)
+  const [isSavingPlanEditFloor, setIsSavingPlanEditFloor] = useState(false)
   const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showComparisonDialog, setShowComparisonDialog] = useState(false)
@@ -324,6 +327,30 @@ export default function ProjectOverviewPage() {
       toast("Unable to save the generated plan option", "error")
     } finally {
       setIsSavingConceptFloor(false)
+    }
+  }
+
+  async function handleSavePlanEditFloor(proposal: PlanEditProposal) {
+    if (!projectId || !project || isCreatingFloor || isSavingPlanEditFloor) return
+
+    const nextFloor = getNextFloorNumber(orderedFloorPlans)
+    setIsSavingPlanEditFloor(true)
+
+    try {
+      await saveFloorPlan({
+        projectId,
+        floor: nextFloor,
+        data: proposal.data
+      })
+      setPendingCreatedFloor(nextFloor)
+      setSelectedFloor(nextFloor)
+      toast(`${proposal.title} saved as ${formatFloorLabel(nextFloor)}`, "success")
+      router.push(`/projects/${projectId}/edit?floor=${nextFloor}`)
+    } catch (error) {
+      console.error("Unable to save plan edit proposal.", error)
+      toast("Unable to save the plan edit preview", "error")
+    } finally {
+      setIsSavingPlanEditFloor(false)
     }
   }
 
@@ -612,6 +639,13 @@ export default function ProjectOverviewPage() {
         floorCount={orderedFloorPlans.length}
         isSaving={isSavingConceptFloor}
         onSaveConcept={handleSaveConceptFloor}
+      />
+
+      <PlanEditAssistantPanel
+        floorLabel={activeFloorPlan ? formatFloorLabel(activeFloorPlan.floor) : "the selected floor"}
+        sourceData={activeFloorPlan?.data ?? null}
+        isSaving={isSavingPlanEditFloor}
+        onSaveProposal={handleSavePlanEditFloor}
       />
 
       <section className="panel overview-readiness-panel">

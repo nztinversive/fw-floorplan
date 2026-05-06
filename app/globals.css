@@ -806,6 +806,149 @@ button:disabled,
   line-height: 1.45;
 }
 
+.plan-edit-assistant-panel {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.plan-edit-assistant-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.plan-edit-kicker {
+  display: inline-flex;
+  gap: 0.42rem;
+  align-items: center;
+  margin-bottom: 0.35rem;
+  color: #735419;
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.plan-edit-assistant-grid {
+  display: grid;
+  grid-template-columns: minmax(18rem, 0.72fr) minmax(0, 1.28fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.plan-edit-chat {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.plan-edit-prompt {
+  min-height: 9.5rem;
+}
+
+.plan-edit-prompt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.plan-edit-chip {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  border: 1px solid rgba(27, 42, 74, 0.1);
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.92);
+  color: var(--fw-navy);
+  padding: 0.4rem 0.58rem;
+  font-size: 0.75rem;
+  font-weight: 820;
+}
+
+.plan-edit-chip:hover {
+  border-color: rgba(212, 168, 75, 0.55);
+  background: rgba(212, 168, 75, 0.12);
+}
+
+.plan-edit-actions {
+  grid-template-columns: 1fr;
+}
+
+.plan-edit-preview-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(27, 42, 74, 0.1);
+  border-radius: 0.5rem;
+  background: rgba(248, 250, 252, 0.7);
+}
+
+.plan-edit-preview-media {
+  min-height: 18rem;
+  border-bottom: 1px solid rgba(27, 42, 74, 0.08);
+  background: #f8fafc;
+}
+
+.plan-edit-preview-media .concept-preview {
+  min-height: 18rem;
+}
+
+.plan-edit-preview-body {
+  display: grid;
+  gap: 1rem;
+  padding: 0.95rem;
+}
+
+.plan-edit-preview-title-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.plan-edit-preview-title {
+  color: var(--fw-navy);
+  font-size: 1.02rem;
+  font-weight: 900;
+}
+
+.plan-edit-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.plan-edit-list strong {
+  color: var(--fw-navy);
+  font-size: 0.82rem;
+}
+
+.plan-edit-list-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: start;
+  color: #166534;
+  font-size: 0.82rem;
+  line-height: 1.38;
+}
+
+.plan-edit-list.is-review .plan-edit-list-item {
+  color: #735419;
+}
+
+.plan-edit-empty {
+  display: grid;
+  gap: 0.35rem;
+  place-items: center;
+  min-height: 22rem;
+  padding: 2rem;
+  color: var(--fw-slate);
+  text-align: center;
+}
+
+.plan-edit-empty strong {
+  color: var(--fw-navy);
+}
+
 .overview-readiness-panel {
   display: grid;
   gap: 0.85rem;
@@ -7779,6 +7922,7 @@ button.render-variant-row:disabled {
   .overview-grid,
   .editor-grid,
   .concept-studio-grid,
+  .plan-edit-assistant-grid,
   .render-controls,
   .design-control-center-main,
   .design-control-center-focus,
@@ -7837,6 +7981,8 @@ button.render-variant-row:disabled {
 
   .page-heading,
   .panel-header,
+  .plan-edit-assistant-header,
+  .plan-edit-preview-title-row,
   .canvas-caption,
   .comparison-header,
   .share-brand-row,
