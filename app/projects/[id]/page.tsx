@@ -13,6 +13,7 @@ import ComplianceChecker from "@/components/ComplianceChecker"
 import ConfirmDialog from "@/components/ConfirmDialog"
 import CostEstimator from "@/components/CostEstimator"
 import DesignReviewPanel from "@/components/DesignReviewPanel"
+import FloorPlanConceptStudio from "@/components/FloorPlanConceptStudio"
 import FloorPlanComparison from "@/components/FloorPlanComparison"
 import RoomAreaSummaryDashboard from "@/components/RoomAreaSummaryDashboard"
 import RoomSchedule from "@/components/RoomSchedule"
@@ -24,6 +25,7 @@ import { api } from "@/convex/_generated/api"
 import type { Id } from "@/convex/_generated/dataModel"
 import { generateDxf } from "@/lib/dxf-export"
 import { formatDate } from "@/lib/file-utils"
+import type { FloorPlanConcept } from "@/lib/floor-plan-concepts"
 import { formatFloorLabel, getNextFloorNumber, getPrimaryFloor, sortFloors } from "@/lib/floor-utils"
 import { createSeedFloorPlan } from "@/lib/geometry"
 import { downloadJson, generateFloorPlanJson } from "@/lib/json-export"
@@ -69,6 +71,7 @@ export default function ProjectOverviewPage() {
   const disablePublicShare = useMutation(api.projects.disablePublicShare)
   const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [isCreatingFloor, setIsCreatingFloor] = useState(false)
+  const [isSavingConceptFloor, setIsSavingConceptFloor] = useState(false)
   const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showComparisonDialog, setShowComparisonDialog] = useState(false)
@@ -297,6 +300,30 @@ export default function ProjectOverviewPage() {
       toast("Unable to create another floor right now", "error")
     } finally {
       setIsCreatingFloor(false)
+    }
+  }
+
+  async function handleSaveConceptFloor(concept: FloorPlanConcept) {
+    if (!projectId || !project || isCreatingFloor || isSavingConceptFloor) return
+
+    const nextFloor = getNextFloorNumber(orderedFloorPlans)
+    setIsSavingConceptFloor(true)
+
+    try {
+      await saveFloorPlan({
+        projectId,
+        floor: nextFloor,
+        data: concept.data
+      })
+      setPendingCreatedFloor(nextFloor)
+      setSelectedFloor(nextFloor)
+      toast(`${concept.name} saved as ${formatFloorLabel(nextFloor)}`, "success")
+      router.push(`/projects/${projectId}/edit?floor=${nextFloor}`)
+    } catch (error) {
+      console.error("Unable to save generated concept.", error)
+      toast("Unable to save the generated plan option", "error")
+    } finally {
+      setIsSavingConceptFloor(false)
     }
   }
 
@@ -579,6 +606,13 @@ export default function ProjectOverviewPage() {
           </div>
         </section>
       ) : null}
+
+      <FloorPlanConceptStudio
+        projectName={project.name}
+        floorCount={orderedFloorPlans.length}
+        isSaving={isSavingConceptFloor}
+        onSaveConcept={handleSaveConceptFloor}
+      />
 
       <section className="panel overview-readiness-panel">
         <div className="panel-header">
