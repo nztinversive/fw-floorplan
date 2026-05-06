@@ -882,6 +882,63 @@ button:disabled,
   background: rgba(248, 250, 252, 0.7);
 }
 
+.plan-edit-options-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid rgba(27, 42, 74, 0.08);
+}
+
+.plan-edit-option {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(27, 42, 74, 0.1);
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: inherit;
+  text-align: left;
+}
+
+.plan-edit-option:hover,
+.plan-edit-option.is-selected {
+  border-color: rgba(212, 168, 75, 0.58);
+  background: rgba(255, 251, 235, 0.58);
+}
+
+.plan-edit-option.is-selected {
+  box-shadow: inset 0 0 0 1px rgba(212, 168, 75, 0.42);
+}
+
+.plan-edit-option-preview {
+  min-height: 8.8rem;
+  border-bottom: 1px solid rgba(27, 42, 74, 0.08);
+  background: #f8fafc;
+}
+
+.plan-edit-option-preview .concept-preview {
+  min-height: 8.8rem;
+}
+
+.plan-edit-option-meta {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.6rem;
+}
+
+.plan-edit-option-meta strong {
+  color: var(--fw-navy);
+  font-size: 0.84rem;
+  line-height: 1.2;
+}
+
+.plan-edit-option-meta span:not(.badge) {
+  color: var(--fw-slate);
+  font-size: 0.73rem;
+  font-weight: 800;
+}
+
 .plan-edit-preview-media {
   min-height: 18rem;
   border-bottom: 1px solid rgba(27, 42, 74, 0.08);
@@ -8008,6 +8065,7 @@ button.render-variant-row:disabled {
   .overview-actions-grid,
   .overview-readiness-grid,
   .concept-brief-fields,
+  .plan-edit-options-grid,
   .plan-quality-gates-list,
   .render-workflow-steps {
     grid-template-columns: 1fr;

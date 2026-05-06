@@ -4,7 +4,7 @@ import { ArrowRight, Bot, CheckCircle2, MessageSquareText, Plus, WandSparkles } 
 import { useState } from "react"
 
 import FloorPlanPreviewSvg from "@/components/FloorPlanPreviewSvg"
-import { generatePlanEditProposal, type PlanEditProposal } from "@/lib/plan-edit-assistant"
+import { generatePlanEditProposals, type PlanEditProposal } from "@/lib/plan-edit-assistant"
 import type { FloorPlanData } from "@/lib/types"
 
 type PlanEditAssistantPanelProps = {
@@ -28,14 +28,18 @@ export default function PlanEditAssistantPanel({
   onSaveProposal
 }: PlanEditAssistantPanelProps) {
   const [prompt, setPrompt] = useState(EXAMPLE_PROMPTS[0])
-  const [proposal, setProposal] = useState<PlanEditProposal | null>(null)
+  const [proposals, setProposals] = useState<PlanEditProposal[]>([])
+  const [selectedProposalId, setSelectedProposalId] = useState("")
+  const selectedProposal = proposals.find((proposal) => proposal.id === selectedProposalId) ?? proposals[0] ?? null
 
   function handlePreview() {
     if (!sourceData || !prompt.trim()) {
       return
     }
 
-    setProposal(generatePlanEditProposal(sourceData, prompt))
+    const nextProposals = generatePlanEditProposals(sourceData, prompt)
+    setProposals(nextProposals)
+    setSelectedProposalId(nextProposals[0]?.id ?? "")
   }
 
   const canPreview = Boolean(sourceData && prompt.trim())
@@ -53,7 +57,7 @@ export default function PlanEditAssistantPanel({
           </div>
           <div className="section-title">Tell the plan what to change.</div>
           <div className="muted">
-            Preview AI-style edits against {floorLabel}; save the result as a new floor option before editing details.
+            Generate multiple AI-style edit options against {floorLabel}; compare them, then save the winner as a new floor.
           </div>
         </div>
         <span className="badge">{baseStats}</span>
@@ -89,38 +93,59 @@ export default function PlanEditAssistantPanel({
           <div className="button-row plan-edit-actions">
             <button type="button" className="button" onClick={handlePreview} disabled={!canPreview}>
               <WandSparkles size={17} />
-              Preview edit
+              Generate 3 options
             </button>
             <button
               type="button"
               className="button-secondary"
-              onClick={() => proposal && onSaveProposal(proposal)}
-              disabled={!proposal || isSaving}
+              onClick={() => selectedProposal && onSaveProposal(selectedProposal)}
+              disabled={!selectedProposal || isSaving}
             >
               <Plus size={17} />
-              {isSaving ? "Saving..." : "Save preview as new floor"}
+              {isSaving ? "Saving..." : "Save selected option"}
             </button>
           </div>
         </div>
 
         <div className="plan-edit-preview-card">
-          {proposal ? (
+          {selectedProposal ? (
             <>
-              <div className="plan-edit-preview-media">
-                <FloorPlanPreviewSvg data={proposal.data} label="Plan edit proposal preview" />
+              <div className="plan-edit-options-grid" aria-label="Generated plan edit options">
+                {proposals.map((proposal) => {
+                  const isSelected = proposal.id === selectedProposal.id
+
+                  return (
+                    <button
+                      key={proposal.id}
+                      type="button"
+                      className={`plan-edit-option${isSelected ? " is-selected" : ""}`}
+                      onClick={() => setSelectedProposalId(proposal.id)}
+                    >
+                      <div className="plan-edit-option-preview">
+                        <FloorPlanPreviewSvg data={proposal.data} label={`${proposal.title} preview`} />
+                      </div>
+                      <div className="plan-edit-option-meta">
+                        <span className="badge">{proposal.focus}</span>
+                        <strong>{proposal.title}</strong>
+                        <span>{proposal.confidence}% match</span>
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
+
               <div className="plan-edit-preview-body">
                 <div className="plan-edit-preview-title-row">
                   <div>
-                    <div className="plan-edit-preview-title">{proposal.title}</div>
-                    <div className="muted">{proposal.summary}</div>
+                    <div className="plan-edit-preview-title">{selectedProposal.title}</div>
+                    <div className="muted">{selectedProposal.summary}</div>
                   </div>
-                  <span className="badge">{proposal.confidence}% match</span>
+                  <span className="badge">{selectedProposal.confidence}% match</span>
                 </div>
 
                 <div className="plan-edit-list">
                   <strong>Proposed changes</strong>
-                  {proposal.changes.map((change) => (
+                  {selectedProposal.changes.map((change) => (
                     <div key={change} className="plan-edit-list-item">
                       <CheckCircle2 size={15} />
                       <span>{change}</span>
@@ -130,7 +155,7 @@ export default function PlanEditAssistantPanel({
 
                 <div className="plan-edit-list is-review">
                   <strong>Review before render</strong>
-                  {proposal.checks.map((check) => (
+                  {selectedProposal.checks.map((check) => (
                     <div key={check} className="plan-edit-list-item">
                       <ArrowRight size={15} />
                       <span>{check}</span>
@@ -142,8 +167,8 @@ export default function PlanEditAssistantPanel({
           ) : (
             <div className="plan-edit-empty">
               <WandSparkles size={24} />
-              <strong>Preview appears here</strong>
-              <span>Ask for a layout change, then review the proposed plan before saving it.</span>
+              <strong>Options appear here</strong>
+              <span>Ask for a layout change, then compare three proposed plans before saving one.</span>
             </div>
           )}
         </div>

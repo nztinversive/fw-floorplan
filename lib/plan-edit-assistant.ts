@@ -4,12 +4,15 @@ import type { Door, FloorPlanData, Room, Wall, Window } from "@/lib/types"
 export type PlanEditProposal = {
   id: string
   title: string
+  focus: string
   summary: string
   data: FloorPlanData
   changes: string[]
   checks: string[]
   confidence: number
 }
+
+type PlanEditVariant = "balanced" | "privacy" | "entertaining"
 
 type Rect = {
   x: number
@@ -161,6 +164,10 @@ function findRoom(data: FloorPlanData, pattern: RegExp) {
   return data.rooms.find((room) => pattern.test(room.label))
 }
 
+function hasRoom(data: FloorPlanData, pattern: RegExp) {
+  return Boolean(findRoom(data, pattern))
+}
+
 function expandRoom(builder: EditBuilder, pattern: RegExp, label: string, growX: number, growY: number) {
   const room = findRoom(builder.data, pattern)
   if (!room) {
@@ -208,25 +215,72 @@ function appendModule(builder: EditBuilder, label: string, preferred: "right" | 
   builder.changes.push(`Added ${label.toLowerCase()} as a safe preview module.`)
 }
 
-function makeTitle(prompt: string, changes: string[]) {
-  if (changes.some((change) => /office/i.test(change))) return "Office Addition Preview"
-  if (changes.some((change) => /mudroom/i.test(change))) return "Mudroom Revision Preview"
-  if (changes.some((change) => /bedroom/i.test(change))) return "Bedroom Option Preview"
-  if (/private|split/i.test(prompt)) return "Privacy Layout Preview"
-  return "Plan Edit Preview"
+function makeTitle(prompt: string, changes: string[], variant: PlanEditVariant) {
+  if (variant === "privacy") return "Privacy-First Option"
+  if (variant === "entertaining") return "Entertaining Option"
+  if (changes.some((change) => /office/i.test(change))) return "Direct Edit Option"
+  if (changes.some((change) => /mudroom/i.test(change))) return "Service-Core Option"
+  if (changes.some((change) => /bedroom/i.test(change))) return "Bedroom Option"
+  if (/private|split/i.test(prompt)) return "Privacy Layout Option"
+  return "Balanced Edit Option"
 }
 
-export function generatePlanEditProposal(source: FloorPlanData, prompt: string): PlanEditProposal {
+function getVariantFocus(variant: PlanEditVariant) {
+  if (variant === "privacy") return "Privacy"
+  if (variant === "entertaining") return "Entertaining"
+  return "Balanced"
+}
+
+function addVariantIntent(builder: EditBuilder, variant: PlanEditVariant) {
+  if (variant === "privacy") {
+    const didExpandPrimary = expandRoom(
+      builder,
+      /primary|suite/i,
+      "Pulled the plan toward a quieter primary-suite wing.",
+      (builder.data.scale || 18) * 5,
+      (builder.data.scale || 18) * 3
+    )
+    if (!didExpandPrimary) {
+      appendModule(builder, "Primary Suite", "right", 15, 13)
+    }
+    if (!hasRoom(builder.data, /flex|guest/i)) {
+      appendModule(builder, "Flex / Guest Room", "right", 11, 10)
+    }
+    builder.checks.push("Confirm the added private-room wing has a clean hall connection in the editor.")
+  }
+
+  if (variant === "entertaining") {
+    expandRoom(
+      builder,
+      /living|great/i,
+      "Opened the main living room to support larger gatherings.",
+      (builder.data.scale || 18) * 6,
+      (builder.data.scale || 18) * 3
+    )
+    if (!hasRoom(builder.data, /covered patio|patio|porch|deck/i)) {
+      appendModule(builder, "Covered Patio", "bottom", 18, 10)
+    }
+    builder.checks.push("Check exterior doors and window rhythm before moving this option into renders.")
+  }
+}
+
+export function generatePlanEditProposal(
+  source: FloorPlanData,
+  prompt: string,
+  variant: PlanEditVariant = "balanced"
+): PlanEditProposal {
   const normalizedPrompt = normalizePrompt(prompt)
-  const builder = createBuilder(source, normalizedPrompt)
+  const builder = createBuilder(source, `${normalizedPrompt}-${variant}`)
   const wantsKitchen = /kitchen|dining|cook|island|pantry/.test(normalizedPrompt)
   const wantsOffice = /office|study|work|flex/.test(normalizedPrompt)
   const wantsMudroom = /mudroom|mud room|laundry|drop zone|entry/.test(normalizedPrompt)
   const wantsBedroom = /bedroom|bed room|4-bed|four bed|guest/.test(normalizedPrompt)
   const wantsPatio = /patio|porch|deck|outdoor|indoor-outdoor/.test(normalizedPrompt)
   const wantsPrivacy = /private|privacy|split|separate|suite/.test(normalizedPrompt)
+  const shouldForcePrivacy = variant === "privacy"
+  const shouldForceEntertaining = variant === "entertaining"
 
-  if (wantsKitchen) {
+  if (wantsKitchen || shouldForceEntertaining) {
     const didExpandKitchen = expandRoom(
       builder,
       /kitchen|dining/i,
@@ -241,7 +295,7 @@ export function generatePlanEditProposal(source: FloorPlanData, prompt: string):
     }
   }
 
-  if (wantsOffice) {
+  if (wantsOffice || (variant === "privacy" && !wantsBedroom)) {
     appendModule(builder, "Office", "right", 11, 10)
   }
 
@@ -249,15 +303,15 @@ export function generatePlanEditProposal(source: FloorPlanData, prompt: string):
     appendModule(builder, "Mudroom / Laundry", "bottom", 12, 9)
   }
 
-  if (wantsBedroom) {
+  if (wantsBedroom || shouldForcePrivacy) {
     appendModule(builder, builder.data.rooms.some((room) => /Bedroom 3/i.test(room.label)) ? "Guest Bedroom" : "Bedroom 3", "right", 12, 11)
   }
 
-  if (wantsPatio) {
+  if (wantsPatio || shouldForceEntertaining) {
     appendModule(builder, "Covered Patio", "bottom", 18, 10)
   }
 
-  if (wantsPrivacy) {
+  if (wantsPrivacy || shouldForcePrivacy) {
     const didExpandPrimary = expandRoom(
       builder,
       /primary|suite/i,
@@ -269,6 +323,8 @@ export function generatePlanEditProposal(source: FloorPlanData, prompt: string):
       appendModule(builder, "Primary Suite", "right", 15, 13)
     }
   }
+
+  addVariantIntent(builder, variant)
 
   if (builder.changes.length === 0) {
     expandRoom(
@@ -285,16 +341,26 @@ export function generatePlanEditProposal(source: FloorPlanData, prompt: string):
   builder.checks.push("Use the editor to resolve any structural wall alignment before sending to renders.")
 
   const data = syncDerivedData(builder.data)
-  const confidence = Math.min(96, 72 + builder.changes.length * 6)
-  const title = makeTitle(normalizedPrompt, builder.changes)
+  const confidence = Math.min(97, 72 + builder.changes.length * 5 + (variant === "balanced" ? 2 : 0))
+  const title = makeTitle(normalizedPrompt, builder.changes, variant)
+  const focus = getVariantFocus(variant)
 
   return {
-    id: `proposal-${Date.now()}`,
+    id: `proposal-${variant}-${Date.now()}`,
     title,
-    summary: `Assistant interpreted: "${prompt.trim()}". Preview saves as a new floor so the current plan stays intact.`,
+    focus,
+    summary: `${focus} interpretation of: "${prompt.trim()}". Save as a new floor so the current plan stays intact.`,
     data,
     changes: [...new Set(builder.changes)],
     checks: [...new Set(builder.checks)],
     confidence
   }
+}
+
+export function generatePlanEditProposals(source: FloorPlanData, prompt: string): PlanEditProposal[] {
+  return [
+    generatePlanEditProposal(source, prompt, "balanced"),
+    generatePlanEditProposal(source, prompt, "privacy"),
+    generatePlanEditProposal(source, prompt, "entertaining")
+  ].sort((left, right) => right.confidence - left.confidence)
 }
