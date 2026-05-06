@@ -9,7 +9,10 @@ import {
   type PlanEditConstraintId,
   type PlanEditConstraintSettings,
   type PlanEditConstraintStatus,
-  type PlanEditProposal
+  type PlanEditProposal,
+  type PlanEditRevisionDraft,
+  type PlanEditRevisionMode,
+  type PlanEditRevisionRecord
 } from "@/lib/plan-edit-assistant"
 import type { FloorPlanData } from "@/lib/types"
 
@@ -23,6 +26,9 @@ type PlanEditAssistantPanelProps = {
     constraints: PlanEditConstraintSettings
     sourceData: FloorPlanData
   }) => Promise<PlanEditProposal[]>
+  savedRevisions?: PlanEditRevisionRecord[]
+  onSaveRevision?: (revision: PlanEditRevisionDraft) => Promise<void> | void
+  onSelectRevisionOption?: (clientId: string, proposalId: string) => Promise<void> | void
   onSaveProposal: (proposal: PlanEditProposal) => Promise<void> | void
   onApplyProposal?: (proposal: PlanEditProposal) => Promise<void> | void
 }
@@ -31,17 +37,6 @@ type PlanEditSourceContext = {
   label: string
   data: FloorPlanData
   proposalId?: string
-}
-
-type PlanEditRevisionThread = {
-  id: string
-  prompt: string
-  sourceLabel: string
-  sourceData: FloorPlanData
-  proposals: PlanEditProposal[]
-  selectedProposalId: string
-  mode: "openai" | "local" | "fallback"
-  createdAt: string
 }
 
 const EXAMPLE_PROMPTS = [
@@ -107,12 +102,19 @@ function getSourceFingerprint(data: FloorPlanData | null, floorLabel: string) {
   ].join(":")
 }
 
+function formatRevisionTime(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+}
+
 export default function PlanEditAssistantPanel({
   floorLabel,
   sourceData,
   isSaving = false,
   isApplying = false,
   onGenerateWithAI,
+  savedRevisions = [],
+  onSaveRevision,
+  onSelectRevisionOption,
   onSaveProposal,
   onApplyProposal
 }: PlanEditAssistantPanelProps) {
@@ -127,9 +129,13 @@ export default function PlanEditAssistantPanel({
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
   const [generationMessage, setGenerationMessage] = useState("")
   const [iterationSource, setIterationSource] = useState<PlanEditSourceContext | null>(null)
-  const [revisionThreads, setRevisionThreads] = useState<PlanEditRevisionThread[]>([])
+  const [revisionThreads, setRevisionThreads] = useState<PlanEditRevisionRecord[]>([])
   const [activeRevisionId, setActiveRevisionId] = useState("")
   const sourceFingerprint = useMemo(() => getSourceFingerprint(sourceData, floorLabel), [floorLabel, sourceData])
+  const savedRevisionFingerprint = useMemo(
+    () => savedRevisions.map((revision) => `${revision.clientId}:${revision.selectedProposalId}:${revision.createdAt}`).join("|"),
+    [savedRevisions]
+  )
   const workingSource = iterationSource ?? (sourceData ? { label: floorLabel, data: sourceData } : null)
   const selectedProposal = proposals.find((proposal) => proposal.id === selectedProposalId) ?? proposals[0] ?? null
   const recommendedProposal = proposals.find((proposal) => proposal.isRecommended) ?? proposals[0] ?? null
@@ -149,6 +155,16 @@ export default function PlanEditAssistantPanel({
     setActiveRevisionId("")
   }, [sourceFingerprint])
 
+  useEffect(() => {
+    setRevisionThreads((current) => {
+      const savedIds = new Set(savedRevisions.map((revision) => revision.clientId))
+      const localOnly = current.filter((revision) => !savedIds.has(revision.clientId))
+      return [...localOnly, ...savedRevisions]
+        .sort((left, right) => right.createdAt - left.createdAt)
+        .slice(0, 8)
+    })
+  }, [savedRevisionFingerprint, savedRevisions])
+
   function getConstraints(): PlanEditConstraintSettings {
     const parsedMaxSqFt = Number(maxSqFt)
     return {
@@ -164,33 +180,50 @@ export default function PlanEditAssistantPanel({
         thread.id === activeRevisionId ? { ...thread, selectedProposalId: proposalId } : thread
       )
     )
+    if (activeRevisionId) {
+      void onSelectRevisionOption?.(activeRevisionId, proposalId)
+    }
   }
 
   function recordRevision(args: {
     request: string
     source: PlanEditSourceContext
     nextProposals: PlanEditProposal[]
-    mode: PlanEditRevisionThread["mode"]
+    mode: PlanEditRevisionMode
   }) {
     const selectedId = args.nextProposals[0]?.id ?? ""
-    const thread: PlanEditRevisionThread = {
-      id: `plan-edit-thread-${Date.now()}`,
+    const now = Date.now()
+    const clientId = `plan-edit-thread-${now}`
+    const thread: PlanEditRevisionRecord = {
+      id: clientId,
+      clientId,
       prompt: args.request,
       sourceLabel: args.source.label,
       sourceData: args.source.data,
       proposals: args.nextProposals,
       selectedProposalId: selectedId,
       mode: args.mode,
-      createdAt: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+      createdAt: now
     }
 
     setProposals(args.nextProposals)
     setSelectedProposalId(selectedId)
     setActiveRevisionId(thread.id)
     setRevisionThreads((current) => [thread, ...current].slice(0, 8))
+    void Promise.resolve(onSaveRevision?.({
+      clientId,
+      prompt: thread.prompt,
+      sourceLabel: thread.sourceLabel,
+      sourceData: thread.sourceData,
+      proposals: thread.proposals,
+      selectedProposalId: thread.selectedProposalId,
+      mode: thread.mode
+    })).catch((error) => {
+      console.error("Unable to persist plan edit revision.", error)
+    })
   }
 
-  function loadRevision(thread: PlanEditRevisionThread) {
+  function loadRevision(thread: PlanEditRevisionRecord) {
     setPrompt(thread.prompt)
     setIterationSource({
       label: thread.sourceLabel,
@@ -200,7 +233,7 @@ export default function PlanEditAssistantPanel({
     setSelectedProposalId(thread.selectedProposalId)
     setActiveRevisionId(thread.id)
     setGenerationMessage(
-      `Loaded ${thread.mode === "openai" ? "OpenAI" : thread.mode === "fallback" ? "fallback" : "local"} revision from ${thread.createdAt}.`
+      `Loaded ${thread.mode === "openai" ? "OpenAI" : thread.mode === "fallback" ? "fallback" : "local"} revision from ${formatRevisionTime(thread.createdAt)}.`
     )
   }
 
@@ -327,7 +360,14 @@ export default function PlanEditAssistantPanel({
         </div>
         <div className="plan-edit-source-badges">
           {iterationSource ? (
-            <button type="button" className="badge plan-edit-source-reset" onClick={() => setIterationSource(null)}>
+            <button
+              type="button"
+              className="badge plan-edit-source-reset"
+              onClick={() => {
+                setIterationSource(null)
+                setActiveRevisionId("")
+              }}
+            >
               Source: {sourceLabel} · reset
             </button>
           ) : (
@@ -504,7 +544,7 @@ export default function PlanEditAssistantPanel({
                       <span>{index === 0 ? "Latest" : `Rev ${revisionThreads.length - index}`}</span>
                       <strong>{thread.prompt.split("\n").slice(-1)[0]}</strong>
                       <small>
-                        {thread.mode === "openai" ? "OpenAI" : thread.mode === "fallback" ? "Fallback" : "Local"} · {thread.sourceLabel} · {thread.createdAt}
+                        {thread.mode === "openai" ? "OpenAI" : thread.mode === "fallback" ? "Fallback" : "Local"} · {thread.sourceLabel} · {formatRevisionTime(thread.createdAt)}
                       </small>
                     </button>
                   )

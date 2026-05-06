@@ -78,6 +78,23 @@ export type PlanEditDelta = {
   summary: string[]
 }
 
+export type PlanEditRevisionMode = "openai" | "local" | "fallback"
+
+export type PlanEditRevisionDraft = {
+  clientId: string
+  prompt: string
+  sourceLabel: string
+  sourceData: FloorPlanData
+  proposals: PlanEditProposal[]
+  selectedProposalId: string
+  mode: PlanEditRevisionMode
+}
+
+export type PlanEditRevisionRecord = PlanEditRevisionDraft & {
+  id: string
+  createdAt: number
+}
+
 export type PlanEditVariant = "balanced" | "privacy" | "entertaining" | "openai"
 
 export type AiPlanEditProposal = {

@@ -2,7 +2,12 @@ import { defineSchema, defineTable } from "convex/server";
 import { authTables } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 
-import { legacyRenderSettingsValidator, renderBriefValidator, renderSettingsValidator } from "./validators";
+import {
+  legacyRenderSettingsValidator,
+  planEditProposalValidator,
+  renderBriefValidator,
+  renderSettingsValidator
+} from "./validators";
 
 const point = v.object({
   x: v.number(),
@@ -202,6 +207,32 @@ export default defineSchema({
   })
     .index("by_projectId", ["projectId"])
     .index("by_projectId_floor", ["projectId", "floor"]),
+  planEditSessions: defineTable({
+    projectId: v.id("projects"),
+    clientId: v.string(),
+    floor: v.number(),
+    prompt: v.string(),
+    sourceLabel: v.string(),
+    sourceData: floorPlanData,
+    selectedProposalId: v.string(),
+    mode: v.union(v.literal("openai"), v.literal("local"), v.literal("fallback")),
+    authorEmail: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number()
+  })
+    .index("by_projectId_and_createdAt", ["projectId", "createdAt"])
+    .index("by_projectId_and_clientId", ["projectId", "clientId"])
+    .index("by_projectId_and_floor_and_createdAt", ["projectId", "floor", "createdAt"]),
+  planEditOptions: defineTable({
+    projectId: v.id("projects"),
+    sessionId: v.id("planEditSessions"),
+    sessionClientId: v.string(),
+    order: v.number(),
+    proposal: planEditProposalValidator,
+    createdAt: v.number()
+  })
+    .index("by_sessionId", ["sessionId"])
+    .index("by_projectId_and_createdAt", ["projectId", "createdAt"]),
   renders: defineTable({
     projectId: v.id("projects"),
     style: v.string(),

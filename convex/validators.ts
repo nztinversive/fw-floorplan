@@ -112,3 +112,75 @@ export const floorPlanDataValidator = v.object({
   scale: v.number(),
   gridSize: v.number()
 });
+
+export const planEditConstraintIdValidator = v.union(
+  v.literal("keep-bedroom-count"),
+  v.literal("keep-bathroom-count"),
+  v.literal("keep-kitchen"),
+  v.literal("must-have-mudroom"),
+  v.literal("improve-privacy"),
+  v.literal("improve-render-readiness"),
+  v.literal("max-sqft")
+);
+
+export const planEditConstraintResultValidator = v.object({
+  id: planEditConstraintIdValidator,
+  label: v.string(),
+  status: v.union(v.literal("met"), v.literal("review"), v.literal("missed")),
+  detail: v.string(),
+  isHard: v.boolean()
+});
+
+export const planEditStatsValidator = v.object({
+  roomCount: v.number(),
+  wallCount: v.number(),
+  doorCount: v.number(),
+  windowCount: v.number(),
+  totalAreaSqFt: v.number(),
+  bedroomCount: v.number(),
+  bathroomCount: v.number(),
+  outdoorCount: v.number()
+});
+
+export const planEditDeltaValidator = v.object({
+  before: planEditStatsValidator,
+  after: planEditStatsValidator,
+  roomDelta: v.number(),
+  wallDelta: v.number(),
+  doorDelta: v.number(),
+  windowDelta: v.number(),
+  areaDeltaSqFt: v.number(),
+  bedroomDelta: v.number(),
+  bathroomDelta: v.number(),
+  outdoorDelta: v.number(),
+  addedRooms: v.array(v.string()),
+  removedRooms: v.array(v.string()),
+  summary: v.array(v.string())
+});
+
+export const planEditScoresValidator = v.object({
+  privacy: v.number(),
+  flow: v.number(),
+  programFit: v.number(),
+  outdoorConnection: v.number(),
+  renderReadiness: v.number(),
+  overall: v.number()
+});
+
+export const planEditProposalValidator = v.object({
+  id: v.string(),
+  title: v.string(),
+  focus: v.string(),
+  summary: v.string(),
+  data: floorPlanDataValidator,
+  delta: planEditDeltaValidator,
+  constraints: v.array(planEditConstraintResultValidator),
+  constraintSummary: v.string(),
+  hasHardConstraintMiss: v.boolean(),
+  scores: planEditScoresValidator,
+  changes: v.array(v.string()),
+  checks: v.array(v.string()),
+  confidence: v.number(),
+  isRecommended: v.boolean(),
+  recommendationReason: v.string()
+});

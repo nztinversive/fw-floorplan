@@ -36,7 +36,9 @@ import {
   createPlanEditProposalFromAI,
   rankPlanEditProposals,
   type PlanEditConstraintSettings,
-  type PlanEditProposal
+  type PlanEditProposal,
+  type PlanEditRevisionDraft,
+  type PlanEditRevisionRecord
 } from "@/lib/plan-edit-assistant"
 import { downloadSvg, generateSvg } from "@/lib/svg-export"
 import type { PersistedFloorPlan, ProjectComment } from "@/lib/types"
@@ -73,6 +75,8 @@ export default function ProjectOverviewPage() {
   const versionsQuery = useQuery(api.versions.listProjectVersions, childQueryArgs)
   const saveFloorPlan = useMutation(api.floorPlans.save)
   const saveFloorPlanVersion = useMutation(api.versions.saveVersion)
+  const savePlanEditRevision = useMutation(api.planEditRevisions.save)
+  const selectPlanEditRevisionOption = useMutation(api.planEditRevisions.selectOption)
   const updateProject = useMutation(api.projects.update)
   const removeProject = useMutation(api.projects.remove)
   const generateAiConcepts = useAction(api.floorPlanConcepts.generateWithAI)
@@ -141,6 +145,16 @@ export default function ProjectOverviewPage() {
   const activeFloorPlan = useMemo(
     () => orderedFloorPlans.find((floorPlan) => floorPlan.floor === selectedFloor) ?? null,
     [orderedFloorPlans, selectedFloor]
+  )
+  const planEditRevisionsQuery = useQuery(
+    api.planEditRevisions.list,
+    projectId && project && activeFloorPlan
+      ? { projectId, floor: activeFloorPlan.floor }
+      : "skip"
+  )
+  const savedPlanEditRevisions = useMemo(
+    () => (planEditRevisionsQuery ?? []) as PlanEditRevisionRecord[],
+    [planEditRevisionsQuery]
   )
   const activePlanToRenderReadiness = useMemo(
     () =>
@@ -373,6 +387,41 @@ export default function ProjectOverviewPage() {
         createPlanEditProposalFromAI(request.sourceData, request.prompt, proposal, index, request.constraints)
       )
     )
+  }
+
+  async function handleSavePlanEditRevision(revision: PlanEditRevisionDraft) {
+    if (!projectId || !activeFloorPlan) return
+
+    try {
+      await savePlanEditRevision({
+        projectId,
+        floor: activeFloorPlan.floor,
+        clientId: revision.clientId,
+        prompt: revision.prompt,
+        sourceLabel: revision.sourceLabel,
+        sourceData: revision.sourceData,
+        selectedProposalId: revision.selectedProposalId,
+        mode: revision.mode,
+        proposals: revision.proposals
+      })
+    } catch (error) {
+      console.error("Unable to save plan edit revision.", error)
+      toast("Unable to save the plan edit history entry", "error")
+    }
+  }
+
+  async function handleSelectPlanEditRevisionOption(clientId: string, proposalId: string) {
+    if (!projectId) return
+
+    try {
+      await selectPlanEditRevisionOption({
+        projectId,
+        clientId,
+        selectedProposalId: proposalId
+      })
+    } catch (error) {
+      console.error("Unable to update plan edit revision selection.", error)
+    }
   }
 
   async function handleSavePlanEditFloor(proposal: PlanEditProposal) {
@@ -721,6 +770,9 @@ export default function ProjectOverviewPage() {
         isSaving={isSavingPlanEditFloor}
         isApplying={isApplyingPlanEditFloor}
         onGenerateWithAI={handleGeneratePlanEditsWithAI}
+        savedRevisions={savedPlanEditRevisions}
+        onSaveRevision={handleSavePlanEditRevision}
+        onSelectRevisionOption={handleSelectPlanEditRevisionOption}
         onSaveProposal={handleSavePlanEditFloor}
         onApplyProposal={activeFloorPlan ? handleApplyPlanEditToCurrentFloor : undefined}
       />
