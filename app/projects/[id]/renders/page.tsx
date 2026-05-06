@@ -17,6 +17,7 @@ import DesignControlCenterPanel, {
 } from "@/components/DesignControlCenterPanel"
 import DesignOutputQAPanel from "@/components/DesignOutputQAPanel"
 import Lightbox from "@/components/Lightbox"
+import PlanQualityGatesPanel from "@/components/PlanQualityGatesPanel"
 import RenderDesignSpecPanel from "@/components/RenderDesignSpecPanel"
 import RenderDecisionPanel from "@/components/RenderDecisionPanel"
 import RenderCard from "@/components/RenderCard"
@@ -67,6 +68,11 @@ import {
   buildRenderDesignSpecReport,
   type RenderDesignSpecAction
 } from "@/lib/render-design-spec"
+import {
+  applyPlanQualityGateActionToBrief,
+  buildPlanQualityGateReport,
+  type PlanQualityGateAction
+} from "@/lib/plan-quality-gates"
 import {
   analyzeRenderSpecDelta,
   buildRenderSpecDeltaRevision,
@@ -482,6 +488,20 @@ export default function ProjectRendersPage() {
     () => buildProjectDesignDNAReport({ renders }),
     [renders]
   )
+  const planQualityGates = useMemo(
+    () =>
+      project
+        ? buildPlanQualityGateReport({
+          floorPlans: project.floorPlans,
+          renderBrief,
+          settings,
+          styleLabel: getStyleLabel(selectedStyle),
+          editHref: `/projects/${projectId}/edit`,
+          designDNAText: designDNA.dnaText
+        })
+        : null,
+    [designDNA.dnaText, project, projectId, renderBrief, selectedStyle, settings]
+  )
   const renderReadinessItems = useMemo(() => {
     const hasPlanRooms = (project?.floorPlans ?? []).some((floorPlan) => floorPlan.data.rooms.length > 0)
     const hasWinner = Boolean(finalRender || renders.some((render) => render.isFavorite))
@@ -589,6 +609,7 @@ export default function ProjectRendersPage() {
     const renderCount = renders.filter((render) => render.imageUrl).length
     const hasBrief = hasRenderBriefContent
     const hasFinal = Boolean(finalRender)
+    const qualityStatus = planQualityGates?.status ?? "review"
     const specStatus = renderDesignSpec?.status ?? "review"
     const queueNeedsWork = renderReviewQueue.stats.needsRevision + renderReviewQueue.stats.review
 
@@ -598,6 +619,12 @@ export default function ProjectRendersPage() {
         value: hasPlan ? `${planRoomCount} rooms` : "Missing",
         detail: hasPlan ? "Saved floor plan can drive render constraints." : "Save room-labeled plan data first.",
         status: hasPlan ? "ready" : "blocked"
+      },
+      {
+        label: "Quality",
+        value: planQualityGates ? `${planQualityGates.score}/100` : "Pending",
+        detail: planQualityGates?.summary ?? "Checking floor plan quality gates.",
+        status: qualityStatus
       },
       {
         label: "Brief",
@@ -624,7 +651,7 @@ export default function ProjectRendersPage() {
         status: hasFinal ? "ready" : "review"
       }
     ]
-  }, [finalRender, hasRenderBriefContent, project?.floorPlans, renderDesignSpec, renderReviewQueue, renders])
+  }, [finalRender, hasRenderBriefContent, planQualityGates, project?.floorPlans, renderDesignSpec, renderReviewQueue, renders])
   const designControlQueueSummary = useMemo(() => {
     const { ready, review, needsRevision, stale, missingVisualQA } = renderReviewQueue.stats
     const staleCopy = stale > 0 ? `, ${stale} stale` : ""
@@ -731,6 +758,18 @@ export default function ProjectRendersPage() {
       }
     })
     toast("Design spec guidance added to the brief", "info")
+  }
+
+  function handlePlanQualityGateAction(action: PlanQualityGateAction) {
+    if (action.kind === "brief") {
+      setRenderBrief((current) => applyPlanQualityGateActionToBrief(current, action))
+      toast("Quality gate guidance added to the brief", "info")
+      return
+    }
+
+    if (action.kind === "scroll") {
+      handleScrollToRenderSection(action.targetId)
+    }
   }
 
   async function handleCopyPrompt(prompt: string) {
@@ -846,6 +885,22 @@ export default function ProjectRendersPage() {
         styleLabel: getStyleLabel(nextStyle)
       })
       : null
+    const generationQualityGates = project
+      ? buildPlanQualityGateReport({
+        floorPlans: project.floorPlans,
+        renderBrief: baseRenderBriefForGeneration,
+        settings: generationSettings,
+        styleLabel: getStyleLabel(nextStyle),
+        editHref: `/projects/${projectId}/edit`,
+        designDNAText: designDNA.dnaText
+      })
+      : null
+
+    if (generationQualityGates?.status === "blocked") {
+      toast("Resolve the blocked plan quality gates before generating", "warning")
+      handleScrollToRenderSection("plan-quality-gates-section")
+      return false
+    }
 
     if (generationDesignSpec?.status === "blocked") {
       toast("Resolve the blocked design spec items before generating", "warning")
@@ -1729,11 +1784,16 @@ export default function ProjectRendersPage() {
       label: renderReviewQueue.weakest.label,
       detail: renderReviewQueue.weakest.detail
     }
-    : designOutputQA.regenerationTarget
-      ? {
-        label: designOutputQA.regenerationTarget.renderLabel,
-        detail: designOutputQA.regenerationTarget.fixes
-      }
+      : designOutputQA.regenerationTarget
+        ? {
+          label: designOutputQA.regenerationTarget.renderLabel,
+          detail: designOutputQA.regenerationTarget.fixes
+        }
+        : planQualityGates?.status === "blocked"
+          ? {
+            label: "Plan quality is blocked",
+            detail: planQualityGates.summary
+          }
       : renderDesignSpec?.status === "blocked"
         ? {
           label: "Design spec is blocked",
@@ -1749,7 +1809,14 @@ export default function ProjectRendersPage() {
             detail: renders.length > 0 ? "Use QA and comparison to select a final render." : "Create the first exterior concept from the current brief."
           }
   const designControlPrimaryAction: DesignControlCenterAction =
-    renderDesignSpec?.status === "blocked"
+    planQualityGates?.status === "blocked"
+      ? {
+        label: "Review quality gates",
+        detail: "Resolve blocked plan-quality checks before generation.",
+        onClick: () => handleScrollToRenderSection("plan-quality-gates-section"),
+        disabled: isGenerationBusy
+      }
+      : renderDesignSpec?.status === "blocked"
       ? {
         label: "Review spec blockers",
         detail: "Resolve blocked render-spec assumptions before generation.",
@@ -1800,6 +1867,12 @@ export default function ProjectRendersPage() {
                 disabled: isExportingPackage
               }
   const designControlSecondaryActions: DesignControlCenterAction[] = [
+    {
+      label: "Quality",
+      detail: "Review pre-generation plan quality gates.",
+      onClick: () => handleScrollToRenderSection("plan-quality-gates-section"),
+      disabled: !planQualityGates
+    },
     {
       label: "Brief",
       detail: "Jump to the design brief inputs.",
@@ -1872,6 +1945,14 @@ export default function ProjectRendersPage() {
           primaryAction={designControlPrimaryAction}
           secondaryActions={designControlSecondaryActions}
         />
+
+        {planQualityGates ? (
+          <PlanQualityGatesPanel
+            report={planQualityGates}
+            disabled={isGenerationBusy || isSavingBrief}
+            onAction={handlePlanQualityGateAction}
+          />
+        ) : null}
 
         <section id="render-brief-section" className="panel">
           <div className="panel-header">
@@ -1948,21 +2029,25 @@ export default function ProjectRendersPage() {
           </div>
         </section>
 
-        <DesignDNAPanel
-          report={designDNA}
-          disabled={isGenerationBusy || isSavingBrief}
-          isRegenerating={pendingRenderAction?.action === "dna-regenerate"}
-          onApplyDNA={handleApplyDesignDNA}
-          onFocusRender={handleFocusQARender}
-          onRegenerateDrift={handleRegenerateBackToDNA}
-        />
+        <div id="design-dna-section">
+          <DesignDNAPanel
+            report={designDNA}
+            disabled={isGenerationBusy || isSavingBrief}
+            isRegenerating={pendingRenderAction?.action === "dna-regenerate"}
+            onApplyDNA={handleApplyDesignDNA}
+            onFocusRender={handleFocusQARender}
+            onRegenerateDrift={handleRegenerateBackToDNA}
+          />
+        </div>
 
-        <RoomDesignDirectionsPanel
-          floorPlans={project.floorPlans}
-          styleLabel={getStyleLabel(selectedStyle)}
-          disabled={isGenerationBusy || isSavingBrief}
-          onApplyDirections={handleApplyRoomDesignDirections}
-        />
+        <div id="room-design-directions-section">
+          <RoomDesignDirectionsPanel
+            floorPlans={project.floorPlans}
+            styleLabel={getStyleLabel(selectedStyle)}
+            disabled={isGenerationBusy || isSavingBrief}
+            onApplyDirections={handleApplyRoomDesignDirections}
+          />
+        </div>
 
         {renderDesignSpec ? (
           <div id="render-design-spec-section">

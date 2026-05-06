@@ -1712,6 +1712,198 @@ button:disabled,
   justify-content: flex-end;
 }
 
+.plan-quality-gates-panel {
+  display: grid;
+  gap: 1rem;
+  border-color: rgba(27, 42, 74, 0.12);
+}
+
+.plan-quality-gates-panel.is-ready {
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.plan-quality-gates-panel.is-review {
+  border-color: rgba(212, 168, 75, 0.24);
+}
+
+.plan-quality-gates-panel.is-blocked {
+  border-color: rgba(185, 28, 28, 0.24);
+}
+
+.plan-quality-gates-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.plan-quality-gates-status.is-ready {
+  background: rgba(34, 197, 94, 0.1);
+  color: #166534;
+}
+
+.plan-quality-gates-status.is-review {
+  background: rgba(212, 168, 75, 0.16);
+  color: #7c5a16;
+}
+
+.plan-quality-gates-status.is-blocked {
+  background: rgba(239, 68, 68, 0.12);
+  color: #991b1b;
+}
+
+.plan-quality-gates-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: center;
+  padding: 0.85rem;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.65rem;
+  background: rgba(248, 250, 252, 0.78);
+}
+
+.plan-quality-gates-score {
+  display: grid;
+  place-items: center;
+  width: 3.1rem;
+  height: 3.1rem;
+  border-radius: 0.7rem;
+  background: rgba(27, 42, 74, 0.08);
+  color: var(--fw-navy);
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.plan-quality-gates-score-label {
+  margin-top: 0.25rem;
+  color: var(--fw-slate);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.plan-quality-gates-copy {
+  color: var(--fw-navy);
+  font-size: 0.94rem;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.plan-quality-gates-counts {
+  margin-top: 0.25rem;
+  color: var(--fw-slate);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.plan-quality-gates-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.75rem;
+}
+
+.plan-quality-gate {
+  display: grid;
+  gap: 0.75rem;
+  align-content: space-between;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 0.85rem;
+}
+
+.plan-quality-gate.is-ready {
+  border-color: rgba(34, 197, 94, 0.16);
+  background: rgba(240, 253, 244, 0.48);
+}
+
+.plan-quality-gate.is-review {
+  border-color: rgba(212, 168, 75, 0.22);
+  background: rgba(255, 251, 235, 0.5);
+}
+
+.plan-quality-gate.is-blocked {
+  border-color: rgba(239, 68, 68, 0.22);
+  background: rgba(254, 242, 242, 0.52);
+}
+
+.plan-quality-gate-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: start;
+}
+
+.plan-quality-gate-icon {
+  display: grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 999px;
+  background: rgba(27, 42, 74, 0.08);
+  color: var(--fw-navy);
+}
+
+.plan-quality-gate.is-ready .plan-quality-gate-icon {
+  background: rgba(34, 197, 94, 0.12);
+  color: #166534;
+}
+
+.plan-quality-gate.is-review .plan-quality-gate-icon {
+  background: rgba(212, 168, 75, 0.16);
+  color: #7c5a16;
+}
+
+.plan-quality-gate.is-blocked .plan-quality-gate-icon {
+  background: rgba(239, 68, 68, 0.12);
+  color: #991b1b;
+}
+
+.plan-quality-gate-title {
+  color: var(--fw-navy);
+  font-size: 0.9rem;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.plan-quality-gate-detail {
+  margin-top: 0.25rem;
+  color: var(--fw-slate);
+  font-size: 0.8rem;
+  line-height: 1.42;
+}
+
+.plan-quality-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.plan-quality-gate-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(27, 42, 74, 0.12);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--fw-navy);
+  padding: 0.42rem 0.68rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.plan-quality-gate-action:hover {
+  border-color: rgba(212, 168, 75, 0.55);
+  background: rgba(212, 168, 75, 0.12);
+}
+
+.plan-quality-gate-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .render-design-spec-panel {
   display: grid;
   gap: 1rem;
@@ -7249,8 +7441,17 @@ button.render-variant-row:disabled {
   }
 
   .overview-actions-grid,
-  .overview-readiness-grid {
+  .overview-readiness-grid,
+  .plan-quality-gates-list {
     grid-template-columns: 1fr;
+  }
+
+  .plan-quality-gates-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-quality-gate-action {
+    flex: 1 1 100%;
   }
 
   .toolbar-row {
