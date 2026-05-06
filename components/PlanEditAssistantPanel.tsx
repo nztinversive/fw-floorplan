@@ -1,7 +1,7 @@
 "use client"
 
 import { ArrowRight, Bot, CheckCircle2, MessageSquareText, Plus, RefreshCw, Trophy, WandSparkles } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import FloorPlanPreviewSvg from "@/components/FloorPlanPreviewSvg"
 import {
@@ -21,9 +21,27 @@ type PlanEditAssistantPanelProps = {
   onGenerateWithAI?: (request: {
     prompt: string
     constraints: PlanEditConstraintSettings
+    sourceData: FloorPlanData
   }) => Promise<PlanEditProposal[]>
   onSaveProposal: (proposal: PlanEditProposal) => Promise<void> | void
   onApplyProposal?: (proposal: PlanEditProposal) => Promise<void> | void
+}
+
+type PlanEditSourceContext = {
+  label: string
+  data: FloorPlanData
+  proposalId?: string
+}
+
+type PlanEditRevisionThread = {
+  id: string
+  prompt: string
+  sourceLabel: string
+  sourceData: FloorPlanData
+  proposals: PlanEditProposal[]
+  selectedProposalId: string
+  mode: "openai" | "local" | "fallback"
+  createdAt: string
 }
 
 const EXAMPLE_PROMPTS = [
@@ -77,6 +95,18 @@ function getConstraintStatusLabel(status: PlanEditConstraintStatus) {
   return "review"
 }
 
+function getSourceFingerprint(data: FloorPlanData | null, floorLabel: string) {
+  if (!data) return `${floorLabel}:empty`
+  return [
+    floorLabel,
+    data.rooms.length,
+    data.walls.length,
+    data.doors.length,
+    data.windows.length,
+    Math.round(data.rooms.reduce((total, room) => total + Math.max(room.areaSqFt, 0), 0))
+  ].join(":")
+}
+
 export default function PlanEditAssistantPanel({
   floorLabel,
   sourceData,
@@ -96,9 +126,28 @@ export default function PlanEditAssistantPanel({
   const [selectedProposalId, setSelectedProposalId] = useState("")
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
   const [generationMessage, setGenerationMessage] = useState("")
+  const [iterationSource, setIterationSource] = useState<PlanEditSourceContext | null>(null)
+  const [revisionThreads, setRevisionThreads] = useState<PlanEditRevisionThread[]>([])
+  const [activeRevisionId, setActiveRevisionId] = useState("")
+  const sourceFingerprint = useMemo(() => getSourceFingerprint(sourceData, floorLabel), [floorLabel, sourceData])
+  const workingSource = iterationSource ?? (sourceData ? { label: floorLabel, data: sourceData } : null)
   const selectedProposal = proposals.find((proposal) => proposal.id === selectedProposalId) ?? proposals[0] ?? null
   const recommendedProposal = proposals.find((proposal) => proposal.isRecommended) ?? proposals[0] ?? null
   const selectedHardConstraintMiss = Boolean(selectedProposal?.hasHardConstraintMiss)
+  const activeRevision = revisionThreads.find((thread) => thread.id === activeRevisionId) ?? null
+  const previewSource = activeRevision
+    ? { label: activeRevision.sourceLabel, data: activeRevision.sourceData }
+    : workingSource
+
+  useEffect(() => {
+    setProposals([])
+    setSelectedProposalId("")
+    setIsGeneratingAI(false)
+    setGenerationMessage("")
+    setIterationSource(null)
+    setRevisionThreads([])
+    setActiveRevisionId("")
+  }, [sourceFingerprint])
 
   function getConstraints(): PlanEditConstraintSettings {
     const parsedMaxSqFt = Number(maxSqFt)
@@ -108,46 +157,108 @@ export default function PlanEditAssistantPanel({
     }
   }
 
-  function handlePreview(promptOverride?: string) {
-    const request = promptOverride ?? prompt
+  function selectProposal(proposalId: string) {
+    setSelectedProposalId(proposalId)
+    setRevisionThreads((current) =>
+      current.map((thread) =>
+        thread.id === activeRevisionId ? { ...thread, selectedProposalId: proposalId } : thread
+      )
+    )
+  }
 
-    if (!sourceData || !request.trim()) {
+  function recordRevision(args: {
+    request: string
+    source: PlanEditSourceContext
+    nextProposals: PlanEditProposal[]
+    mode: PlanEditRevisionThread["mode"]
+  }) {
+    const selectedId = args.nextProposals[0]?.id ?? ""
+    const thread: PlanEditRevisionThread = {
+      id: `plan-edit-thread-${Date.now()}`,
+      prompt: args.request,
+      sourceLabel: args.source.label,
+      sourceData: args.source.data,
+      proposals: args.nextProposals,
+      selectedProposalId: selectedId,
+      mode: args.mode,
+      createdAt: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    }
+
+    setProposals(args.nextProposals)
+    setSelectedProposalId(selectedId)
+    setActiveRevisionId(thread.id)
+    setRevisionThreads((current) => [thread, ...current].slice(0, 8))
+  }
+
+  function loadRevision(thread: PlanEditRevisionThread) {
+    setPrompt(thread.prompt)
+    setIterationSource({
+      label: thread.sourceLabel,
+      data: thread.sourceData
+    })
+    setProposals(thread.proposals)
+    setSelectedProposalId(thread.selectedProposalId)
+    setActiveRevisionId(thread.id)
+    setGenerationMessage(
+      `Loaded ${thread.mode === "openai" ? "OpenAI" : thread.mode === "fallback" ? "fallback" : "local"} revision from ${thread.createdAt}.`
+    )
+  }
+
+  function handlePreview(promptOverride?: string, sourceOverride?: PlanEditSourceContext) {
+    const request = promptOverride ?? prompt
+    const source = sourceOverride ?? workingSource
+
+    if (!source || !request.trim()) {
       return
     }
 
-    const nextProposals = generatePlanEditProposals(sourceData, request, getConstraints())
-    setProposals(nextProposals)
-    setSelectedProposalId(nextProposals[0]?.id ?? "")
-    setGenerationMessage("Generated local editable options.")
+    const nextProposals = generatePlanEditProposals(source.data, request, getConstraints())
+    recordRevision({
+      request,
+      source,
+      nextProposals,
+      mode: "local"
+    })
+    setGenerationMessage(`Generated local editable options from ${source.label}.`)
   }
 
-  async function handleOpenAIPreview() {
-    const request = prompt.trim()
+  async function handleOpenAIPreview(promptOverride?: string, sourceOverride?: PlanEditSourceContext) {
+    const request = (promptOverride ?? prompt).trim()
+    const source = sourceOverride ?? workingSource
 
-    if (!sourceData || !request || isGeneratingAI) {
+    if (!source || !request || isGeneratingAI) {
       return
     }
 
     if (!onGenerateWithAI) {
-      handlePreview(request)
+      handlePreview(request, source)
       return
     }
 
     setIsGeneratingAI(true)
-    setGenerationMessage("OpenAI is generating editable plan options...")
+    setGenerationMessage(`OpenAI is generating editable plan options from ${source.label}...`)
 
     try {
       const nextProposals = await onGenerateWithAI({
         prompt: request,
-        constraints: getConstraints()
+        constraints: getConstraints(),
+        sourceData: source.data
       })
-      setProposals(nextProposals)
-      setSelectedProposalId(nextProposals[0]?.id ?? "")
-      setGenerationMessage("OpenAI generated editable options from the current floor plan.")
+      recordRevision({
+        request,
+        source,
+        nextProposals,
+        mode: "openai"
+      })
+      setGenerationMessage(`OpenAI generated editable options from ${source.label}.`)
     } catch (error) {
-      const fallbackProposals = generatePlanEditProposals(sourceData, request, getConstraints())
-      setProposals(fallbackProposals)
-      setSelectedProposalId(fallbackProposals[0]?.id ?? "")
+      const fallbackProposals = generatePlanEditProposals(source.data, request, getConstraints())
+      recordRevision({
+        request,
+        source,
+        nextProposals: fallbackProposals,
+        mode: "fallback"
+      })
       setGenerationMessage(
         error instanceof Error
           ? `OpenAI was unavailable (${error.message}); generated local fallback options.`
@@ -167,15 +278,39 @@ export default function PlanEditAssistantPanel({
   }
 
   function handleFollowUp(instruction: string) {
+    if (!selectedProposal) {
+      return
+    }
+
     const nextPrompt = joinPrompt(prompt, instruction)
+    const nextSource = {
+      label: selectedProposal.title,
+      data: selectedProposal.data,
+      proposalId: selectedProposal.id
+    }
     setPrompt(nextPrompt)
-    handlePreview(nextPrompt)
+    setIterationSource(nextSource)
+    setGenerationMessage(`${selectedProposal.title} is now the source. Run OpenAI or local generation to continue the revision.`)
   }
 
-  const canPreview = Boolean(sourceData && prompt.trim())
-  const baseStats = sourceData
-    ? `${sourceData.rooms.length} rooms · ${sourceData.walls.length} walls · ${sourceData.doors.length} doors`
+  function handleUseSelectedAsSource() {
+    if (!selectedProposal) {
+      return
+    }
+
+    setIterationSource({
+      label: selectedProposal.title,
+      data: selectedProposal.data,
+      proposalId: selectedProposal.id
+    })
+    setGenerationMessage(`${selectedProposal.title} is now the source for the next edit.`)
+  }
+
+  const canPreview = Boolean(workingSource && prompt.trim())
+  const baseStats = workingSource
+    ? `${workingSource.data.rooms.length} rooms · ${workingSource.data.walls.length} walls · ${workingSource.data.doors.length} doors`
     : "Select or create a floor first"
+  const sourceLabel = workingSource?.label ?? floorLabel
 
   return (
     <section className="panel plan-edit-assistant-panel">
@@ -187,10 +322,19 @@ export default function PlanEditAssistantPanel({
           </div>
           <div className="section-title">Tell the plan what to change.</div>
           <div className="muted">
-            Generate multiple AI-style edit options against {floorLabel}; compare them, then save the winner as a new floor.
+            Generate editable plan options against {sourceLabel}; compare them, then keep iterating from the winner.
           </div>
         </div>
-        <span className="badge">{baseStats}</span>
+        <div className="plan-edit-source-badges">
+          {iterationSource ? (
+            <button type="button" className="badge plan-edit-source-reset" onClick={() => setIterationSource(null)}>
+              Source: {sourceLabel} · reset
+            </button>
+          ) : (
+            <span className="badge">Source: {sourceLabel}</span>
+          )}
+          <span className="badge">{baseStats}</span>
+        </div>
       </div>
 
       <div className="plan-edit-assistant-grid">
@@ -261,7 +405,7 @@ export default function PlanEditAssistantPanel({
           </div>
 
           <div className="button-row plan-edit-actions">
-            <button type="button" className="button" onClick={handleOpenAIPreview} disabled={!canPreview || isGeneratingAI}>
+            <button type="button" className="button" onClick={() => handleOpenAIPreview()} disabled={!canPreview || isGeneratingAI}>
               <Bot size={17} />
               {isGeneratingAI ? "Generating..." : "Generate plan edits with OpenAI"}
             </button>
@@ -314,9 +458,13 @@ export default function PlanEditAssistantPanel({
             <div className="plan-edit-iterate-card">
               <div>
                 <strong>Keep iterating</strong>
-                <span>Use the selected option as direction, then regenerate another set.</span>
+                <span>Use the selected option as the next source, then ask for another refinement.</span>
               </div>
               <div className="plan-edit-followups">
+                <button type="button" className="plan-edit-chip" onClick={handleUseSelectedAsSource}>
+                  <CheckCircle2 size={14} />
+                  Use selected as source
+                </button>
                 <button type="button" className="plan-edit-chip" onClick={() => handlePreview()}>
                   <RefreshCw size={14} />
                   Try again
@@ -332,6 +480,35 @@ export default function PlanEditAssistantPanel({
                     {action.label}
                   </button>
                 ))}
+              </div>
+            </div>
+          ) : null}
+
+          {revisionThreads.length > 0 ? (
+            <div className="plan-edit-history-card">
+              <div>
+                <strong>Edit history</strong>
+                <span>Reload a prior generation, then continue from any option.</span>
+              </div>
+              <div className="plan-edit-history-list">
+                {revisionThreads.map((thread, index) => {
+                  const isActive = thread.id === activeRevisionId
+
+                  return (
+                    <button
+                      key={thread.id}
+                      type="button"
+                      className={`plan-edit-history-item${isActive ? " is-active" : ""}`}
+                      onClick={() => loadRevision(thread)}
+                    >
+                      <span>{index === 0 ? "Latest" : `Rev ${revisionThreads.length - index}`}</span>
+                      <strong>{thread.prompt.split("\n").slice(-1)[0]}</strong>
+                      <small>
+                        {thread.mode === "openai" ? "OpenAI" : thread.mode === "fallback" ? "Fallback" : "Local"} · {thread.sourceLabel} · {thread.createdAt}
+                      </small>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           ) : null}
@@ -352,7 +529,7 @@ export default function PlanEditAssistantPanel({
                   <button
                     type="button"
                     className="plan-edit-recommendation-button"
-                    onClick={() => setSelectedProposalId(recommendedProposal.id)}
+                    onClick={() => selectProposal(recommendedProposal.id)}
                   >
                     View winner
                   </button>
@@ -368,7 +545,7 @@ export default function PlanEditAssistantPanel({
                       key={proposal.id}
                       type="button"
                       className={`plan-edit-option${isSelected ? " is-selected" : ""}`}
-                      onClick={() => setSelectedProposalId(proposal.id)}
+                      onClick={() => selectProposal(proposal.id)}
                     >
                       <div className="plan-edit-option-preview">
                         <FloorPlanPreviewSvg data={proposal.data} label={`${proposal.title} preview`} />
@@ -392,11 +569,11 @@ export default function PlanEditAssistantPanel({
               </div>
 
               <div className="plan-edit-preview-body">
-                {sourceData ? (
+                {previewSource ? (
                   <div className="plan-edit-before-after">
                     <article>
                       <div className="comparison-side-label">Before</div>
-                      <FloorPlanPreviewSvg data={sourceData} label={`${floorLabel} before edit`} />
+                      <FloorPlanPreviewSvg data={previewSource.data} label={`${previewSource.label} before edit`} />
                     </article>
                     <article>
                       <div className="comparison-side-label">After</div>

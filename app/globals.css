@@ -983,6 +983,23 @@ button:disabled,
   align-items: flex-start;
 }
 
+.plan-edit-source-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  min-width: 12rem;
+}
+
+.plan-edit-source-reset {
+  cursor: pointer;
+}
+
+.plan-edit-source-reset:hover {
+  border-color: rgba(212, 168, 75, 0.5);
+  background: rgba(212, 168, 75, 0.12);
+}
+
 .plan-edit-kicker {
   display: inline-flex;
   gap: 0.42rem;
@@ -1147,6 +1164,80 @@ button:disabled,
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+}
+
+.plan-edit-history-card {
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.78rem;
+}
+
+.plan-edit-history-card strong,
+.plan-edit-history-card span {
+  display: block;
+}
+
+.plan-edit-history-card > div:first-child strong {
+  color: var(--fw-navy);
+  font-size: 0.86rem;
+}
+
+.plan-edit-history-card > div:first-child span {
+  margin-top: 0.18rem;
+  color: var(--fw-slate);
+  font-size: 0.76rem;
+  line-height: 1.38;
+}
+
+.plan-edit-history-list {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.plan-edit-history-item {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.52rem;
+  background: rgba(248, 250, 252, 0.82);
+  color: var(--fw-navy);
+  padding: 0.55rem 0.62rem;
+  text-align: left;
+}
+
+.plan-edit-history-item.is-active {
+  border-color: rgba(212, 168, 75, 0.45);
+  background: rgba(212, 168, 75, 0.1);
+}
+
+.plan-edit-history-item > span {
+  color: #735419;
+  font-size: 0.64rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.plan-edit-history-item strong {
+  overflow: hidden;
+  color: var(--fw-navy);
+  font-size: 0.76rem;
+  line-height: 1.24;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-edit-history-item small {
+  overflow: hidden;
+  color: var(--fw-slate);
+  font-size: 0.7rem;
+  font-weight: 740;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .plan-edit-apply-note {

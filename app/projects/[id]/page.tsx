@@ -354,6 +354,7 @@ export default function ProjectOverviewPage() {
   async function handleGeneratePlanEditsWithAI(request: {
     prompt: string
     constraints: PlanEditConstraintSettings
+    sourceData: PersistedFloorPlan["data"]
   }) {
     if (!projectId || !activeFloorPlan) {
       throw new Error("Select a floor before generating AI plan edits")
@@ -362,14 +363,14 @@ export default function ProjectOverviewPage() {
     const aiProposals = await generateAiPlanEdits({
       projectId,
       floor: activeFloorPlan.floor,
-      sourceData: activeFloorPlan.data,
+      sourceData: request.sourceData,
       prompt: request.prompt,
       constraints: request.constraints
     })
 
     return rankPlanEditProposals(
       aiProposals.map((proposal, index) =>
-        createPlanEditProposalFromAI(activeFloorPlan.data, request.prompt, proposal, index, request.constraints)
+        createPlanEditProposalFromAI(request.sourceData, request.prompt, proposal, index, request.constraints)
       )
     )
   }
