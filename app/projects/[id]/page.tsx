@@ -32,7 +32,12 @@ import { createSeedFloorPlan } from "@/lib/geometry"
 import { downloadJson, generateFloorPlanJson } from "@/lib/json-export"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
 import { buildPlanToRenderReadinessReport } from "@/lib/plan-to-render-readiness"
-import type { PlanEditProposal } from "@/lib/plan-edit-assistant"
+import {
+  createPlanEditProposalFromAI,
+  rankPlanEditProposals,
+  type PlanEditConstraintSettings,
+  type PlanEditProposal
+} from "@/lib/plan-edit-assistant"
 import { downloadSvg, generateSvg } from "@/lib/svg-export"
 import type { PersistedFloorPlan, ProjectComment } from "@/lib/types"
 
@@ -71,6 +76,7 @@ export default function ProjectOverviewPage() {
   const updateProject = useMutation(api.projects.update)
   const removeProject = useMutation(api.projects.remove)
   const generateAiConcepts = useAction(api.floorPlanConcepts.generateWithAI)
+  const generateAiPlanEdits = useAction(api.planEditAssistant.generateWithAI)
   const enablePublicShare = useMutation(api.projects.enablePublicShare)
   const rotatePublicShare = useMutation(api.projects.rotatePublicShare)
   const disablePublicShare = useMutation(api.projects.disablePublicShare)
@@ -343,6 +349,29 @@ export default function ProjectOverviewPage() {
     } finally {
       setIsSavingConceptFloor(false)
     }
+  }
+
+  async function handleGeneratePlanEditsWithAI(request: {
+    prompt: string
+    constraints: PlanEditConstraintSettings
+  }) {
+    if (!projectId || !activeFloorPlan) {
+      throw new Error("Select a floor before generating AI plan edits")
+    }
+
+    const aiProposals = await generateAiPlanEdits({
+      projectId,
+      floor: activeFloorPlan.floor,
+      sourceData: activeFloorPlan.data,
+      prompt: request.prompt,
+      constraints: request.constraints
+    })
+
+    return rankPlanEditProposals(
+      aiProposals.map((proposal, index) =>
+        createPlanEditProposalFromAI(activeFloorPlan.data, request.prompt, proposal, index, request.constraints)
+      )
+    )
   }
 
   async function handleSavePlanEditFloor(proposal: PlanEditProposal) {
@@ -690,6 +719,7 @@ export default function ProjectOverviewPage() {
         sourceData={activeFloorPlan?.data ?? null}
         isSaving={isSavingPlanEditFloor}
         isApplying={isApplyingPlanEditFloor}
+        onGenerateWithAI={handleGeneratePlanEditsWithAI}
         onSaveProposal={handleSavePlanEditFloor}
         onApplyProposal={activeFloorPlan ? handleApplyPlanEditToCurrentFloor : undefined}
       />

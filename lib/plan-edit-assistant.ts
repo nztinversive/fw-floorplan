@@ -8,6 +8,9 @@ export type PlanEditProposal = {
   summary: string
   data: FloorPlanData
   delta: PlanEditDelta
+  constraints: PlanEditConstraintResult[]
+  constraintSummary: string
+  hasHardConstraintMiss: boolean
   scores: PlanEditScores
   changes: string[]
   checks: string[]
@@ -23,6 +26,29 @@ export type PlanEditScores = {
   outdoorConnection: number
   renderReadiness: number
   overall: number
+}
+
+export type PlanEditConstraintId =
+  | "keep-bedroom-count"
+  | "keep-bathroom-count"
+  | "keep-kitchen"
+  | "must-have-mudroom"
+  | "improve-privacy"
+  | "improve-render-readiness"
+
+export type PlanEditConstraintSettings = {
+  lockedIds: PlanEditConstraintId[]
+  maxSqFt?: number | null
+}
+
+export type PlanEditConstraintStatus = "met" | "review" | "missed"
+
+export type PlanEditConstraintResult = {
+  id: PlanEditConstraintId | "max-sqft"
+  label: string
+  status: PlanEditConstraintStatus
+  detail: string
+  isHard: boolean
 }
 
 export type PlanEditStats = {
@@ -52,7 +78,17 @@ export type PlanEditDelta = {
   summary: string[]
 }
 
-type PlanEditVariant = "balanced" | "privacy" | "entertaining"
+export type PlanEditVariant = "balanced" | "privacy" | "entertaining" | "openai"
+
+export type AiPlanEditProposal = {
+  title: string
+  focus: string
+  summary: string
+  data: FloorPlanData
+  changes: string[]
+  checks: string[]
+  confidence: number
+}
 
 type Rect = {
   x: number
@@ -66,6 +102,20 @@ type EditBuilder = {
   changes: string[]
   checks: string[]
   nextId: (prefix: string) => string
+}
+
+const EMPTY_CONSTRAINTS: PlanEditConstraintSettings = {
+  lockedIds: [],
+  maxSqFt: null
+}
+
+const CONSTRAINT_LABELS: Record<PlanEditConstraintId, string> = {
+  "keep-bedroom-count": "Keep bedroom count",
+  "keep-bathroom-count": "Keep bath count",
+  "keep-kitchen": "Do not move kitchen",
+  "must-have-mudroom": "Must include mudroom",
+  "improve-privacy": "Improve privacy",
+  "improve-render-readiness": "Improve render readiness"
 }
 
 function normalizePrompt(prompt: string) {
@@ -212,6 +262,14 @@ function countRooms(data: FloorPlanData, pattern: RegExp) {
   return data.rooms.filter((room) => pattern.test(room.label)).length
 }
 
+function getRoomCenter(room: Room) {
+  const bounds = rectFromRoom(room)
+  return {
+    x: bounds.x + bounds.width / 2,
+    y: bounds.y + bounds.height / 2
+  }
+}
+
 function normalizeRoomLabel(label: string) {
   return label.trim().toLowerCase().replace(/\s+/g, " ")
 }
@@ -287,6 +345,141 @@ export function buildPlanEditDelta(beforeData: FloorPlanData, afterData: FloorPl
     removedRooms,
     summary
   }
+}
+
+function getConstraintSettings(settings?: PlanEditConstraintSettings): PlanEditConstraintSettings {
+  return {
+    lockedIds: settings?.lockedIds ?? [],
+    maxSqFt: settings?.maxSqFt ?? null
+  }
+}
+
+function makeConstraintResult(result: PlanEditConstraintResult): PlanEditConstraintResult {
+  return result
+}
+
+function evaluatePlanEditConstraints(args: {
+  source: FloorPlanData
+  data: FloorPlanData
+  delta: PlanEditDelta
+  scores: PlanEditScores
+  settings?: PlanEditConstraintSettings
+}): PlanEditConstraintResult[] {
+  const settings = getConstraintSettings(args.settings)
+  const results: PlanEditConstraintResult[] = []
+  const sourceKitchen = findRoom(args.source, /kitchen|dining/i)
+  const nextKitchen = findRoom(args.data, /kitchen|dining/i)
+  const scale = args.source.scale || 18
+
+  if (settings.lockedIds.includes("keep-bedroom-count")) {
+    const before = args.delta.before.bedroomCount
+    const after = args.delta.after.bedroomCount
+    results.push(makeConstraintResult({
+      id: "keep-bedroom-count",
+      label: CONSTRAINT_LABELS["keep-bedroom-count"],
+      status: after === before ? "met" : "missed",
+      detail: after === before ? `Kept ${after} bedroom${after === 1 ? "" : "s"}.` : `Changed bedrooms from ${before} to ${after}.`,
+      isHard: true
+    }))
+  }
+
+  if (settings.lockedIds.includes("keep-bathroom-count")) {
+    const before = args.delta.before.bathroomCount
+    const after = args.delta.after.bathroomCount
+    results.push(makeConstraintResult({
+      id: "keep-bathroom-count",
+      label: CONSTRAINT_LABELS["keep-bathroom-count"],
+      status: after === before ? "met" : "missed",
+      detail: after === before ? `Kept ${after} bath${after === 1 ? "" : "s"}.` : `Changed baths from ${before} to ${after}.`,
+      isHard: true
+    }))
+  }
+
+  if (settings.lockedIds.includes("keep-kitchen")) {
+    let status: PlanEditConstraintStatus = "met"
+    let detail = "Kitchen location is preserved."
+
+    if (sourceKitchen && !nextKitchen) {
+      status = "missed"
+      detail = "The source kitchen/dining room is no longer represented."
+    } else if (sourceKitchen && nextKitchen) {
+      const sourceCenter = getRoomCenter(sourceKitchen)
+      const nextCenter = getRoomCenter(nextKitchen)
+      const drift = Math.hypot(nextCenter.x - sourceCenter.x, nextCenter.y - sourceCenter.y)
+      const driftFt = Math.round(drift / scale)
+      status = drift <= scale * 4 ? "met" : drift <= scale * 8 ? "review" : "missed"
+      detail =
+        status === "met"
+          ? `Kitchen center stays within ${Math.max(1, driftFt)} ft of the source plan.`
+          : `Kitchen center shifts about ${driftFt} ft from the source plan.`
+    }
+
+    results.push(makeConstraintResult({
+      id: "keep-kitchen",
+      label: CONSTRAINT_LABELS["keep-kitchen"],
+      status,
+      detail,
+      isHard: true
+    }))
+  }
+
+  if (settings.lockedIds.includes("must-have-mudroom")) {
+    const hasMudroom = hasRoom(args.data, /mudroom|mud room|laundry|drop zone/i)
+    results.push(makeConstraintResult({
+      id: "must-have-mudroom",
+      label: CONSTRAINT_LABELS["must-have-mudroom"],
+      status: hasMudroom ? "met" : "missed",
+      detail: hasMudroom ? "Mudroom/drop-zone space is represented." : "No mudroom, laundry, or drop-zone room was found.",
+      isHard: true
+    }))
+  }
+
+  if (settings.lockedIds.includes("improve-privacy")) {
+    results.push(makeConstraintResult({
+      id: "improve-privacy",
+      label: CONSTRAINT_LABELS["improve-privacy"],
+      status: args.scores.privacy >= 80 ? "met" : args.scores.privacy >= 70 ? "review" : "missed",
+      detail: `Privacy score is ${args.scores.privacy}/100 after the edit.`,
+      isHard: false
+    }))
+  }
+
+  if (settings.lockedIds.includes("improve-render-readiness")) {
+    results.push(makeConstraintResult({
+      id: "improve-render-readiness",
+      label: CONSTRAINT_LABELS["improve-render-readiness"],
+      status: args.scores.renderReadiness >= 82 ? "met" : args.scores.renderReadiness >= 72 ? "review" : "missed",
+      detail: `Render readiness is ${args.scores.renderReadiness}/100 after the edit.`,
+      isHard: false
+    }))
+  }
+
+  if (settings.maxSqFt && settings.maxSqFt > 0) {
+    const afterArea = args.delta.after.totalAreaSqFt
+    const overBy = afterArea - settings.maxSqFt
+    results.push(makeConstraintResult({
+      id: "max-sqft",
+      label: `Stay under ${settings.maxSqFt.toLocaleString()} sq ft`,
+      status: overBy <= 0 ? "met" : overBy <= settings.maxSqFt * 0.05 ? "review" : "missed",
+      detail: overBy <= 0
+        ? `Plan is ${afterArea.toLocaleString()} sq ft.`
+        : `Plan is ${Math.round(overBy).toLocaleString()} sq ft over the limit.`,
+      isHard: true
+    }))
+  }
+
+  return results
+}
+
+function summarizeConstraints(results: PlanEditConstraintResult[]) {
+  if (results.length === 0) {
+    return "No locked constraints"
+  }
+
+  const met = results.filter((result) => result.status === "met").length
+  const review = results.filter((result) => result.status === "review").length
+  const missed = results.filter((result) => result.status === "missed").length
+  return `${met} met${review > 0 ? ` / ${review} review` : ""}${missed > 0 ? ` / ${missed} missed` : ""}`
 }
 
 function expandRoom(builder: EditBuilder, pattern: RegExp, label: string, growX: number, growY: number) {
@@ -425,6 +618,21 @@ function calculatePlanEditScores(data: FloorPlanData, prompt: string, variant: P
   }
 }
 
+export function rankPlanEditProposals(proposals: PlanEditProposal[]): PlanEditProposal[] {
+  const rankedProposals = [...proposals].sort((left, right) => {
+    const leftHardMisses = left.constraints.filter((constraint) => constraint.isHard && constraint.status === "missed").length
+    const rightHardMisses = right.constraints.filter((constraint) => constraint.isHard && constraint.status === "missed").length
+    if (leftHardMisses !== rightHardMisses) return leftHardMisses - rightHardMisses
+    return right.scores.overall - left.scores.overall
+  })
+  const recommendedId = rankedProposals[0]?.id
+
+  return rankedProposals.map((proposal) => ({
+    ...proposal,
+    isRecommended: proposal.id === recommendedId
+  }))
+}
+
 function makeRecommendationReason(proposal: Pick<PlanEditProposal, "focus" | "scores" | "changes">) {
   const scoreEntries: Array<[string, number]> = [
     ["program fit", proposal.scores.programFit],
@@ -474,7 +682,8 @@ function addVariantIntent(builder: EditBuilder, variant: PlanEditVariant) {
 export function generatePlanEditProposal(
   source: FloorPlanData,
   prompt: string,
-  variant: PlanEditVariant = "balanced"
+  variant: PlanEditVariant = "balanced",
+  constraints?: PlanEditConstraintSettings
 ): PlanEditProposal {
   const normalizedPrompt = normalizePrompt(prompt)
   const builder = createBuilder(source, `${normalizedPrompt}-${variant}`)
@@ -550,6 +759,13 @@ export function generatePlanEditProposal(
   const data = syncDerivedData(builder.data)
   const delta = buildPlanEditDelta(source, data)
   const scores = calculatePlanEditScores(data, normalizedPrompt, variant, builder.changes)
+  const constraintResults = evaluatePlanEditConstraints({
+    source,
+    data,
+    delta,
+    scores,
+    settings: constraints
+  })
   const confidence = Math.min(97, 72 + builder.changes.length * 5 + (variant === "balanced" ? 2 : 0))
   const title = makeTitle(normalizedPrompt, builder.changes, variant)
   const focus = getVariantFocus(variant)
@@ -568,6 +784,9 @@ export function generatePlanEditProposal(
     summary: `${focus} interpretation of: "${prompt.trim()}". Save as a new floor so the current plan stays intact.`,
     data,
     delta,
+    constraints: constraintResults,
+    constraintSummary: summarizeConstraints(constraintResults),
+    hasHardConstraintMiss: constraintResults.some((result) => result.isHard && result.status === "missed"),
     scores,
     changes: uniqueChanges,
     checks: uniqueChecks,
@@ -577,16 +796,61 @@ export function generatePlanEditProposal(
   }
 }
 
-export function generatePlanEditProposals(source: FloorPlanData, prompt: string): PlanEditProposal[] {
-  const proposals = [
-    generatePlanEditProposal(source, prompt, "balanced"),
-    generatePlanEditProposal(source, prompt, "privacy"),
-    generatePlanEditProposal(source, prompt, "entertaining")
-  ].sort((left, right) => right.scores.overall - left.scores.overall)
-  const recommendedId = proposals[0]?.id
+export function createPlanEditProposalFromAI(
+  source: FloorPlanData,
+  prompt: string,
+  aiProposal: AiPlanEditProposal,
+  index: number,
+  constraints?: PlanEditConstraintSettings
+): PlanEditProposal {
+  const data = syncDerivedData(aiProposal.data)
+  const changes = [...new Set(aiProposal.changes.map((change) => change.trim()).filter(Boolean))]
+  const checks = [...new Set(aiProposal.checks.map((check) => check.trim()).filter(Boolean))]
+  const delta = buildPlanEditDelta(source, data)
+  const scores = calculatePlanEditScores(data, normalizePrompt(prompt), "openai", changes)
+  const constraintResults = evaluatePlanEditConstraints({
+    source,
+    data,
+    delta,
+    scores,
+    settings: constraints
+  })
+  const focus = aiProposal.focus.trim() || "OpenAI"
+  const recommendationReason = makeRecommendationReason({
+    focus,
+    scores,
+    changes
+  })
 
-  return proposals.map((proposal) => ({
-    ...proposal,
-    isRecommended: proposal.id === recommendedId
-  }))
+  return {
+    id: `proposal-openai-${index + 1}-${Date.now()}`,
+    title: aiProposal.title.trim() || `OpenAI Option ${index + 1}`,
+    focus,
+    summary: aiProposal.summary.trim() || `OpenAI-generated interpretation of: "${prompt.trim()}".`,
+    data,
+    delta,
+    constraints: constraintResults,
+    constraintSummary: summarizeConstraints(constraintResults),
+    hasHardConstraintMiss: constraintResults.some((result) => result.isHard && result.status === "missed"),
+    scores,
+    changes: changes.length > 0 ? changes : ["Generated an editable plan option from the requested brief."],
+    checks: checks.length > 0 ? checks : ["Run design review before sending this option to renders."],
+    confidence: Math.max(45, Math.min(99, Math.round(aiProposal.confidence))),
+    isRecommended: false,
+    recommendationReason
+  }
+}
+
+export function generatePlanEditProposals(
+  source: FloorPlanData,
+  prompt: string,
+  constraints?: PlanEditConstraintSettings
+): PlanEditProposal[] {
+  const proposals = [
+    generatePlanEditProposal(source, prompt, "balanced", constraints),
+    generatePlanEditProposal(source, prompt, "privacy", constraints),
+    generatePlanEditProposal(source, prompt, "entertaining", constraints)
+  ]
+
+  return rankPlanEditProposals(proposals)
 }

@@ -1038,6 +1038,85 @@ button:disabled,
   grid-template-columns: 1fr;
 }
 
+.plan-edit-constraints-card {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.82rem;
+}
+
+.plan-edit-constraints-card strong,
+.plan-edit-constraints-card span {
+  display: block;
+}
+
+.plan-edit-constraints-card > div:first-child strong {
+  color: var(--fw-navy);
+  font-size: 0.88rem;
+}
+
+.plan-edit-constraints-card > div:first-child span {
+  margin-top: 0.18rem;
+  color: var(--fw-slate);
+  font-size: 0.76rem;
+  line-height: 1.38;
+}
+
+.plan-edit-constraints-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.plan-edit-constraint-chip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.36rem 0.45rem;
+  align-items: start;
+  min-width: 0;
+  border: 1px solid rgba(27, 42, 74, 0.1);
+  border-radius: 0.58rem;
+  background: rgba(248, 250, 252, 0.86);
+  color: var(--fw-navy);
+  padding: 0.55rem;
+  text-align: left;
+}
+
+.plan-edit-constraint-chip svg {
+  grid-row: span 2;
+  margin-top: 0.08rem;
+  color: rgba(27, 42, 74, 0.38);
+}
+
+.plan-edit-constraint-chip span {
+  color: var(--fw-navy);
+  font-size: 0.75rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.plan-edit-constraint-chip small {
+  color: var(--fw-slate);
+  font-size: 0.68rem;
+  font-weight: 720;
+  line-height: 1.3;
+}
+
+.plan-edit-constraint-chip.is-active {
+  border-color: rgba(34, 197, 94, 0.26);
+  background: rgba(240, 253, 244, 0.72);
+}
+
+.plan-edit-constraint-chip.is-active svg {
+  color: #166534;
+}
+
+.plan-edit-max-area-field {
+  margin: 0;
+}
+
 .plan-edit-iterate-card {
   display: grid;
   gap: 0.7rem;
@@ -1077,6 +1156,17 @@ button:disabled,
   font-weight: 760;
   line-height: 1.42;
   padding-left: 0.7rem;
+}
+
+.plan-edit-generation-note {
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.55rem;
+  background: rgba(248, 250, 252, 0.8);
+  color: var(--fw-slate);
+  font-size: 0.76rem;
+  font-weight: 760;
+  line-height: 1.42;
+  padding: 0.62rem 0.7rem;
 }
 
 .plan-edit-preview-card {
@@ -1201,6 +1291,16 @@ button:disabled,
   font-weight: 800;
 }
 
+.plan-edit-constraint-summary.is-met {
+  background: rgba(34, 197, 94, 0.1);
+  color: #166534;
+}
+
+.plan-edit-constraint-summary.is-missed {
+  background: rgba(239, 68, 68, 0.12);
+  color: #991b1b;
+}
+
 .plan-edit-preview-media {
   min-height: 18rem;
   border-bottom: 1px solid rgba(27, 42, 74, 0.08);
@@ -1285,6 +1385,77 @@ button:disabled,
   font-size: 0.72rem;
   font-weight: 760;
   line-height: 1.35;
+}
+
+.plan-edit-constraint-results {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.plan-edit-constraint-results > strong {
+  color: var(--fw-navy);
+  font-size: 0.82rem;
+}
+
+.plan-edit-constraint-results-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.plan-edit-constraint-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: start;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.58rem;
+  background: #ffffff;
+  padding: 0.62rem;
+}
+
+.plan-edit-constraint-result > span {
+  border-radius: 999px;
+  background: rgba(27, 42, 74, 0.08);
+  color: var(--fw-slate);
+  padding: 0.18rem 0.38rem;
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.plan-edit-constraint-result.is-met > span {
+  background: rgba(34, 197, 94, 0.12);
+  color: #166534;
+}
+
+.plan-edit-constraint-result.is-review > span {
+  background: rgba(212, 168, 75, 0.16);
+  color: #7c5a16;
+}
+
+.plan-edit-constraint-result.is-missed > span {
+  background: rgba(239, 68, 68, 0.12);
+  color: #991b1b;
+}
+
+.plan-edit-constraint-result strong {
+  display: block;
+  color: var(--fw-navy);
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.plan-edit-constraint-result small {
+  display: block;
+  margin-top: 0.18rem;
+  color: var(--fw-slate);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.plan-edit-constraint-result.is-hard {
+  border-style: solid;
 }
 
 .plan-edit-score-grid {
@@ -8590,6 +8761,8 @@ button.render-variant-row:disabled {
   .overview-actions-grid,
   .overview-readiness-grid,
   .concept-brief-fields,
+  .plan-edit-constraints-grid,
+  .plan-edit-constraint-results-list,
   .plan-edit-options-grid,
   .plan-edit-before-after,
   .plan-edit-delta-grid,

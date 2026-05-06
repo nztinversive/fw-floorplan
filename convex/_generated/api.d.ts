@@ -16,6 +16,7 @@ import type * as floorPlanConcepts from "../floorPlanConcepts.js";
 import type * as floorPlans from "../floorPlans.js";
 import type * as http from "../http.js";
 import type * as members from "../members.js";
+import type * as planEditAssistant from "../planEditAssistant.js";
 import type * as projects from "../projects.js";
 import type * as renderPresets from "../renderPresets.js";
 import type * as renders from "../renders.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   floorPlans: typeof floorPlans;
   http: typeof http;
   members: typeof members;
+  planEditAssistant: typeof planEditAssistant;
   projects: typeof projects;
   renderPresets: typeof renderPresets;
   renders: typeof renders;

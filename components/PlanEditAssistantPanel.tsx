@@ -4,7 +4,13 @@ import { ArrowRight, Bot, CheckCircle2, MessageSquareText, Plus, RefreshCw, Trop
 import { useState } from "react"
 
 import FloorPlanPreviewSvg from "@/components/FloorPlanPreviewSvg"
-import { generatePlanEditProposals, type PlanEditProposal } from "@/lib/plan-edit-assistant"
+import {
+  generatePlanEditProposals,
+  type PlanEditConstraintId,
+  type PlanEditConstraintSettings,
+  type PlanEditConstraintStatus,
+  type PlanEditProposal
+} from "@/lib/plan-edit-assistant"
 import type { FloorPlanData } from "@/lib/types"
 
 type PlanEditAssistantPanelProps = {
@@ -12,6 +18,10 @@ type PlanEditAssistantPanelProps = {
   sourceData: FloorPlanData | null
   isSaving?: boolean
   isApplying?: boolean
+  onGenerateWithAI?: (request: {
+    prompt: string
+    constraints: PlanEditConstraintSettings
+  }) => Promise<PlanEditProposal[]>
   onSaveProposal: (proposal: PlanEditProposal) => Promise<void> | void
   onApplyProposal?: (proposal: PlanEditProposal) => Promise<void> | void
 }
@@ -38,6 +48,19 @@ const FOLLOW_UP_ACTIONS = [
   { label: "Add outdoor living", instruction: "Add or improve a patio, porch, deck, or indoor-outdoor living connection." }
 ]
 
+const CONSTRAINT_OPTIONS: Array<{
+  id: PlanEditConstraintId
+  label: string
+  detail: string
+}> = [
+  { id: "keep-bedroom-count", label: "Keep bedrooms", detail: "Do not add or remove bedrooms." },
+  { id: "keep-bathroom-count", label: "Keep baths", detail: "Do not add or remove bathrooms." },
+  { id: "keep-kitchen", label: "Do not move kitchen", detail: "Keep the kitchen in roughly the same zone." },
+  { id: "must-have-mudroom", label: "Must include mudroom", detail: "Require mudroom, laundry, or drop zone." },
+  { id: "improve-privacy", label: "Improve privacy", detail: "Prefer separated bedroom and suite logic." },
+  { id: "improve-render-readiness", label: "Improve render readiness", detail: "Prefer stronger exterior/render cues." }
+]
+
 function formatDelta(value: number, suffix = "") {
   if (value === 0) return `0${suffix}`
   return `${value > 0 ? "+" : ""}${value.toLocaleString()}${suffix}`
@@ -48,19 +71,42 @@ function joinPrompt(basePrompt: string, instruction: string) {
   return `${trimmedBase}${trimmedBase ? "\n" : ""}${instruction}`
 }
 
+function getConstraintStatusLabel(status: PlanEditConstraintStatus) {
+  if (status === "met") return "met"
+  if (status === "missed") return "missed"
+  return "review"
+}
+
 export default function PlanEditAssistantPanel({
   floorLabel,
   sourceData,
   isSaving = false,
   isApplying = false,
+  onGenerateWithAI,
   onSaveProposal,
   onApplyProposal
 }: PlanEditAssistantPanelProps) {
   const [prompt, setPrompt] = useState(EXAMPLE_PROMPTS[0])
+  const [lockedConstraintIds, setLockedConstraintIds] = useState<PlanEditConstraintId[]>([
+    "keep-bedroom-count",
+    "keep-kitchen"
+  ])
+  const [maxSqFt, setMaxSqFt] = useState("")
   const [proposals, setProposals] = useState<PlanEditProposal[]>([])
   const [selectedProposalId, setSelectedProposalId] = useState("")
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false)
+  const [generationMessage, setGenerationMessage] = useState("")
   const selectedProposal = proposals.find((proposal) => proposal.id === selectedProposalId) ?? proposals[0] ?? null
   const recommendedProposal = proposals.find((proposal) => proposal.isRecommended) ?? proposals[0] ?? null
+  const selectedHardConstraintMiss = Boolean(selectedProposal?.hasHardConstraintMiss)
+
+  function getConstraints(): PlanEditConstraintSettings {
+    const parsedMaxSqFt = Number(maxSqFt)
+    return {
+      lockedIds: lockedConstraintIds,
+      maxSqFt: Number.isFinite(parsedMaxSqFt) && parsedMaxSqFt > 0 ? parsedMaxSqFt : null
+    }
+  }
 
   function handlePreview(promptOverride?: string) {
     const request = promptOverride ?? prompt
@@ -69,9 +115,55 @@ export default function PlanEditAssistantPanel({
       return
     }
 
-    const nextProposals = generatePlanEditProposals(sourceData, request)
+    const nextProposals = generatePlanEditProposals(sourceData, request, getConstraints())
     setProposals(nextProposals)
     setSelectedProposalId(nextProposals[0]?.id ?? "")
+    setGenerationMessage("Generated local editable options.")
+  }
+
+  async function handleOpenAIPreview() {
+    const request = prompt.trim()
+
+    if (!sourceData || !request || isGeneratingAI) {
+      return
+    }
+
+    if (!onGenerateWithAI) {
+      handlePreview(request)
+      return
+    }
+
+    setIsGeneratingAI(true)
+    setGenerationMessage("OpenAI is generating editable plan options...")
+
+    try {
+      const nextProposals = await onGenerateWithAI({
+        prompt: request,
+        constraints: getConstraints()
+      })
+      setProposals(nextProposals)
+      setSelectedProposalId(nextProposals[0]?.id ?? "")
+      setGenerationMessage("OpenAI generated editable options from the current floor plan.")
+    } catch (error) {
+      const fallbackProposals = generatePlanEditProposals(sourceData, request, getConstraints())
+      setProposals(fallbackProposals)
+      setSelectedProposalId(fallbackProposals[0]?.id ?? "")
+      setGenerationMessage(
+        error instanceof Error
+          ? `OpenAI was unavailable (${error.message}); generated local fallback options.`
+          : "OpenAI was unavailable; generated local fallback options."
+      )
+    } finally {
+      setIsGeneratingAI(false)
+    }
+  }
+
+  function toggleConstraint(id: PlanEditConstraintId) {
+    setLockedConstraintIds((current) =>
+      current.includes(id)
+        ? current.filter((constraintId) => constraintId !== id)
+        : [...current, id]
+    )
   }
 
   function handleFollowUp(instruction: string) {
@@ -128,17 +220,61 @@ export default function PlanEditAssistantPanel({
             ))}
           </div>
 
+          <div className="plan-edit-constraints-card">
+            <div>
+              <strong>Plan constraints</strong>
+              <span>Lock what the assistant should protect before generating options.</span>
+            </div>
+
+            <div className="plan-edit-constraints-grid">
+              {CONSTRAINT_OPTIONS.map((constraint) => {
+                const isActive = lockedConstraintIds.includes(constraint.id)
+
+                return (
+                  <button
+                    key={constraint.id}
+                    type="button"
+                    className={`plan-edit-constraint-chip${isActive ? " is-active" : ""}`}
+                    onClick={() => toggleConstraint(constraint.id)}
+                    aria-pressed={isActive}
+                  >
+                    <CheckCircle2 size={14} />
+                    <span>{constraint.label}</span>
+                    <small>{constraint.detail}</small>
+                  </button>
+                )
+              })}
+            </div>
+
+            <label className="field plan-edit-max-area-field">
+              <span className="field-label">Max square footage</span>
+              <input
+                className="field-input"
+                type="number"
+                min={0}
+                step={25}
+                value={maxSqFt}
+                onChange={(event) => setMaxSqFt(event.target.value)}
+                placeholder="Optional"
+              />
+            </label>
+          </div>
+
           <div className="button-row plan-edit-actions">
-            <button type="button" className="button" onClick={() => handlePreview()} disabled={!canPreview}>
+            <button type="button" className="button" onClick={handleOpenAIPreview} disabled={!canPreview || isGeneratingAI}>
+              <Bot size={17} />
+              {isGeneratingAI ? "Generating..." : "Generate plan edits with OpenAI"}
+            </button>
+            <button type="button" className="button-secondary" onClick={() => handlePreview()} disabled={!canPreview || isGeneratingAI}>
               <WandSparkles size={17} />
-              Generate 3 options
+              Generate local options
             </button>
             {onApplyProposal ? (
               <button
                 type="button"
                 className="button-secondary"
                 onClick={() => selectedProposal && onApplyProposal(selectedProposal)}
-                disabled={!selectedProposal || isSaving || isApplying}
+                disabled={!selectedProposal || isSaving || isApplying || selectedHardConstraintMiss}
               >
                 <CheckCircle2 size={17} />
                 {isApplying ? "Applying..." : `Apply to ${floorLabel.toLowerCase()}`}
@@ -164,9 +300,13 @@ export default function PlanEditAssistantPanel({
             </button>
           </div>
 
+          {generationMessage ? <div className="plan-edit-generation-note">{generationMessage}</div> : null}
+
           {selectedProposal && onApplyProposal ? (
             <div className="plan-edit-apply-note">
-              Applying in place saves the current {floorLabel.toLowerCase()} as a named version first, so it can be restored from the editor.
+              {selectedHardConstraintMiss
+                ? "Resolve missed hard constraints before applying in place. Saving as a new floor is still available for exploration."
+                : `Applying in place saves the current ${floorLabel.toLowerCase()} as a named version first, so it can be restored from the editor.`}
             </div>
           ) : null}
 
@@ -237,6 +377,11 @@ export default function PlanEditAssistantPanel({
                         <div className="plan-edit-option-badges">
                           <span className="badge">{proposal.focus}</span>
                           {proposal.isRecommended ? <span className="badge is-success">winner</span> : null}
+                          {proposal.constraints.length > 0 ? (
+                            <span className={`badge plan-edit-constraint-summary${proposal.hasHardConstraintMiss ? " is-missed" : " is-met"}`}>
+                              {proposal.constraintSummary}
+                            </span>
+                          ) : null}
                         </div>
                         <strong>{proposal.title}</strong>
                         <span>{proposal.scores.overall}% score · {proposal.confidence}% match</span>
@@ -301,6 +446,26 @@ export default function PlanEditAssistantPanel({
                     <small>doors / windows</small>
                   </div>
                 </div>
+
+                {selectedProposal.constraints.length > 0 ? (
+                  <div className="plan-edit-constraint-results">
+                    <strong>Constraint check</strong>
+                    <div className="plan-edit-constraint-results-list">
+                      {selectedProposal.constraints.map((constraint) => (
+                        <div
+                          key={constraint.id}
+                          className={`plan-edit-constraint-result is-${constraint.status}${constraint.isHard ? " is-hard" : ""}`}
+                        >
+                          <span>{getConstraintStatusLabel(constraint.status)}</span>
+                          <div>
+                            <strong>{constraint.label}</strong>
+                            <small>{constraint.detail}</small>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="plan-edit-list is-delta">
                   <strong>Before / after diff</strong>
