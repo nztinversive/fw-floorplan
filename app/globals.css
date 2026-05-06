@@ -1038,6 +1038,47 @@ button:disabled,
   grid-template-columns: 1fr;
 }
 
+.plan-edit-iterate-card {
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.65rem;
+  background: rgba(248, 250, 252, 0.78);
+  padding: 0.78rem;
+}
+
+.plan-edit-iterate-card strong,
+.plan-edit-iterate-card span {
+  display: block;
+}
+
+.plan-edit-iterate-card strong {
+  color: var(--fw-navy);
+  font-size: 0.86rem;
+}
+
+.plan-edit-iterate-card span {
+  margin-top: 0.18rem;
+  color: var(--fw-slate);
+  font-size: 0.76rem;
+  line-height: 1.38;
+}
+
+.plan-edit-followups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.plan-edit-apply-note {
+  border-left: 3px solid rgba(212, 168, 75, 0.72);
+  color: var(--fw-slate);
+  font-size: 0.78rem;
+  font-weight: 760;
+  line-height: 1.42;
+  padding-left: 0.7rem;
+}
+
 .plan-edit-preview-card {
   min-width: 0;
   overflow: hidden;
@@ -1176,6 +1217,27 @@ button:disabled,
   padding: 0.95rem;
 }
 
+.plan-edit-before-after {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.plan-edit-before-after article {
+  overflow: hidden;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.55rem;
+  background: #ffffff;
+}
+
+.plan-edit-before-after .comparison-side-label {
+  padding: 0.62rem 0.7rem 0;
+}
+
+.plan-edit-before-after .concept-preview {
+  min-height: 16rem;
+}
+
 .plan-edit-preview-title-row {
   display: flex;
   justify-content: space-between;
@@ -1187,6 +1249,42 @@ button:disabled,
   color: var(--fw-navy);
   font-size: 1.02rem;
   font-weight: 900;
+}
+
+.plan-edit-delta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.plan-edit-delta-item {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.55rem;
+  background: #ffffff;
+  padding: 0.68rem;
+}
+
+.plan-edit-delta-item span {
+  color: var(--fw-slate);
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.plan-edit-delta-item strong {
+  color: var(--fw-navy);
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+
+.plan-edit-delta-item small {
+  color: var(--fw-slate);
+  font-size: 0.72rem;
+  font-weight: 760;
+  line-height: 1.35;
 }
 
 .plan-edit-score-grid {
@@ -1254,6 +1352,10 @@ button:disabled,
 
 .plan-edit-list.is-review .plan-edit-list-item {
   color: #735419;
+}
+
+.plan-edit-list.is-delta .plan-edit-list-item {
+  color: var(--fw-navy);
 }
 
 .plan-edit-empty {
@@ -8440,6 +8542,7 @@ button.render-variant-row:disabled {
 
   .render-presets-save-row,
   .concept-option-card,
+  .plan-edit-before-after,
   .render-review-queue-next,
   .render-revision-brief-summary,
   .floor-plan-compare-stats {
@@ -8488,6 +8591,8 @@ button.render-variant-row:disabled {
   .overview-readiness-grid,
   .concept-brief-fields,
   .plan-edit-options-grid,
+  .plan-edit-before-after,
+  .plan-edit-delta-grid,
   .plan-edit-score-grid,
   .plan-quality-gates-list,
   .render-workflow-steps {

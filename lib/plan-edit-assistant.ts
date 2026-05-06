@@ -7,6 +7,7 @@ export type PlanEditProposal = {
   focus: string
   summary: string
   data: FloorPlanData
+  delta: PlanEditDelta
   scores: PlanEditScores
   changes: string[]
   checks: string[]
@@ -22,6 +23,33 @@ export type PlanEditScores = {
   outdoorConnection: number
   renderReadiness: number
   overall: number
+}
+
+export type PlanEditStats = {
+  roomCount: number
+  wallCount: number
+  doorCount: number
+  windowCount: number
+  totalAreaSqFt: number
+  bedroomCount: number
+  bathroomCount: number
+  outdoorCount: number
+}
+
+export type PlanEditDelta = {
+  before: PlanEditStats
+  after: PlanEditStats
+  roomDelta: number
+  wallDelta: number
+  doorDelta: number
+  windowDelta: number
+  areaDeltaSqFt: number
+  bedroomDelta: number
+  bathroomDelta: number
+  outdoorDelta: number
+  addedRooms: string[]
+  removedRooms: string[]
+  summary: string[]
 }
 
 type PlanEditVariant = "balanced" | "privacy" | "entertaining"
@@ -182,6 +210,83 @@ function hasRoom(data: FloorPlanData, pattern: RegExp) {
 
 function countRooms(data: FloorPlanData, pattern: RegExp) {
   return data.rooms.filter((room) => pattern.test(room.label)).length
+}
+
+function normalizeRoomLabel(label: string) {
+  return label.trim().toLowerCase().replace(/\s+/g, " ")
+}
+
+function titleCaseRoomLabel(label: string) {
+  return label.replace(/\b\w/g, (match: string) => match.toUpperCase())
+}
+
+function formatSignedNumber(value: number, suffix = "") {
+  if (value === 0) return `no change${suffix}`
+  return `${value > 0 ? "+" : ""}${value.toLocaleString()}${suffix}`
+}
+
+function getRoomLabelCounts(data: FloorPlanData) {
+  return data.rooms.reduce<Record<string, number>>((counts, room) => {
+    const label = normalizeRoomLabel(room.label)
+    counts[label] = (counts[label] ?? 0) + 1
+    return counts
+  }, {})
+}
+
+export function getPlanEditStats(data: FloorPlanData): PlanEditStats {
+  return {
+    roomCount: data.rooms.length,
+    wallCount: data.walls.length,
+    doorCount: data.doors.length,
+    windowCount: data.windows.length,
+    totalAreaSqFt: Math.round(data.rooms.reduce((total, room) => total + Math.max(room.areaSqFt, 0), 0)),
+    bedroomCount: countRooms(data, /bedroom|bed room|guest|primary|suite/i),
+    bathroomCount: countRooms(data, /bath|powder/i),
+    outdoorCount: countRooms(data, /patio|porch|deck|outdoor|courtyard/i)
+  }
+}
+
+export function buildPlanEditDelta(beforeData: FloorPlanData, afterData: FloorPlanData): PlanEditDelta {
+  const before = getPlanEditStats(beforeData)
+  const after = getPlanEditStats(afterData)
+  const beforeLabels = getRoomLabelCounts(beforeData)
+  const afterLabels = getRoomLabelCounts(afterData)
+  const addedRooms = Object.entries(afterLabels)
+    .flatMap(([label, count]) => Array(Math.max(0, count - (beforeLabels[label] ?? 0))).fill(label))
+    .map((label) => titleCaseRoomLabel(String(label)))
+  const removedRooms = Object.entries(beforeLabels)
+    .flatMap(([label, count]) => Array(Math.max(0, count - (afterLabels[label] ?? 0))).fill(label))
+    .map((label) => titleCaseRoomLabel(String(label)))
+  const areaDeltaSqFt = after.totalAreaSqFt - before.totalAreaSqFt
+  const roomDelta = after.roomCount - before.roomCount
+  const bedroomDelta = after.bedroomCount - before.bedroomCount
+  const bathroomDelta = after.bathroomCount - before.bathroomCount
+  const outdoorDelta = after.outdoorCount - before.outdoorCount
+  const summary = [
+    `${formatSignedNumber(roomDelta)} room${Math.abs(roomDelta) === 1 ? "" : "s"}`,
+    `${formatSignedNumber(areaDeltaSqFt, " sq ft")} total area`,
+    bedroomDelta !== 0 ? `${formatSignedNumber(bedroomDelta)} bedroom${Math.abs(bedroomDelta) === 1 ? "" : "s"}` : "",
+    bathroomDelta !== 0 ? `${formatSignedNumber(bathroomDelta)} bath${Math.abs(bathroomDelta) === 1 ? "" : "s"}` : "",
+    outdoorDelta !== 0 ? `${formatSignedNumber(outdoorDelta)} outdoor space${Math.abs(outdoorDelta) === 1 ? "" : "s"}` : "",
+    addedRooms.length > 0 ? `adds ${addedRooms.slice(0, 3).join(", ")}` : "",
+    removedRooms.length > 0 ? `removes ${removedRooms.slice(0, 2).join(", ")}` : ""
+  ].filter(Boolean)
+
+  return {
+    before,
+    after,
+    roomDelta,
+    wallDelta: after.wallCount - before.wallCount,
+    doorDelta: after.doorCount - before.doorCount,
+    windowDelta: after.windowCount - before.windowCount,
+    areaDeltaSqFt,
+    bedroomDelta,
+    bathroomDelta,
+    outdoorDelta,
+    addedRooms,
+    removedRooms,
+    summary
+  }
 }
 
 function expandRoom(builder: EditBuilder, pattern: RegExp, label: string, growX: number, growY: number) {
@@ -443,6 +548,7 @@ export function generatePlanEditProposal(
   builder.checks.push("Use the editor to resolve any structural wall alignment before sending to renders.")
 
   const data = syncDerivedData(builder.data)
+  const delta = buildPlanEditDelta(source, data)
   const scores = calculatePlanEditScores(data, normalizedPrompt, variant, builder.changes)
   const confidence = Math.min(97, 72 + builder.changes.length * 5 + (variant === "balanced" ? 2 : 0))
   const title = makeTitle(normalizedPrompt, builder.changes, variant)
@@ -461,6 +567,7 @@ export function generatePlanEditProposal(
     focus,
     summary: `${focus} interpretation of: "${prompt.trim()}". Save as a new floor so the current plan stays intact.`,
     data,
+    delta,
     scores,
     changes: uniqueChanges,
     checks: uniqueChecks,

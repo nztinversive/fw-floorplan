@@ -67,6 +67,7 @@ export default function ProjectOverviewPage() {
   const rendersQuery = useQuery(api.renders.list, childQueryArgs)
   const versionsQuery = useQuery(api.versions.listProjectVersions, childQueryArgs)
   const saveFloorPlan = useMutation(api.floorPlans.save)
+  const saveFloorPlanVersion = useMutation(api.versions.saveVersion)
   const updateProject = useMutation(api.projects.update)
   const removeProject = useMutation(api.projects.remove)
   const generateAiConcepts = useAction(api.floorPlanConcepts.generateWithAI)
@@ -77,6 +78,7 @@ export default function ProjectOverviewPage() {
   const [isCreatingFloor, setIsCreatingFloor] = useState(false)
   const [isSavingConceptFloor, setIsSavingConceptFloor] = useState(false)
   const [isSavingPlanEditFloor, setIsSavingPlanEditFloor] = useState(false)
+  const [isApplyingPlanEditFloor, setIsApplyingPlanEditFloor] = useState(false)
   const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showComparisonDialog, setShowComparisonDialog] = useState(false)
@@ -364,6 +366,34 @@ export default function ProjectOverviewPage() {
       toast("Unable to save the plan edit preview", "error")
     } finally {
       setIsSavingPlanEditFloor(false)
+    }
+  }
+
+  async function handleApplyPlanEditToCurrentFloor(proposal: PlanEditProposal) {
+    if (!projectId || !project || !activeFloorPlan || isApplyingPlanEditFloor) return
+
+    const floorLabel = formatFloorLabel(activeFloorPlan.floor)
+    setIsApplyingPlanEditFloor(true)
+
+    try {
+      await saveFloorPlanVersion({
+        projectId,
+        floor: activeFloorPlan.floor,
+        name: `Before ${proposal.title}`,
+        data: activeFloorPlan.data
+      })
+      await saveFloorPlan({
+        projectId,
+        floor: activeFloorPlan.floor,
+        data: proposal.data
+      })
+      setSelectedFloor(activeFloorPlan.floor)
+      toast(`${proposal.title} applied to ${floorLabel}. Previous plan saved as a version.`, "success")
+    } catch (error) {
+      console.error("Unable to apply plan edit proposal.", error)
+      toast("Unable to apply this plan edit right now", "error")
+    } finally {
+      setIsApplyingPlanEditFloor(false)
     }
   }
 
@@ -659,7 +689,9 @@ export default function ProjectOverviewPage() {
         floorLabel={activeFloorPlan ? formatFloorLabel(activeFloorPlan.floor) : "the selected floor"}
         sourceData={activeFloorPlan?.data ?? null}
         isSaving={isSavingPlanEditFloor}
+        isApplying={isApplyingPlanEditFloor}
         onSaveProposal={handleSavePlanEditFloor}
+        onApplyProposal={activeFloorPlan ? handleApplyPlanEditToCurrentFloor : undefined}
       />
 
       <section className="panel overview-readiness-panel">
