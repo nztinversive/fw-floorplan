@@ -779,6 +779,34 @@ button:disabled,
   color: #166534;
 }
 
+.concept-option-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.concept-qa-badge {
+  display: inline-flex;
+  gap: 0.28rem;
+  align-items: center;
+}
+
+.concept-qa-badge.is-ready {
+  background: rgba(22, 101, 52, 0.1);
+  color: #166534;
+}
+
+.concept-qa-badge.is-review {
+  background: rgba(180, 83, 9, 0.1);
+  color: #92400e;
+}
+
+.concept-qa-badge.is-fix {
+  background: rgba(180, 35, 24, 0.1);
+  color: #b42318;
+}
+
 .concept-option-title {
   color: var(--fw-navy);
   font-size: 1.02rem;
@@ -808,6 +836,8 @@ button:disabled,
 }
 
 .concept-selected-notes {
+  display: grid;
+  gap: 0.9rem;
   border: 1px solid rgba(27, 42, 74, 0.08);
   border-radius: 0.5rem;
   background: rgba(248, 250, 252, 0.74);
@@ -829,6 +859,115 @@ button:disabled,
   color: var(--fw-slate);
   font-size: 0.78rem;
   line-height: 1.45;
+}
+
+.concept-qa-panel {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid rgba(27, 42, 74, 0.1);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.75rem;
+}
+
+.concept-qa-panel.is-ready {
+  border-color: rgba(22, 101, 52, 0.18);
+  background: rgba(240, 253, 244, 0.58);
+}
+
+.concept-qa-panel.is-review {
+  border-color: rgba(180, 83, 9, 0.18);
+  background: rgba(255, 251, 235, 0.66);
+}
+
+.concept-qa-panel.is-fix {
+  border-color: rgba(180, 35, 24, 0.16);
+  background: rgba(254, 242, 242, 0.58);
+}
+
+.concept-qa-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.concept-qa-title {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  color: var(--fw-navy);
+  font-size: 0.85rem;
+  font-weight: 900;
+}
+
+.concept-qa-header span:not(.badge) {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--fw-slate);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.concept-qa-checks {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.concept-qa-check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.45rem;
+  background: rgba(255, 255, 255, 0.64);
+  padding: 0.55rem;
+}
+
+.concept-qa-check svg {
+  margin-top: 0.08rem;
+}
+
+.concept-qa-check.is-ready svg {
+  color: #166534;
+}
+
+.concept-qa-check.is-review svg {
+  color: #92400e;
+}
+
+.concept-qa-check.is-fix svg {
+  color: #b42318;
+}
+
+.concept-qa-check strong,
+.concept-qa-check span {
+  display: block;
+}
+
+.concept-qa-check strong {
+  color: var(--fw-navy);
+  font-size: 0.78rem;
+}
+
+.concept-qa-check span {
+  margin-top: 0.12rem;
+  color: var(--fw-slate);
+  font-size: 0.74rem;
+  line-height: 1.38;
+}
+
+.concept-repair-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.concept-repair-actions .button-secondary,
+.concept-repair-actions .button-ghost {
+  min-height: 2.35rem;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.78rem;
 }
 
 .plan-edit-assistant-panel {

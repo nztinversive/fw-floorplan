@@ -1,7 +1,7 @@
 "use client"
 
-import { CheckCircle2, Home, Plus, Sparkles } from "lucide-react"
-import { useState } from "react"
+import { AlertTriangle, CheckCircle2, Home, Plus, ShieldCheck, Sparkles, Wrench } from "lucide-react"
+import { useMemo, useState } from "react"
 
 import FloorPlanPreviewSvg from "@/components/FloorPlanPreviewSvg"
 import {
@@ -9,6 +9,11 @@ import {
   type FloorPlanConcept,
   type FloorPlanConceptBrief
 } from "@/lib/floor-plan-concepts"
+import {
+  evaluateFloorPlanConcept,
+  type FloorPlanConceptRepairAction,
+  type FloorPlanConceptQAStatus
+} from "@/lib/floor-plan-concept-qa"
 
 type FloorPlanConceptStudioProps = {
   projectName: string
@@ -28,6 +33,18 @@ const DEFAULT_BRIEF: FloorPlanConceptBrief = {
   mustHaves: "covered entry, mudroom, walk-in pantry, strong indoor-outdoor connection"
 }
 
+const STATUS_LABELS: Record<FloorPlanConceptQAStatus, string> = {
+  ready: "ready",
+  review: "review",
+  fix: "fix"
+}
+
+const STATUS_ICONS: Record<FloorPlanConceptQAStatus, typeof CheckCircle2> = {
+  ready: CheckCircle2,
+  review: AlertTriangle,
+  fix: Wrench
+}
+
 export default function FloorPlanConceptStudio({
   projectName,
   floorCount,
@@ -42,34 +59,44 @@ export default function FloorPlanConceptStudio({
   const [generationMessage, setGenerationMessage] = useState("Template concepts are ready to compare.")
   const [isGeneratingConcepts, setIsGeneratingConcepts] = useState(false)
   const selectedConcept = concepts.find((concept) => concept.id === selectedConceptId) ?? concepts[0]
+  const qaReports = useMemo(
+    () => Object.fromEntries(concepts.map((concept) => [concept.id, evaluateFloorPlanConcept(concept, brief)])),
+    [brief, concepts]
+  )
+  const selectedReport = selectedConcept ? qaReports[selectedConcept.id] : null
 
   function updateBrief<Key extends keyof FloorPlanConceptBrief>(key: Key, value: FloorPlanConceptBrief[Key]) {
     setBrief((current) => ({ ...current, [key]: value }))
   }
 
-  async function handleGenerateConcepts() {
+  async function handleGenerateConcepts(nextBrief = brief, repairLabel?: string) {
     if (isGeneratingConcepts) return
 
     setIsGeneratingConcepts(true)
+    setBrief(nextBrief)
 
     try {
       if (onGenerateConcepts) {
-        const nextConcepts = await onGenerateConcepts(brief)
+        const nextConcepts = await onGenerateConcepts(nextBrief)
         setConcepts(nextConcepts)
         setSelectedConceptId(nextConcepts[0]?.id ?? "")
         setGenerationSource("openai")
-        setGenerationMessage("OpenAI generated these editable concepts from the current brief.")
+        setGenerationMessage(
+          repairLabel
+            ? `${repairLabel} regenerated the options with QA guidance.`
+            : "OpenAI generated these editable concepts from the current brief."
+        )
         return
       }
 
-      const nextConcepts = generateFloorPlanConcepts(brief)
+      const nextConcepts = generateFloorPlanConcepts(nextBrief)
       setConcepts(nextConcepts)
       setSelectedConceptId(nextConcepts[0]?.id ?? "")
       setGenerationSource("template")
-      setGenerationMessage("Template concepts are ready to compare.")
+      setGenerationMessage(repairLabel ? `${repairLabel} regenerated local editable options.` : "Template concepts are ready to compare.")
     } catch (error) {
       console.error("Unable to generate AI floor plan concepts.", error)
-      const fallbackConcepts = generateFloorPlanConcepts(brief)
+      const fallbackConcepts = generateFloorPlanConcepts(nextBrief)
       setConcepts(fallbackConcepts)
       setSelectedConceptId(fallbackConcepts[0]?.id ?? "")
       setGenerationSource("template")
@@ -77,6 +104,10 @@ export default function FloorPlanConceptStudio({
     } finally {
       setIsGeneratingConcepts(false)
     }
+  }
+
+  function handleRepair(action: FloorPlanConceptRepairAction) {
+    void handleGenerateConcepts(action.brief, action.label)
   }
 
   return (
@@ -191,7 +222,7 @@ export default function FloorPlanConceptStudio({
           </div>
 
           <div className="button-row concept-brief-actions">
-            <button type="button" className="button" onClick={handleGenerateConcepts} disabled={isGeneratingConcepts}>
+            <button type="button" className="button" onClick={() => void handleGenerateConcepts()} disabled={isGeneratingConcepts}>
               <Sparkles size={17} />
               {isGeneratingConcepts ? "Generating..." : "Generate with OpenAI"}
             </button>
@@ -199,7 +230,7 @@ export default function FloorPlanConceptStudio({
               type="button"
               className="button-secondary"
               onClick={() => selectedConcept && onSaveConcept(selectedConcept)}
-              disabled={!selectedConcept || isSaving || isGeneratingConcepts}
+              disabled={!selectedConcept || selectedReport?.status === "fix" || isSaving || isGeneratingConcepts}
             >
               <Plus size={17} />
               {isSaving ? "Saving..." : "Save selected as new floor"}
@@ -223,6 +254,8 @@ export default function FloorPlanConceptStudio({
           <div className="concept-option-list">
             {concepts.map((concept) => {
               const isSelected = concept.id === selectedConcept?.id
+              const report = qaReports[concept.id]
+              const StatusIcon = STATUS_ICONS[report.status]
 
               return (
                 <button
@@ -236,7 +269,13 @@ export default function FloorPlanConceptStudio({
                   </div>
                   <div className="concept-option-body">
                     <div className="concept-option-topline">
-                      <span className="badge">{concept.score}% match</span>
+                      <div className="concept-option-badges">
+                        <span className="badge">{concept.score}% match</span>
+                        <span className={`badge concept-qa-badge is-${report.status}`}>
+                          <StatusIcon size={13} />
+                          {report.score}% QA
+                        </span>
+                      </div>
                       {isSelected ? <CheckCircle2 size={17} /> : null}
                     </div>
                     <div className="concept-option-title">{concept.name}</div>
@@ -244,6 +283,7 @@ export default function FloorPlanConceptStudio({
                     <div className="concept-option-stats">
                       <span>{concept.estimatedSqFt.toLocaleString()} sq ft</span>
                       <span>{concept.roomCount} rooms</span>
+                      <span>{STATUS_LABELS[report.status]}</span>
                     </div>
                     <div className="concept-option-tags">
                       {concept.highlights.map((highlight) => (
@@ -262,6 +302,50 @@ export default function FloorPlanConceptStudio({
                 <strong>Tradeoffs to review</strong>
                 <span>{selectedConcept.tradeoffs.join(" · ")}</span>
               </div>
+              {selectedReport ? (
+                <div className={`concept-qa-panel is-${selectedReport.status}`}>
+                  <div className="concept-qa-header">
+                    <div>
+                      <div className="concept-qa-title">
+                        <ShieldCheck size={16} />
+                        Concept QA
+                      </div>
+                      <span>{selectedReport.summary}</span>
+                    </div>
+                    <span className={`badge concept-qa-badge is-${selectedReport.status}`}>{selectedReport.score}%</span>
+                  </div>
+
+                  <div className="concept-qa-checks">
+                    {selectedReport.checks.map((check) => {
+                      const CheckIcon = STATUS_ICONS[check.status]
+                      return (
+                        <div key={check.key} className={`concept-qa-check is-${check.status}`}>
+                          <CheckIcon size={15} />
+                          <div>
+                            <strong>{check.title}</strong>
+                            <span>{check.detail}</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  <div className="concept-repair-actions" aria-label="Concept repair actions">
+                    {selectedReport.actions.map((action) => (
+                      <button
+                        key={action.focus}
+                        type="button"
+                        className={action.focus === "fit" ? "button-secondary" : "button-ghost"}
+                        onClick={() => handleRepair(action)}
+                        disabled={isGeneratingConcepts}
+                      >
+                        <Wrench size={15} />
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
