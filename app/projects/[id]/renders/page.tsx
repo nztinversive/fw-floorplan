@@ -75,6 +75,11 @@ import {
   type PlanQualityGateAction
 } from "@/lib/plan-quality-gates"
 import {
+  applyPlanToRenderReadinessToBrief,
+  buildPlanToRenderReadinessReport,
+  type PlanToRenderReadinessStatus
+} from "@/lib/plan-to-render-readiness"
+import {
   analyzeRenderSpecDelta,
   buildRenderSpecDeltaRevision,
   type RenderSpecDeltaReport
@@ -173,6 +178,12 @@ function formatTimestamp(timestamp: number) {
   }).format(timestamp)
 }
 
+function getReadinessIcon(status: PlanToRenderReadinessStatus) {
+  if (status === "ready") return <CheckCircle2 size={16} />
+  if (status === "blocked") return <AlertTriangle size={16} />
+  return <Circle size={16} />
+}
+
 function appendUniqueRevisionLine(existingNotes: string, nextLine: string) {
   const trimmedLine = nextLine.trim()
   if (!trimmedLine) return existingNotes.trim()
@@ -260,22 +271,6 @@ export default function ProjectRendersPage() {
   const generationRenderBrief = useMemo(
     () => (renderDesignSpec ? applyRenderDesignSpecToBrief(renderBrief, renderDesignSpec) : renderBrief),
     [renderBrief, renderDesignSpec]
-  )
-  const [previewRenderBrief] = useDebounce(generationRenderBrief, 400)
-  const promptPreview = useQuery(
-    api.renders.previewPrompt,
-    projectId && project && project.floorPlans.length > 0
-      ? {
-        projectId,
-        style: selectedStyle,
-        settings: {
-          ...previewSettings,
-          style: selectedStyle
-        },
-        viewAngle: previewSettings.viewAngle,
-        renderBrief: previewRenderBrief
-      }
-      : "skip"
   )
 
   const renders = useMemo<StoredRender[]>(
@@ -502,6 +497,40 @@ export default function ProjectRendersPage() {
         })
         : null,
     [designDNA.dnaText, project, projectId, renderBrief, selectedStyle, settings]
+  )
+  const planToRenderReadiness = useMemo(
+    () =>
+      project
+        ? buildPlanToRenderReadinessReport({
+          floorPlans: project.floorPlans,
+          renderBrief,
+          planQualityGates
+        })
+        : null,
+    [project, renderBrief, planQualityGates]
+  )
+  const generationRenderBriefWithReadiness = useMemo(
+    () =>
+      planToRenderReadiness
+        ? applyPlanToRenderReadinessToBrief(generationRenderBrief, planToRenderReadiness)
+        : generationRenderBrief,
+    [generationRenderBrief, planToRenderReadiness]
+  )
+  const [previewRenderBrief] = useDebounce(generationRenderBriefWithReadiness, 400)
+  const promptPreview = useQuery(
+    api.renders.previewPrompt,
+    projectId && project && project.floorPlans.length > 0
+      ? {
+        projectId,
+        style: selectedStyle,
+        settings: {
+          ...previewSettings,
+          style: selectedStyle
+        },
+        viewAngle: previewSettings.viewAngle,
+        renderBrief: previewRenderBrief
+      }
+      : "skip"
   )
   const renderReadinessItems = useMemo(() => {
     const hasPlanRooms = (project?.floorPlans ?? []).some((floorPlan) => floorPlan.data.rooms.length > 0)
@@ -896,9 +925,17 @@ export default function ProjectRendersPage() {
         designDNAText: designDNA.dnaText
       })
       : null
+    const generationReadiness = project
+      ? buildPlanToRenderReadinessReport({
+        floorPlans: project.floorPlans,
+        renderBrief: baseRenderBriefForGeneration,
+        planQualityGates: generationQualityGates
+      })
+      : null
 
-    if (generationQualityGates?.status === "blocked") {
-      toast("Resolve the blocked plan quality gates before generating", "warning")
+    if (generationReadiness?.status === "blocked") {
+      toast("Fix the plan-to-render blockers before generating", "warning")
+      setErrorMessage(generationReadiness.summary)
       handleScrollToRenderSection("plan-quality-gates-section")
       return false
     }
@@ -908,9 +945,12 @@ export default function ProjectRendersPage() {
       return false
     }
 
-    const renderBriefForGeneration = generationDesignSpec
+    const renderBriefAfterDesignSpec = generationDesignSpec
       ? applyRenderDesignSpecToBrief(baseRenderBriefForGeneration, generationDesignSpec)
       : baseRenderBriefForGeneration
+    const renderBriefForGeneration = generationReadiness
+      ? applyPlanToRenderReadinessToBrief(renderBriefAfterDesignSpec, generationReadiness)
+      : renderBriefAfterDesignSpec
     setErrorMessage(null)
     setIsGenerating(true)
 
@@ -1046,6 +1086,13 @@ export default function ProjectRendersPage() {
       return
     }
 
+    if (planToRenderReadiness?.status === "blocked") {
+      setErrorMessage(planToRenderReadiness.summary)
+      toast("Fix the plan-to-render blockers before batch generating", "warning")
+      handleScrollToRenderSection("plan-quality-gates-section")
+      return
+    }
+
     if (renderDesignSpec?.status === "blocked") {
       toast("Resolve the blocked design spec items before batch generating", "warning")
       return
@@ -1085,6 +1132,16 @@ export default function ProjectRendersPage() {
         style: combination.styleId,
         viewAngle: combination.viewAngle
       }
+      const batchQualityGates = project
+        ? buildPlanQualityGateReport({
+          floorPlans: project.floorPlans,
+          renderBrief,
+          settings: batchSettings,
+          styleLabel: getStyleLabel(combination.styleId),
+          editHref: `/projects/${projectId}/edit`,
+          designDNAText: designDNA.dnaText
+        })
+        : null
       const batchDesignSpec = project
         ? buildRenderDesignSpecReport({
           floorPlans: project.floorPlans,
@@ -1096,6 +1153,16 @@ export default function ProjectRendersPage() {
       const batchRenderBrief = batchDesignSpec
         ? applyRenderDesignSpecToBrief(renderBrief, batchDesignSpec)
         : renderBrief
+      const batchReadiness = project
+        ? buildPlanToRenderReadinessReport({
+          floorPlans: project.floorPlans,
+          renderBrief: batchRenderBrief,
+          planQualityGates: batchQualityGates
+        })
+        : null
+      const batchRenderBriefWithReadiness = batchReadiness
+        ? applyPlanToRenderReadinessToBrief(batchRenderBrief, batchReadiness)
+        : batchRenderBrief
 
       try {
         const renderId = await generateRender({
@@ -1103,7 +1170,7 @@ export default function ProjectRendersPage() {
           style: combination.styleId,
           viewAngle: combination.viewAngle,
           settings: batchSettings,
-          renderBrief: batchRenderBrief
+          renderBrief: batchRenderBriefWithReadiness
         })
         if (renderId) {
           try {
@@ -1790,10 +1857,10 @@ export default function ProjectRendersPage() {
           label: designOutputQA.regenerationTarget.renderLabel,
           detail: designOutputQA.regenerationTarget.fixes
         }
-        : planQualityGates?.status === "blocked"
+        : planToRenderReadiness?.status === "blocked"
           ? {
-            label: "Plan quality is blocked",
-            detail: planQualityGates.summary
+            label: "Plan-to-render is locked",
+            detail: planToRenderReadiness.summary
           }
       : renderDesignSpec?.status === "blocked"
         ? {
@@ -1810,10 +1877,10 @@ export default function ProjectRendersPage() {
             detail: renders.length > 0 ? "Use QA and comparison to select a final render." : "Create the first exterior concept from the current brief."
           }
   const designControlPrimaryAction: DesignControlCenterAction =
-    planQualityGates?.status === "blocked"
+    planToRenderReadiness?.status === "blocked"
       ? {
-        label: "Review quality gates",
-        detail: "Resolve blocked plan-quality checks before generation.",
+        label: "Fix render blockers",
+        detail: "Resolve locked plan-to-render checks before generation.",
         onClick: () => handleScrollToRenderSection("plan-quality-gates-section"),
         disabled: isGenerationBusy
       }
@@ -1901,7 +1968,7 @@ export default function ProjectRendersPage() {
       onClick: () => handleScrollToRenderSection("render-gallery-section")
     }
   ]
-  const hasGenerationBlocker = planQualityGates?.status === "blocked" || renderDesignSpec?.status === "blocked"
+  const hasGenerationBlocker = planToRenderReadiness?.status === "blocked" || renderDesignSpec?.status === "blocked"
   const queueNeedsWork = renderReviewQueue.stats.needsRevision + renderReviewQueue.stats.review
   const finalAcceptance = finalRender ? renderAcceptanceById[finalRender.id] : null
   const renderWorkflowSteps: RenderWorkflowStep[] = [
@@ -2011,6 +2078,66 @@ export default function ProjectRendersPage() {
         />
 
         <RenderWorkflowPanel steps={renderWorkflowSteps} />
+
+        {planToRenderReadiness ? (
+          <section
+            id="plan-to-render-readiness-section"
+            className={`panel plan-to-render-readiness-panel is-${planToRenderReadiness.status}`}
+          >
+            <div className="panel-header">
+              <div>
+                <div className="section-title">Plan-to-render readiness lock</div>
+                <div className="muted">
+                  Blocks generation only when the saved plan cannot reliably drive a high-quality render.
+                </div>
+              </div>
+              <span className={`badge plan-to-render-readiness-status is-${planToRenderReadiness.status}`}>
+                {getReadinessIcon(planToRenderReadiness.status)}
+                {planToRenderReadiness.label}
+              </span>
+            </div>
+
+            <div className="plan-to-render-readiness-summary">
+              <div>
+                <div className="plan-to-render-readiness-score">{planToRenderReadiness.score}</div>
+                <div className="plan-to-render-readiness-score-label">ready</div>
+              </div>
+              <div>
+                <div className="plan-to-render-readiness-copy">{planToRenderReadiness.summary}</div>
+                <div className="plan-to-render-readiness-detail">
+                  The next render prompt automatically includes this plan fidelity guidance.
+                </div>
+              </div>
+            </div>
+
+            <div className="plan-to-render-readiness-list">
+              {planToRenderReadiness.checks.slice(0, 4).map((check) => (
+                <div key={check.id} className={`plan-to-render-readiness-check is-${check.status}`}>
+                  <span>{getReadinessIcon(check.status)}</span>
+                  <div>
+                    <strong>{check.label}</strong>
+                    <small>{check.detail}</small>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="button-row">
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => handleScrollToRenderSection("plan-quality-gates-section")}
+              >
+                Review quality gates
+              </button>
+              {planToRenderReadiness.status !== "ready" ? (
+                <Link href={`/projects/${projectId}/edit`} className="button-ghost">
+                  Fix before render
+                </Link>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         {planQualityGates ? (
           <PlanQualityGatesPanel
@@ -2358,7 +2485,7 @@ export default function ProjectRendersPage() {
                 type="button"
                 className="button button-generate"
                 onClick={handleGenerateRender}
-                disabled={isGenerationBusy}
+                disabled={isGenerationBusy || hasGenerationBlocker}
               >
                 <ImagePlus size={18} />
                 {isAutoVisualQARunning ? "Running visual QA..." : isGenerating ? "Generating..." : "Generate Render"}
@@ -2367,7 +2494,7 @@ export default function ProjectRendersPage() {
                 type="button"
                 className="button-secondary button-generate"
                 onClick={handleOpenBatchDialog}
-                disabled={isGenerationBusy}
+                disabled={isGenerationBusy || hasGenerationBlocker}
               >
                 <Sparkles size={18} />
                 {isBatchGenerating ? "Batch running..." : "Batch Generate"}

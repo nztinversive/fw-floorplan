@@ -31,6 +31,7 @@ import { formatFloorLabel, getNextFloorNumber, getPrimaryFloor, sortFloors } fro
 import { createSeedFloorPlan } from "@/lib/geometry"
 import { downloadJson, generateFloorPlanJson } from "@/lib/json-export"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
+import { buildPlanToRenderReadinessReport } from "@/lib/plan-to-render-readiness"
 import type { PlanEditProposal } from "@/lib/plan-edit-assistant"
 import { downloadSvg, generateSvg } from "@/lib/svg-export"
 import type { PersistedFloorPlan, ProjectComment } from "@/lib/types"
@@ -132,6 +133,17 @@ export default function ProjectOverviewPage() {
   const activeFloorPlan = useMemo(
     () => orderedFloorPlans.find((floorPlan) => floorPlan.floor === selectedFloor) ?? null,
     [orderedFloorPlans, selectedFloor]
+  )
+  const activePlanToRenderReadiness = useMemo(
+    () =>
+      activeFloorPlan
+        ? buildPlanToRenderReadinessReport({
+          floorPlans: [activeFloorPlan],
+          renderBrief: project?.renderBrief,
+          selectedFloor
+        })
+        : null,
+    [activeFloorPlan, project?.renderBrief, selectedFloor]
   )
   const comments = useMemo(() => (commentsQuery ?? []) as ProjectComment[], [commentsQuery])
   const activeCommentCount = useMemo(
@@ -678,6 +690,47 @@ export default function ProjectOverviewPage() {
           })}
         </div>
       </section>
+
+      {activePlanToRenderReadiness ? (
+        <section className={`panel plan-to-render-readiness-panel is-${activePlanToRenderReadiness.status}`}>
+          <div className="panel-header">
+            <div>
+              <div className="section-title">Plan-to-render readiness</div>
+              <div className="muted">
+                Checks whether {formatFloorLabel(selectedFloor).toLowerCase()} is safe to send into render generation.
+              </div>
+            </div>
+            <span className={`badge plan-to-render-readiness-status is-${activePlanToRenderReadiness.status}`}>
+              {activePlanToRenderReadiness.status === "ready" ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+              {activePlanToRenderReadiness.label}
+            </span>
+          </div>
+
+          <div className="plan-to-render-readiness-summary">
+            <div>
+              <div className="plan-to-render-readiness-score">{activePlanToRenderReadiness.score}</div>
+              <div className="plan-to-render-readiness-score-label">ready</div>
+            </div>
+            <div>
+              <div className="plan-to-render-readiness-copy">{activePlanToRenderReadiness.summary}</div>
+              <div className="plan-to-render-readiness-detail">
+                Hard blockers lock render generation; review items are folded into the prompt as guardrails.
+              </div>
+            </div>
+          </div>
+
+          <div className="button-row">
+            <Link href={`/projects/${projectId}/renders`} className="button-secondary">
+              Open render studio
+            </Link>
+            {activePlanToRenderReadiness.status !== "ready" ? (
+              <Link href={`/projects/${projectId}/edit?floor=${selectedFloor}`} className="button-ghost">
+                Fix before render
+              </Link>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       <div className="overview-grid">
         <section className="panel">
