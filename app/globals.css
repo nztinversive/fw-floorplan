@@ -683,6 +683,31 @@ button:disabled,
   grid-template-columns: 1fr;
 }
 
+.concept-generation-status {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  border: 1px solid rgba(27, 42, 74, 0.1);
+  border-radius: 0.5rem;
+  background: rgba(248, 250, 252, 0.78);
+  color: var(--fw-slate);
+  padding: 0.65rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.concept-generation-status svg {
+  flex: 0 0 auto;
+  margin-top: 0.08rem;
+}
+
+.concept-generation-status.is-openai {
+  border-color: rgba(22, 101, 52, 0.2);
+  background: rgba(240, 253, 244, 0.78);
+  color: #166534;
+}
+
 .concept-results-header {
   display: flex;
   justify-content: space-between;

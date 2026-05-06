@@ -14,6 +14,7 @@ type FloorPlanConceptStudioProps = {
   projectName: string
   floorCount: number
   isSaving?: boolean
+  onGenerateConcepts?: (brief: FloorPlanConceptBrief) => Promise<FloorPlanConcept[]>
   onSaveConcept: (concept: FloorPlanConcept) => Promise<void> | void
 }
 
@@ -31,21 +32,51 @@ export default function FloorPlanConceptStudio({
   projectName,
   floorCount,
   isSaving = false,
+  onGenerateConcepts,
   onSaveConcept
 }: FloorPlanConceptStudioProps) {
   const [brief, setBrief] = useState<FloorPlanConceptBrief>(DEFAULT_BRIEF)
   const [concepts, setConcepts] = useState<FloorPlanConcept[]>(() => generateFloorPlanConcepts(DEFAULT_BRIEF))
   const [selectedConceptId, setSelectedConceptId] = useState(concepts[0]?.id ?? "")
+  const [generationSource, setGenerationSource] = useState<"template" | "openai">("template")
+  const [generationMessage, setGenerationMessage] = useState("Template concepts are ready to compare.")
+  const [isGeneratingConcepts, setIsGeneratingConcepts] = useState(false)
   const selectedConcept = concepts.find((concept) => concept.id === selectedConceptId) ?? concepts[0]
 
   function updateBrief<Key extends keyof FloorPlanConceptBrief>(key: Key, value: FloorPlanConceptBrief[Key]) {
     setBrief((current) => ({ ...current, [key]: value }))
   }
 
-  function handleGenerateConcepts() {
-    const nextConcepts = generateFloorPlanConcepts(brief)
-    setConcepts(nextConcepts)
-    setSelectedConceptId(nextConcepts[0]?.id ?? "")
+  async function handleGenerateConcepts() {
+    if (isGeneratingConcepts) return
+
+    setIsGeneratingConcepts(true)
+
+    try {
+      if (onGenerateConcepts) {
+        const nextConcepts = await onGenerateConcepts(brief)
+        setConcepts(nextConcepts)
+        setSelectedConceptId(nextConcepts[0]?.id ?? "")
+        setGenerationSource("openai")
+        setGenerationMessage("OpenAI generated these editable concepts from the current brief.")
+        return
+      }
+
+      const nextConcepts = generateFloorPlanConcepts(brief)
+      setConcepts(nextConcepts)
+      setSelectedConceptId(nextConcepts[0]?.id ?? "")
+      setGenerationSource("template")
+      setGenerationMessage("Template concepts are ready to compare.")
+    } catch (error) {
+      console.error("Unable to generate AI floor plan concepts.", error)
+      const fallbackConcepts = generateFloorPlanConcepts(brief)
+      setConcepts(fallbackConcepts)
+      setSelectedConceptId(fallbackConcepts[0]?.id ?? "")
+      setGenerationSource("template")
+      setGenerationMessage("OpenAI generation was unavailable, so local editable options are shown.")
+    } finally {
+      setIsGeneratingConcepts(false)
+    }
   }
 
   return (
@@ -160,19 +191,23 @@ export default function FloorPlanConceptStudio({
           </div>
 
           <div className="button-row concept-brief-actions">
-            <button type="button" className="button" onClick={handleGenerateConcepts}>
+            <button type="button" className="button" onClick={handleGenerateConcepts} disabled={isGeneratingConcepts}>
               <Sparkles size={17} />
-              Generate options
+              {isGeneratingConcepts ? "Generating..." : "Generate with OpenAI"}
             </button>
             <button
               type="button"
               className="button-secondary"
               onClick={() => selectedConcept && onSaveConcept(selectedConcept)}
-              disabled={!selectedConcept || isSaving}
+              disabled={!selectedConcept || isSaving || isGeneratingConcepts}
             >
               <Plus size={17} />
               {isSaving ? "Saving..." : "Save selected as new floor"}
             </button>
+          </div>
+          <div className={`concept-generation-status is-${generationSource}`}>
+            <Sparkles size={14} />
+            <span>{generationMessage}</span>
           </div>
         </div>
 
@@ -182,7 +217,7 @@ export default function FloorPlanConceptStudio({
               <div className="section-title">Generated options</div>
               <div className="muted">Pick a direction, save it, then refine walls and rooms in the editor.</div>
             </div>
-            <span className="badge">{concepts.length} concepts</span>
+            <span className="badge">{generationSource === "openai" ? "OpenAI" : "Local"} · {concepts.length} concepts</span>
           </div>
 
           <div className="concept-option-list">

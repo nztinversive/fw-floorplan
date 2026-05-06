@@ -3,7 +3,7 @@
 import Link from "next/link"
 import dynamic from "next/dynamic"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
-import { useMutation, useQuery } from "convex/react"
+import { useAction, useMutation, useQuery } from "convex/react"
 import { AlertTriangle, CalendarDays, CheckCircle2, DraftingCompass, Download, Image as ImageIcon, Info, Layers, Link2, MapPin, MessageSquare, MoreHorizontal, Pencil, RotateCw, Trash2, User, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
@@ -68,6 +68,7 @@ export default function ProjectOverviewPage() {
   const saveFloorPlan = useMutation(api.floorPlans.save)
   const updateProject = useMutation(api.projects.update)
   const removeProject = useMutation(api.projects.remove)
+  const generateAiConcepts = useAction(api.floorPlanConcepts.generateWithAI)
   const enablePublicShare = useMutation(api.projects.enablePublicShare)
   const rotatePublicShare = useMutation(api.projects.rotatePublicShare)
   const disablePublicShare = useMutation(api.projects.disablePublicShare)
@@ -638,6 +639,7 @@ export default function ProjectOverviewPage() {
         projectName={project.name}
         floorCount={orderedFloorPlans.length}
         isSaving={isSavingConceptFloor}
+        onGenerateConcepts={(brief) => generateAiConcepts({ projectId, brief })}
         onSaveConcept={handleSaveConceptFloor}
       />
 
