@@ -239,7 +239,7 @@ button {
 
 .project-thumb {
   height: 190px;
-  border-radius: 0.75rem;
+  border-radius: 0.5rem;
   overflow: hidden;
   background:
     linear-gradient(135deg, rgba(27, 42, 74, 0.82), rgba(100, 116, 139, 0.72)),
@@ -361,7 +361,7 @@ button:disabled,
   height: 2.5rem;
   display: inline-grid;
   place-items: center;
-  border-radius: 0.55rem;
+  border-radius: 0.5rem;
   border-color: var(--fw-border);
   background: #ffffff;
   color: var(--fw-navy);
@@ -1426,6 +1426,144 @@ button:disabled,
   margin-top: 1.5rem;
 }
 
+.render-workflow-panel {
+  display: grid;
+  gap: 0.95rem;
+  border-color: rgba(27, 42, 74, 0.12);
+}
+
+.render-workflow-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.render-workflow-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.render-workflow-step {
+  display: grid;
+  gap: 0.8rem;
+  align-content: space-between;
+  min-width: 0;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 0.78rem;
+}
+
+.render-workflow-step.is-ready {
+  border-color: rgba(34, 197, 94, 0.16);
+  background: rgba(240, 253, 244, 0.46);
+}
+
+.render-workflow-step.is-review {
+  border-color: rgba(212, 168, 75, 0.22);
+  background: rgba(255, 251, 235, 0.5);
+}
+
+.render-workflow-step.is-blocked {
+  border-color: rgba(239, 68, 68, 0.22);
+  background: rgba(254, 242, 242, 0.52);
+}
+
+.render-workflow-step.is-idle {
+  background: rgba(248, 250, 252, 0.76);
+}
+
+.render-workflow-step-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.52rem;
+  align-items: start;
+}
+
+.render-workflow-step-icon {
+  display: grid;
+  place-items: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 999px;
+  background: rgba(27, 42, 74, 0.08);
+  color: var(--fw-navy);
+}
+
+.render-workflow-step.is-ready .render-workflow-step-icon {
+  background: rgba(34, 197, 94, 0.12);
+  color: #166534;
+}
+
+.render-workflow-step.is-review .render-workflow-step-icon {
+  background: rgba(212, 168, 75, 0.16);
+  color: #7c5a16;
+}
+
+.render-workflow-step.is-blocked .render-workflow-step-icon {
+  background: rgba(239, 68, 68, 0.12);
+  color: #991b1b;
+}
+
+.render-workflow-step-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  color: var(--fw-slate);
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.render-workflow-step-kicker span {
+  border-radius: 999px;
+  background: rgba(27, 42, 74, 0.08);
+  color: var(--fw-navy);
+  padding: 0.14rem 0.38rem;
+}
+
+.render-workflow-step-title {
+  margin-top: 0.18rem;
+  color: var(--fw-navy);
+  font-size: 0.9rem;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.render-workflow-step-detail {
+  margin-top: 0.25rem;
+  color: var(--fw-slate);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.render-workflow-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  width: 100%;
+  border: 1px solid rgba(27, 42, 74, 0.12);
+  border-radius: 0.55rem;
+  background: #ffffff;
+  color: var(--fw-navy);
+  padding: 0.5rem 0.62rem;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.render-workflow-action:hover {
+  border-color: rgba(212, 168, 75, 0.55);
+  background: rgba(212, 168, 75, 0.12);
+}
+
+.render-workflow-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .render-brief-grid {
   display: grid;
   gap: 1rem;
@@ -2064,6 +2202,58 @@ button:disabled,
 .prompt-preview-panel {
   display: grid;
   gap: 1rem;
+}
+
+.render-advanced-details {
+  padding: 0;
+  overflow: hidden;
+}
+
+.render-advanced-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 1.1rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.render-advanced-summary::-webkit-details-marker {
+  display: none;
+}
+
+.render-advanced-summary::after {
+  content: "+";
+  display: grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 999px;
+  background: rgba(27, 42, 74, 0.08);
+  color: var(--fw-navy);
+  font-weight: 900;
+}
+
+.render-advanced-details[open] .render-advanced-summary {
+  border-bottom: 1px solid rgba(27, 42, 74, 0.08);
+}
+
+.render-advanced-details[open] .render-advanced-summary::after {
+  content: "-";
+}
+
+.render-advanced-content {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+}
+
+.render-advanced-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .prompt-preview-text,
@@ -7368,6 +7558,7 @@ button.render-variant-row:disabled {
   .design-control-center-main,
   .design-control-center-focus,
   .design-control-center-signals,
+  .render-workflow-steps,
   .overview-readiness-grid,
   .comparison-grid,
   .render-decision-score-grid,
@@ -7442,12 +7633,19 @@ button.render-variant-row:disabled {
 
   .overview-actions-grid,
   .overview-readiness-grid,
-  .plan-quality-gates-list {
+  .plan-quality-gates-list,
+  .render-workflow-steps {
     grid-template-columns: 1fr;
   }
 
   .plan-quality-gates-summary {
     grid-template-columns: 1fr;
+  }
+
+  .render-advanced-summary,
+  .render-advanced-actions {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .plan-quality-gate-action {

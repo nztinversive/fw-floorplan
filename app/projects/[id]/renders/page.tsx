@@ -24,6 +24,7 @@ import RenderCard from "@/components/RenderCard"
 import RenderProgress from "@/components/RenderProgress"
 import RenderReviewQueuePanel from "@/components/RenderReviewQueuePanel"
 import RenderRevisionBriefPanel, { type RenderRevisionBriefDraft } from "@/components/RenderRevisionBriefPanel"
+import RenderWorkflowPanel, { type RenderWorkflowStep } from "@/components/RenderWorkflowPanel"
 import RoomDesignDirectionsPanel from "@/components/RoomDesignDirectionsPanel"
 import SettingTooltip, { SETTING_TOOLTIPS } from "@/components/SettingTooltip"
 import { SkeletonPanel } from "@/components/Skeleton"
@@ -1900,6 +1901,69 @@ export default function ProjectRendersPage() {
       onClick: () => handleScrollToRenderSection("render-gallery-section")
     }
   ]
+  const hasGenerationBlocker = planQualityGates?.status === "blocked" || renderDesignSpec?.status === "blocked"
+  const queueNeedsWork = renderReviewQueue.stats.needsRevision + renderReviewQueue.stats.review
+  const finalAcceptance = finalRender ? renderAcceptanceById[finalRender.id] : null
+  const renderWorkflowSteps: RenderWorkflowStep[] = [
+    {
+      id: "quality",
+      label: "Plan quality",
+      detail: planQualityGates?.summary ?? "Checking saved floor plan inputs.",
+      status: planQualityGates?.status ?? "review",
+      actionLabel: "Review gates",
+      onClick: () => handleScrollToRenderSection("plan-quality-gates-section"),
+      disabled: !planQualityGates
+    },
+    {
+      id: "brief",
+      label: "Render brief",
+      detail: hasRenderBriefContent
+        ? isRenderBriefDirty
+          ? "Brief edits are ready to save or generate with."
+          : "Design intent is saved and ready."
+        : "Add design intent and must-haves before generation.",
+      status: hasRenderBriefContent ? isRenderBriefDirty ? "review" : "ready" : "review",
+      actionLabel: "Edit brief",
+      onClick: () => handleScrollToRenderSection("render-brief-section")
+    },
+    {
+      id: "generate",
+      label: renders.length > 0 ? "Generate variants" : "Generate render",
+      detail: hasGenerationBlocker
+        ? "Resolve blockers before starting the next render."
+        : renders.length > 0
+          ? "Create another controlled pass from the current brief."
+          : "Create the first exterior concept from the current plan and brief.",
+      status: hasGenerationBlocker ? "blocked" : renders.length > 0 ? "ready" : "review",
+      actionLabel: renders.length > 0 ? "Generate" : "Generate first",
+      onClick: handleGenerateRender,
+      disabled: isGenerationBusy || hasGenerationBlocker
+    },
+    {
+      id: "review",
+      label: "Review queue",
+      detail: renders.length === 0
+        ? "Generated renders will appear here for QA and revision."
+        : queueNeedsWork > 0
+          ? `${queueNeedsWork} render${queueNeedsWork === 1 ? "" : "s"} need review or revision.`
+          : "Render queue is clear enough to choose a final direction.",
+      status: renders.length === 0 ? "idle" : queueNeedsWork > 0 ? "review" : "ready",
+      actionLabel: "Open queue",
+      onClick: () => handleScrollToRenderSection("render-review-queue-section")
+    },
+    {
+      id: "final",
+      label: "Final package",
+      detail: finalRender
+        ? finalAcceptance?.status === "ready"
+          ? "Final render is ready for client package export."
+          : "Final render is selected; review package acceptance before delivery."
+        : "Select a final render before exporting the client package.",
+      status: finalRender ? finalAcceptance?.status === "ready" ? "ready" : "review" : "idle",
+      actionLabel: finalRender ? "Open package" : "Choose final",
+      onClick: () => handleScrollToRenderSection(finalRender ? "render-finalization-section" : "render-gallery-section")
+    }
+  ]
 
   return (
     <main className="page-shell">
@@ -1945,6 +2009,8 @@ export default function ProjectRendersPage() {
           primaryAction={designControlPrimaryAction}
           secondaryActions={designControlSecondaryActions}
         />
+
+        <RenderWorkflowPanel steps={renderWorkflowSteps} />
 
         {planQualityGates ? (
           <PlanQualityGatesPanel
@@ -2059,35 +2125,44 @@ export default function ProjectRendersPage() {
           </div>
         ) : null}
 
-        <section className="panel prompt-preview-panel">
-          <div className="panel-header">
+        <details className="panel prompt-preview-panel render-advanced-details">
+          <summary className="render-advanced-summary">
             <div>
               <div className="section-title">Prompt preview</div>
               <div className="muted">
-                The current floor plan summary, style, settings, and brief as the generator will receive them.
+                Advanced view of the exact prompt payload used for generation.
               </div>
             </div>
-            <button
-              type="button"
-              className="button-ghost"
-              onClick={() => {
-                if (promptPreview?.prompt) void handleCopyPrompt(promptPreview.prompt)
-              }}
-              disabled={!promptPreview?.prompt}
-            >
-              <Copy size={16} />
-              Copy prompt
-            </button>
-          </div>
+            <span className="badge">advanced</span>
+          </summary>
 
-          {promptPreview === undefined ? (
-            <div className="prompt-preview-empty">Preparing prompt...</div>
-          ) : promptPreview?.prompt ? (
-            <pre className="prompt-preview-text">{promptPreview.prompt}</pre>
-          ) : (
-            <div className="prompt-preview-empty">Save a floor plan before previewing the render prompt.</div>
-          )}
-        </section>
+          <div className="render-advanced-content">
+            <div className="render-advanced-actions">
+              <div className="muted">
+                The current floor plan summary, style, settings, and brief as the generator will receive them.
+              </div>
+              <button
+                type="button"
+                className="button-ghost"
+                onClick={() => {
+                  if (promptPreview?.prompt) void handleCopyPrompt(promptPreview.prompt)
+                }}
+                disabled={!promptPreview?.prompt}
+              >
+                <Copy size={16} />
+                Copy prompt
+              </button>
+            </div>
+
+            {promptPreview === undefined ? (
+              <div className="prompt-preview-empty">Preparing prompt...</div>
+            ) : promptPreview?.prompt ? (
+              <pre className="prompt-preview-text">{promptPreview.prompt}</pre>
+            ) : (
+              <div className="prompt-preview-empty">Save a floor plan before previewing the render prompt.</div>
+            )}
+          </div>
+        </details>
 
         <div className="render-controls">
           <section className="panel">
