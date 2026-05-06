@@ -4,7 +4,7 @@ import Link from "next/link"
 import dynamic from "next/dynamic"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useMutation, useQuery } from "convex/react"
-import { AlertTriangle, CalendarDays, CheckCircle2, DraftingCompass, Download, Image as ImageIcon, Info, Layers, Link2, MapPin, MessageSquare, Pencil, RotateCw, Trash2, User, X } from "lucide-react"
+import { AlertTriangle, CalendarDays, CheckCircle2, DraftingCompass, Download, Image as ImageIcon, Info, Layers, Link2, MapPin, MessageSquare, MoreHorizontal, Pencil, RotateCw, Trash2, User, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import Breadcrumb from "@/components/Breadcrumb"
@@ -73,6 +73,7 @@ export default function ProjectOverviewPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showComparisonDialog, setShowComparisonDialog] = useState(false)
   const [showCommentsSection, setShowCommentsSection] = useState(false)
+  const [showProjectActions, setShowProjectActions] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isUpdatingShareLink, setIsUpdatingShareLink] = useState(false)
   const [activeInsightsTab, setActiveInsightsTab] = useState<OverviewInsightsTab>("summary")
@@ -183,6 +184,7 @@ export default function ProjectOverviewPage() {
           : `${activeCommentCount} active comment${activeCommentCount === 1 ? "" : "s"} remain.`
     }
   ]
+  const clientPackageReadyCount = clientPackageChecks.filter((check) => check.ready).length
 
   function startEditing() {
     if (!project) return
@@ -464,85 +466,148 @@ export default function ProjectOverviewPage() {
             </>
           )}
         </div>
-        {!isEditing && (
-          <div className="button-row" style={{ alignItems: "center" }}>
+        {!isEditing ? (
+          <div className="overview-heading-actions">
             <button
               type="button"
-              className={`button-ghost${showCommentsSection ? " is-active" : ""}`}
+              className={`overview-comment-chip${showCommentsSection ? " is-active" : ""}`}
               onClick={() => setShowCommentsSection((open) => !open)}
             >
               <MessageSquare size={16} />
-              {showCommentsSection ? "Hide comments" : "Comments"}
-              <span className="badge">{activeCommentCount}</span>
+              <span>{showCommentsSection ? "Hide comments" : "Comments"}</span>
+              <strong>{activeCommentCount}</strong>
             </button>
-            <button type="button" className="button-ghost" onClick={startEditing} title="Edit project details">
-              <Pencil size={16} />
-              Edit
+
+            {activeFloorPlan ? (
+              <Link href={`/projects/${projectId}/edit?floor=${selectedFloor}`} className="button">
+                <DraftingCompass size={18} />
+                Open editor
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="button"
+                onClick={handleAddFloor}
+                disabled={isCreatingFloor}
+              >
+                {isCreatingFloor ? "Creating..." : "Add floor"}
+              </button>
+            )}
+
+            <button
+              type="button"
+              className={`button-secondary overview-more-button${showProjectActions ? " is-active" : ""}`}
+              onClick={() => setShowProjectActions((open) => !open)}
+              aria-expanded={showProjectActions}
+            >
+              <MoreHorizontal size={18} />
+              More actions
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      {!isEditing && showProjectActions ? (
+        <section className="panel overview-actions-panel">
+          <div className="overview-actions-grid">
+            <button type="button" className="overview-action-tile" onClick={startEditing}>
+              <Pencil size={17} />
+              <span>Edit details</span>
             </button>
             <button
               type="button"
-              className="button-secondary"
+              className="overview-action-tile"
               onClick={handleAddFloor}
               disabled={isCreatingFloor}
             >
-              {isCreatingFloor ? "Creating..." : "Add floor"}
+              <Layers size={17} />
+              <span>{isCreatingFloor ? "Creating..." : "Add floor"}</span>
             </button>
             <button
               type="button"
-              className="button-secondary"
+              className="overview-action-tile"
               onClick={() => setShowComparisonDialog(true)}
               disabled={comparisonOptionsCount < 2 || versionsQuery === undefined}
             >
-              Compare
+              <DraftingCompass size={17} />
+              <span>Compare plans</span>
             </button>
             <button
               type="button"
-              className="button-secondary"
+              className="overview-action-tile"
               onClick={handleExportPdf}
               disabled={isExportingPdf || rendersQuery === undefined || orderedFloorPlans.length === 0}
             >
-              <Download size={18} />
-              {isExportingPdf ? "Exporting..." : "Export PDF"}
+              <Download size={17} />
+              <span>{isExportingPdf ? "Exporting..." : "Export PDF"}</span>
             </button>
             <button
               type="button"
-              className="button-secondary"
+              className="overview-action-tile"
               onClick={handleExportDxf}
               disabled={orderedFloorPlans.length === 0}
             >
-              <Download size={18} />
-              Export DXF
+              <Download size={17} />
+              <span>Export DXF</span>
             </button>
             <button
               type="button"
-              className="button-secondary"
+              className="overview-action-tile"
               onClick={handleExportSvg}
               disabled={orderedFloorPlans.length === 0}
             >
-              <Download size={18} />
-              Export SVG
+              <Download size={17} />
+              <span>Export SVG</span>
             </button>
             <button
               type="button"
-              className="button-secondary"
+              className="overview-action-tile"
               onClick={handleExportJson}
               disabled={orderedFloorPlans.length === 0}
             >
-              <Download size={18} />
-              Export JSON
+              <Download size={17} />
+              <span>Export JSON</span>
             </button>
             <button
               type="button"
-              className="button-ghost"
+              className="overview-action-tile is-danger"
               onClick={() => setShowDeleteDialog(true)}
-              style={{ color: "#b42318" }}
-              title="Delete project"
             >
-              <Trash2 size={16} />
+              <Trash2 size={17} />
+              <span>Delete project</span>
             </button>
           </div>
-        )}
-      </div>
+        </section>
+      ) : null}
+
+      <section className="panel overview-readiness-panel">
+        <div className="panel-header">
+          <div>
+            <div className="section-title">Client presentation readiness</div>
+            <div className="muted">
+              Package status before sharing the read-only client view.
+            </div>
+          </div>
+          <span className="badge">
+            {clientPackageReadyCount}/{clientPackageChecks.length} ready
+          </span>
+        </div>
+        <div className="overview-readiness-grid">
+          {clientPackageChecks.map((check) => {
+            const Icon = check.ready ? CheckCircle2 : AlertTriangle
+
+            return (
+              <div key={check.label} className={`overview-readiness-item${check.ready ? " is-ready" : ""}`}>
+                <Icon size={16} />
+                <div>
+                  <strong>{check.label}</strong>
+                  <span>{check.detail}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </section>
 
       <div className="overview-grid">
         <section className="panel">
@@ -803,42 +868,6 @@ export default function ProjectOverviewPage() {
           />
         </section>
       ) : null}
-
-      <section className="panel" style={{ marginTop: "1.5rem" }}>
-        <div className="panel-header">
-          <div>
-            <div className="section-title">Client presentation readiness</div>
-            <div className="muted">
-              Check the package before sending the read-only presentation link.
-            </div>
-          </div>
-          <span className="badge">
-            {clientPackageChecks.filter((check) => check.ready).length}/{clientPackageChecks.length} ready
-          </span>
-        </div>
-        <div className="compliance-list">
-          {clientPackageChecks.map((check) => {
-            const Icon = check.ready ? CheckCircle2 : AlertTriangle
-
-            return (
-              <div key={check.label} className={`compliance-item${check.ready ? "" : " is-warning"}`}>
-                <div className={`compliance-icon-shell${check.ready ? " is-success" : " is-warning"}`}>
-                  <Icon size={16} />
-                </div>
-                <div className="compliance-copy">
-                  <div className="compliance-title">
-                    <strong>{check.label}</strong>
-                    <span className={`badge compliance-badge${check.ready ? " is-success" : " is-warning"}`}>
-                      {check.ready ? "ready" : "needs work"}
-                    </span>
-                  </div>
-                  <div>{check.detail}</div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </section>
 
       <ShareLinkCard
         url={publicShareUrl}
