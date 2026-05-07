@@ -4,7 +4,7 @@ import Link from "next/link"
 import dynamic from "next/dynamic"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useAction, useMutation, useQuery } from "convex/react"
-import { AlertTriangle, CalendarDays, CheckCircle2, DraftingCompass, Download, Image as ImageIcon, Info, Layers, Link2, MapPin, MessageSquare, MoreHorizontal, Pencil, RotateCw, Trash2, User, X } from "lucide-react"
+import { AlertTriangle, CalendarDays, CheckCircle2, DraftingCompass, Download, Image as ImageIcon, Info, Layers, Link2, MapPin, MessageSquare, MoreHorizontal, Pencil, RotateCw, Trash2, Trophy, User, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import Breadcrumb from "@/components/Breadcrumb"
@@ -78,6 +78,7 @@ export default function ProjectOverviewPage() {
   const savePlanEditRevision = useMutation(api.planEditRevisions.save)
   const selectPlanEditRevisionOption = useMutation(api.planEditRevisions.selectOption)
   const updateProject = useMutation(api.projects.update)
+  const setFinalPlanCandidate = useMutation(api.projects.setFinalPlanCandidate)
   const removeProject = useMutation(api.projects.remove)
   const generateAiConcepts = useAction(api.floorPlanConcepts.generateWithAI)
   const generateAiPlanEdits = useAction(api.planEditAssistant.generateWithAI)
@@ -89,6 +90,7 @@ export default function ProjectOverviewPage() {
   const [isSavingConceptFloor, setIsSavingConceptFloor] = useState(false)
   const [isSavingPlanEditFloor, setIsSavingPlanEditFloor] = useState(false)
   const [isApplyingPlanEditFloor, setIsApplyingPlanEditFloor] = useState(false)
+  const [isPromotingPlanEditFloor, setIsPromotingPlanEditFloor] = useState(false)
   const [pendingCreatedFloor, setPendingCreatedFloor] = useState<number | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showComparisonDialog, setShowComparisonDialog] = useState(false)
@@ -146,6 +148,13 @@ export default function ProjectOverviewPage() {
     () => orderedFloorPlans.find((floorPlan) => floorPlan.floor === selectedFloor) ?? null,
     [orderedFloorPlans, selectedFloor]
   )
+  const finalPlanFloorPlan = useMemo(
+    () =>
+      typeof project?.finalPlanFloor === "number"
+        ? orderedFloorPlans.find((floorPlan) => floorPlan.floor === project.finalPlanFloor) ?? null
+        : null,
+    [orderedFloorPlans, project?.finalPlanFloor]
+  )
   const planEditRevisionsQuery = useQuery(
     api.planEditRevisions.list,
     projectId && project && activeFloorPlan
@@ -200,6 +209,13 @@ export default function ProjectOverviewPage() {
         orderedFloorPlans.length > 0
           ? `${orderedFloorPlans.length} floor${orderedFloorPlans.length === 1 ? "" : "s"} available for presentation.`
           : "Create or save at least one floor before sharing."
+    },
+    {
+      label: "Final plan selected",
+      ready: typeof project?.finalPlanFloor === "number",
+      detail: typeof project?.finalPlanFloor === "number"
+        ? `${project.finalPlanLabel ?? formatFloorLabel(project.finalPlanFloor)} is marked as the render source.`
+        : "Promote the best revision so renders and exports have a clear source of truth."
     },
     {
       label: "Render concepts",
@@ -473,6 +489,40 @@ export default function ProjectOverviewPage() {
       toast("Unable to apply this plan edit right now", "error")
     } finally {
       setIsApplyingPlanEditFloor(false)
+    }
+  }
+
+  async function handlePromotePlanEditProposal(
+    proposal: PlanEditProposal,
+    context: { revisionId?: string; proposalId: string }
+  ) {
+    if (!projectId || !project || isCreatingFloor || isPromotingPlanEditFloor) return
+
+    const nextFloor = getNextFloorNumber(orderedFloorPlans)
+    setIsPromotingPlanEditFloor(true)
+
+    try {
+      await saveFloorPlan({
+        projectId,
+        floor: nextFloor,
+        data: proposal.data
+      })
+      await setFinalPlanCandidate({
+        id: projectId,
+        floor: nextFloor,
+        label: proposal.title,
+        sourceRevisionId: context.revisionId,
+        proposalId: context.proposalId
+      })
+      setPendingCreatedFloor(nextFloor)
+      setSelectedFloor(nextFloor)
+      toast(`${proposal.title} promoted as final plan candidate on ${formatFloorLabel(nextFloor)}`, "success")
+      router.push(`/projects/${projectId}?finalPlanQa=1`)
+    } catch (error) {
+      console.error("Unable to promote plan edit proposal.", error)
+      toast("Unable to promote this plan option right now", "error")
+    } finally {
+      setIsPromotingPlanEditFloor(false)
     }
   }
 
@@ -769,13 +819,44 @@ export default function ProjectOverviewPage() {
         sourceData={activeFloorPlan?.data ?? null}
         isSaving={isSavingPlanEditFloor}
         isApplying={isApplyingPlanEditFloor}
+        isPromoting={isPromotingPlanEditFloor}
         onGenerateWithAI={handleGeneratePlanEditsWithAI}
         savedRevisions={savedPlanEditRevisions}
         onSaveRevision={handleSavePlanEditRevision}
         onSelectRevisionOption={handleSelectPlanEditRevisionOption}
         onSaveProposal={handleSavePlanEditFloor}
         onApplyProposal={activeFloorPlan ? handleApplyPlanEditToCurrentFloor : undefined}
+        onPromoteProposal={handlePromotePlanEditProposal}
       />
+
+      {typeof project.finalPlanFloor === "number" ? (
+        <section className="panel final-plan-candidate-panel">
+          <div className="final-plan-candidate-copy">
+            <div className="final-plan-candidate-icon">
+              <Trophy size={18} />
+            </div>
+            <div>
+              <div className="section-title">Final plan candidate</div>
+              <div className="muted">
+                {project.finalPlanLabel ?? formatFloorLabel(project.finalPlanFloor)} on {formatFloorLabel(project.finalPlanFloor)} is the current render source.
+              </div>
+            </div>
+          </div>
+          <div className="final-plan-candidate-actions">
+            <span className="badge is-success">
+              {finalPlanFloorPlan ? `${finalPlanFloorPlan.data.rooms.length} rooms` : "Awaiting floor sync"}
+            </span>
+            <Link href={`/projects/${projectId}/renders`} className="button-secondary">
+              <ImageIcon size={18} />
+              Open render studio
+            </Link>
+            <Link href={`/projects/${projectId}/edit?floor=${project.finalPlanFloor}`} className="button-ghost">
+              <DraftingCompass size={18} />
+              Tweak final plan
+            </Link>
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel overview-readiness-panel">
         <div className="panel-header">

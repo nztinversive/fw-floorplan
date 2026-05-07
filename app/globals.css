@@ -1679,6 +1679,42 @@ button:disabled,
   line-height: 1.38;
 }
 
+.final-plan-candidate-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  border-color: rgba(34, 197, 94, 0.2);
+  background: linear-gradient(135deg, rgba(240, 253, 244, 0.82), rgba(255, 255, 255, 0.96));
+}
+
+.final-plan-candidate-copy {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  min-width: 0;
+}
+
+.final-plan-candidate-icon {
+  display: grid;
+  place-items: center;
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 0.62rem;
+  background: rgba(34, 197, 94, 0.12);
+  color: #166534;
+}
+
+.final-plan-candidate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .overview-thumb {
   width: 100%;
   min-height: 360px;
@@ -8824,6 +8860,7 @@ button.render-variant-row:disabled {
 
   .page-heading,
   .panel-header,
+  .final-plan-candidate-panel,
   .plan-edit-assistant-header,
   .plan-edit-preview-title-row,
   .plan-edit-recommendation,
@@ -8841,11 +8878,15 @@ button.render-variant-row:disabled {
   .overview-heading-actions,
   .overview-comment-chip,
   .overview-heading-actions .button,
-  .overview-heading-actions .button-secondary {
+  .overview-heading-actions .button-secondary,
+  .final-plan-candidate-actions,
+  .final-plan-candidate-actions .button-secondary,
+  .final-plan-candidate-actions .button-ghost {
     width: 100%;
   }
 
-  .overview-heading-actions {
+  .overview-heading-actions,
+  .final-plan-candidate-actions {
     justify-content: stretch;
   }
 

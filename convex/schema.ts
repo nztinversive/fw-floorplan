@@ -100,6 +100,11 @@ export default defineSchema({
     publicShareCreatedAt: v.optional(v.number()),
     publicShareUpdatedAt: v.optional(v.number()),
     renderBrief: v.optional(renderBriefValidator),
+    finalPlanFloor: v.optional(v.number()),
+    finalPlanLabel: v.optional(v.string()),
+    finalPlanSourceRevisionId: v.optional(v.string()),
+    finalPlanProposalId: v.optional(v.string()),
+    finalPlanUpdatedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
     thumbnail: v.optional(v.id("_storage"))

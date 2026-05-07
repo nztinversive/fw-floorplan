@@ -288,6 +288,46 @@ export const updateRenderBrief = mutationGeneric({
   }
 });
 
+export const setFinalPlanCandidate = mutationGeneric({
+  args: {
+    id: v.id("projects"),
+    floor: v.number(),
+    label: v.string(),
+    sourceRevisionId: v.optional(v.string()),
+    proposalId: v.optional(v.string())
+  },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.id);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+    await requireProjectEditor(ctx, args.id);
+
+    const floorPlan = await ctx.db
+      .query("floorPlans")
+      .withIndex("by_projectId_floor", (query: any) =>
+        query.eq("projectId", args.id).eq("floor", args.floor)
+      )
+      .unique();
+
+    if (!floorPlan) {
+      throw new Error("Floor plan not found");
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(args.id, {
+      finalPlanFloor: args.floor,
+      finalPlanLabel: args.label.trim().slice(0, 160) || `Floor ${args.floor}`,
+      finalPlanSourceRevisionId: args.sourceRevisionId,
+      finalPlanProposalId: args.proposalId,
+      finalPlanUpdatedAt: now,
+      updatedAt: now
+    });
+
+    return args.id;
+  }
+});
+
 export const enablePublicShare = mutationGeneric({
   args: {
     id: v.id("projects")

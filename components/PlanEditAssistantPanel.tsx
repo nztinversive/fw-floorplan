@@ -31,6 +31,11 @@ type PlanEditAssistantPanelProps = {
   onSelectRevisionOption?: (clientId: string, proposalId: string) => Promise<void> | void
   onSaveProposal: (proposal: PlanEditProposal) => Promise<void> | void
   onApplyProposal?: (proposal: PlanEditProposal) => Promise<void> | void
+  onPromoteProposal?: (
+    proposal: PlanEditProposal,
+    context: { revisionId?: string; proposalId: string }
+  ) => Promise<void> | void
+  isPromoting?: boolean
 }
 
 type PlanEditSourceContext = {
@@ -116,7 +121,9 @@ export default function PlanEditAssistantPanel({
   onSaveRevision,
   onSelectRevisionOption,
   onSaveProposal,
-  onApplyProposal
+  onApplyProposal,
+  onPromoteProposal,
+  isPromoting = false
 }: PlanEditAssistantPanelProps) {
   const [prompt, setPrompt] = useState(EXAMPLE_PROMPTS[0])
   const [lockedConstraintIds, setLockedConstraintIds] = useState<PlanEditConstraintId[]>([
@@ -468,16 +475,33 @@ export default function PlanEditAssistantPanel({
               type="button"
               className="button-ghost"
               onClick={() => selectedProposal && onSaveProposal(selectedProposal)}
-              disabled={!selectedProposal || isSaving || isApplying}
+              disabled={!selectedProposal || isSaving || isApplying || isPromoting}
             >
               <Plus size={17} />
               {isSaving ? "Saving..." : "Save as new floor"}
             </button>
+            {onPromoteProposal ? (
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() =>
+                  selectedProposal &&
+                  onPromoteProposal(selectedProposal, {
+                    revisionId: activeRevisionId || undefined,
+                    proposalId: selectedProposal.id
+                  })
+                }
+                disabled={!selectedProposal || isSaving || isApplying || isPromoting || selectedHardConstraintMiss}
+              >
+                <Trophy size={17} />
+                {isPromoting ? "Promoting..." : "Promote to final plan"}
+              </button>
+            ) : null}
             <button
               type="button"
               className="button-ghost"
               onClick={() => recommendedProposal && onSaveProposal(recommendedProposal)}
-              disabled={!recommendedProposal || isSaving || isApplying}
+              disabled={!recommendedProposal || isSaving || isApplying || isPromoting}
             >
               <Trophy size={17} />
               Save recommended
@@ -489,7 +513,7 @@ export default function PlanEditAssistantPanel({
           {selectedProposal && onApplyProposal ? (
             <div className="plan-edit-apply-note">
               {selectedHardConstraintMiss
-                ? "Resolve missed hard constraints before applying in place. Saving as a new floor is still available for exploration."
+                ? "Resolve missed hard constraints before applying in place or promoting as final. Saving as a new floor is still available for exploration."
                 : `Applying in place saves the current ${floorLabel.toLowerCase()} as a named version first, so it can be restored from the editor.`}
             </div>
           ) : null}
