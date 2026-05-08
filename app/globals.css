@@ -1542,6 +1542,113 @@ button:disabled,
   font-weight: 900;
 }
 
+.plan-edit-winner-insight {
+  display: grid;
+  gap: 0.8rem;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.68rem;
+  background: linear-gradient(135deg, rgba(255, 251, 235, 0.78), rgba(255, 255, 255, 0.92));
+  padding: 0.86rem;
+}
+
+.plan-edit-winner-insight-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: flex-start;
+}
+
+.plan-edit-winner-insight-header strong {
+  display: block;
+  margin-top: 0.16rem;
+  color: var(--fw-navy);
+  font-size: 0.88rem;
+  line-height: 1.34;
+}
+
+.plan-edit-winner-eyebrow {
+  color: #735419;
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.plan-edit-winner-score-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.plan-edit-winner-score {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 0.52rem 0.56rem;
+}
+
+.plan-edit-winner-score span {
+  overflow: hidden;
+  color: var(--fw-slate);
+  font-size: 0.64rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.plan-edit-winner-score strong {
+  color: var(--fw-navy);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.plan-edit-winner-reasons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.68rem;
+}
+
+.plan-edit-winner-reasons > div {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+}
+
+.plan-edit-winner-reasons > div > strong {
+  color: var(--fw-navy);
+  font-size: 0.78rem;
+}
+
+.plan-edit-winner-reason {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.42rem;
+  align-items: start;
+  color: var(--fw-slate);
+  font-size: 0.74rem;
+  font-weight: 760;
+  line-height: 1.38;
+}
+
+.plan-edit-winner-reason svg {
+  margin-top: 0.08rem;
+  color: #166534;
+}
+
+.plan-edit-winner-reason.is-risk svg {
+  color: #735419;
+}
+
+.plan-edit-winner-fixes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
 .plan-edit-delta-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -9091,6 +9198,7 @@ button.render-variant-row:disabled {
   .render-presets-save-row,
   .concept-option-card,
   .plan-edit-before-after,
+  .plan-edit-winner-reasons,
   .render-review-queue-next,
   .render-revision-brief-summary,
   .floor-plan-compare-stats {
@@ -9149,6 +9257,7 @@ button.render-variant-row:disabled {
   .plan-edit-before-after,
   .plan-edit-delta-grid,
   .plan-edit-score-grid,
+  .plan-edit-winner-score-strip,
   .plan-quality-gates-list,
   .render-workflow-steps {
     grid-template-columns: 1fr;

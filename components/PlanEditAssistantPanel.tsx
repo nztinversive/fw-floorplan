@@ -58,6 +58,13 @@ type PlanEditChatMessage = {
   createdAt: number
 }
 
+type PlanEditOptionInsight = {
+  scoreHighlights: Array<{ label: string; value: number }>
+  strengths: string[]
+  risks: string[]
+  fixes: Array<{ label: string; instruction: string }>
+}
+
 const EXAMPLE_PROMPTS = [
   "Make the kitchen bigger and add a walk-in pantry",
   "Add a private office near the entry",
@@ -142,6 +149,80 @@ function makeChatMessage(role: PlanEditChatMessage["role"], text: string, source
   }
 }
 
+function getPlanOptionInsights(proposal: PlanEditProposal): PlanEditOptionInsight {
+  const scoreEntries = SCORE_LABELS
+    .map((score) => ({
+      label: score.label,
+      value: proposal.scores[score.key],
+      key: score.key
+    }))
+    .sort((left, right) => right.value - left.value)
+  const lowScores = [...scoreEntries].sort((left, right) => left.value - right.value)
+  const hardMisses = proposal.constraints.filter((constraint) => constraint.status === "missed")
+  const reviewConstraints = proposal.constraints.filter((constraint) => constraint.status === "review")
+  const strengths = [
+    scoreEntries[0] ? `${scoreEntries[0].label} leads at ${scoreEntries[0].value}/100.` : "",
+    scoreEntries[1] ? `${scoreEntries[1].label} is also strong at ${scoreEntries[1].value}/100.` : "",
+    proposal.changes[0] ?? ""
+  ].filter(Boolean).slice(0, 2)
+  const risks = [
+    ...hardMisses.map((constraint) => constraint.detail),
+    ...reviewConstraints.map((constraint) => constraint.detail),
+    ...lowScores
+      .filter((score) => score.value < 78)
+      .map((score) => `${score.label} is the lowest score at ${score.value}/100.`),
+    ...proposal.checks
+  ].filter(Boolean).slice(0, 2)
+  const fixes = lowScores.slice(0, 2).map((score) => {
+    if (score.key === "flow") {
+      return {
+        label: "Improve circulation",
+        instruction: "Improve circulation, simplify the path from entry to kitchen and bedrooms, and reduce awkward room transitions."
+      }
+    }
+
+    if (score.key === "privacy") {
+      return {
+        label: "Resolve privacy risk",
+        instruction: "Improve privacy by separating bedroom zones, screening the primary suite, and reducing direct views from shared spaces."
+      }
+    }
+
+    if (score.key === "outdoorConnection") {
+      return {
+        label: "Add outdoor link",
+        instruction: "Improve outdoor connection with clearer patio, porch, deck, or indoor-outdoor room adjacency."
+      }
+    }
+
+    if (score.key === "renderReadiness") {
+      return {
+        label: "Make render-ready",
+        instruction: "Improve render readiness with stronger entry logic, exterior-facing rooms, window rhythm, and facade cues."
+      }
+    }
+
+    return {
+      label: "Improve program fit",
+      instruction: "Improve program fit by better matching the requested rooms, must-haves, and target layout priorities."
+    }
+  })
+
+  if (hardMisses.length > 0) {
+    fixes.unshift({
+      label: "Fix constraints",
+      instruction: `Resolve these missed constraints before saving: ${hardMisses.map((constraint) => constraint.label).join(", ")}.`
+    })
+  }
+
+  return {
+    scoreHighlights: scoreEntries,
+    strengths: strengths.length > 0 ? strengths : ["This option has the strongest overall score in the current set."],
+    risks: risks.length > 0 ? risks : ["No major risks surfaced. Run design review after saving for deeper validation."],
+    fixes: fixes.slice(0, 3)
+  }
+}
+
 export default function PlanEditAssistantPanel({
   floorLabel,
   sourceData,
@@ -180,6 +261,10 @@ export default function PlanEditAssistantPanel({
   const selectedProposal = proposals.find((proposal) => proposal.id === selectedProposalId) ?? proposals[0] ?? null
   const recommendedProposal = proposals.find((proposal) => proposal.isRecommended) ?? proposals[0] ?? null
   const selectedHardConstraintMiss = Boolean(selectedProposal?.hasHardConstraintMiss)
+  const selectedOptionInsight = useMemo(
+    () => (selectedProposal ? getPlanOptionInsights(selectedProposal) : null),
+    [selectedProposal]
+  )
   const activeRevision = revisionThreads.find((thread) => thread.id === activeRevisionId) ?? null
   const previewSource = activeRevision
     ? { label: activeRevision.sourceLabel, data: activeRevision.sourceData }
@@ -798,6 +883,63 @@ export default function PlanEditAssistantPanel({
                   </div>
                   <span className="badge">{selectedProposal.scores.overall}% score</span>
                 </div>
+
+                {selectedOptionInsight ? (
+                  <section className="plan-edit-winner-insight">
+                    <div className="plan-edit-winner-insight-header">
+                      <div>
+                        <div className="plan-edit-winner-eyebrow">Why this option wins</div>
+                        <strong>{selectedProposal.recommendationReason}</strong>
+                      </div>
+                      <span className="badge">{selectedProposal.constraintSummary}</span>
+                    </div>
+
+                    <div className="plan-edit-winner-score-strip" aria-label="Winner score breakdown">
+                      {selectedOptionInsight.scoreHighlights.map((score) => (
+                        <div key={score.label} className="plan-edit-winner-score">
+                          <span>{score.label}</span>
+                          <strong>{score.value}</strong>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="plan-edit-winner-reasons">
+                      <div>
+                        <strong>Strengths</strong>
+                        {selectedOptionInsight.strengths.map((strength) => (
+                          <div key={strength} className="plan-edit-winner-reason">
+                            <CheckCircle2 size={15} />
+                            <span>{strength}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div>
+                        <strong>Risks</strong>
+                        {selectedOptionInsight.risks.map((risk) => (
+                          <div key={risk} className="plan-edit-winner-reason is-risk">
+                            <ArrowRight size={15} />
+                            <span>{risk}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="plan-edit-winner-fixes">
+                      {selectedOptionInsight.fixes.map((fix) => (
+                        <button
+                          key={fix.label}
+                          type="button"
+                          className="plan-edit-chip"
+                          disabled={isGeneratingAI}
+                          onClick={() => handleFollowUp(fix.instruction)}
+                        >
+                          <MessageSquareText size={14} />
+                          {fix.label}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
 
                 <div className="plan-edit-delta-grid" aria-label="Before and after plan delta">
                   <div className="plan-edit-delta-item">
