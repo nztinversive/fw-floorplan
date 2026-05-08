@@ -1033,6 +1033,106 @@ button:disabled,
   gap: 0.45rem;
 }
 
+.plan-edit-chat-thread-card {
+  display: grid;
+  gap: 0.72rem;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.68rem;
+  background: rgba(255, 255, 255, 0.82);
+  padding: 0.78rem;
+}
+
+.plan-edit-chat-thread-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: flex-start;
+}
+
+.plan-edit-chat-thread-header strong,
+.plan-edit-chat-thread-header span {
+  display: block;
+}
+
+.plan-edit-chat-thread-header strong {
+  color: var(--fw-navy);
+  font-size: 0.86rem;
+}
+
+.plan-edit-chat-thread-header div > span {
+  margin-top: 0.16rem;
+  color: var(--fw-slate);
+  font-size: 0.74rem;
+  line-height: 1.36;
+}
+
+.plan-edit-chat-thread {
+  display: grid;
+  gap: 0.48rem;
+  max-height: 15rem;
+  overflow-y: auto;
+  padding-right: 0.18rem;
+}
+
+.plan-edit-chat-message {
+  display: grid;
+  gap: 0.18rem;
+  max-width: 92%;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.62rem;
+  background: rgba(248, 250, 252, 0.92);
+  padding: 0.58rem 0.64rem;
+}
+
+.plan-edit-chat-message.is-user {
+  justify-self: end;
+  border-color: rgba(212, 168, 75, 0.28);
+  background: rgba(255, 251, 235, 0.84);
+}
+
+.plan-edit-chat-message span {
+  overflow: hidden;
+  color: var(--fw-slate);
+  font-size: 0.64rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.plan-edit-chat-message strong {
+  color: var(--fw-navy);
+  font-size: 0.78rem;
+  font-weight: 780;
+  line-height: 1.38;
+}
+
+.plan-edit-chat-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.plan-edit-chat-composer textarea {
+  width: 100%;
+  min-height: 3.1rem;
+  resize: vertical;
+  border: 1px solid var(--fw-border);
+  border-radius: 0.58rem;
+  background: #ffffff;
+  color: var(--fw-ink);
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  padding: 0.62rem 0.7rem;
+}
+
+.plan-edit-chat-composer textarea:focus {
+  outline: 2px solid rgba(212, 168, 75, 0.28);
+  border-color: rgba(212, 168, 75, 0.55);
+}
+
 .plan-edit-chip {
   display: inline-flex;
   gap: 0.35rem;

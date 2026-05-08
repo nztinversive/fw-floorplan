@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowRight, Bot, CheckCircle2, MessageSquareText, Plus, RefreshCw, Trophy, WandSparkles } from "lucide-react"
+import { ArrowRight, Bot, CheckCircle2, MessageSquareText, Plus, RefreshCw, Send, Trophy, WandSparkles } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import FloorPlanPreviewSvg from "@/components/FloorPlanPreviewSvg"
@@ -44,6 +44,20 @@ type PlanEditSourceContext = {
   proposalId?: string
 }
 
+type PlanEditGenerationResult = {
+  mode: PlanEditRevisionMode
+  sourceLabel: string
+  proposals: PlanEditProposal[]
+}
+
+type PlanEditChatMessage = {
+  id: string
+  role: "assistant" | "user"
+  text: string
+  sourceLabel?: string
+  createdAt: number
+}
+
 const EXAMPLE_PROMPTS = [
   "Make the kitchen bigger and add a walk-in pantry",
   "Add a private office near the entry",
@@ -65,6 +79,13 @@ const FOLLOW_UP_ACTIONS = [
   { label: "Better for renders", instruction: "Strengthen facade logic, entry cues, window rhythm, and plan-to-render readiness." },
   { label: "Add outdoor living", instruction: "Add or improve a patio, porch, deck, or indoor-outdoor living connection." }
 ]
+
+const INITIAL_CHAT_MESSAGE: PlanEditChatMessage = {
+  id: "plan-edit-chat-intro",
+  role: "assistant",
+  text: "Tell me the next floor plan change. I will generate editable options from the current plan, or from the selected winner if one is active.",
+  createdAt: 0
+}
 
 const CONSTRAINT_OPTIONS: Array<{
   id: PlanEditConstraintId
@@ -111,6 +132,16 @@ function formatRevisionTime(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
 }
 
+function makeChatMessage(role: PlanEditChatMessage["role"], text: string, sourceLabel?: string): PlanEditChatMessage {
+  return {
+    id: `plan-edit-chat-${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    role,
+    text,
+    sourceLabel,
+    createdAt: Date.now()
+  }
+}
+
 export default function PlanEditAssistantPanel({
   floorLabel,
   sourceData,
@@ -138,6 +169,8 @@ export default function PlanEditAssistantPanel({
   const [iterationSource, setIterationSource] = useState<PlanEditSourceContext | null>(null)
   const [revisionThreads, setRevisionThreads] = useState<PlanEditRevisionRecord[]>([])
   const [activeRevisionId, setActiveRevisionId] = useState("")
+  const [chatDraft, setChatDraft] = useState("")
+  const [chatMessages, setChatMessages] = useState<PlanEditChatMessage[]>([INITIAL_CHAT_MESSAGE])
   const sourceFingerprint = useMemo(() => getSourceFingerprint(sourceData, floorLabel), [floorLabel, sourceData])
   const savedRevisionFingerprint = useMemo(
     () => savedRevisions.map((revision) => `${revision.clientId}:${revision.selectedProposalId}:${revision.createdAt}`).join("|"),
@@ -160,6 +193,8 @@ export default function PlanEditAssistantPanel({
     setIterationSource(null)
     setRevisionThreads([])
     setActiveRevisionId("")
+    setChatDraft("")
+    setChatMessages([INITIAL_CHAT_MESSAGE])
   }, [sourceFingerprint])
 
   useEffect(() => {
@@ -197,7 +232,7 @@ export default function PlanEditAssistantPanel({
     source: PlanEditSourceContext
     nextProposals: PlanEditProposal[]
     mode: PlanEditRevisionMode
-  }) {
+  }): PlanEditRevisionRecord {
     const selectedId = args.nextProposals[0]?.id ?? ""
     const now = Date.now()
     const clientId = `plan-edit-thread-${now}`
@@ -228,6 +263,8 @@ export default function PlanEditAssistantPanel({
     })).catch((error) => {
       console.error("Unable to persist plan edit revision.", error)
     })
+
+    return thread
   }
 
   function loadRevision(thread: PlanEditRevisionRecord) {
@@ -244,12 +281,12 @@ export default function PlanEditAssistantPanel({
     )
   }
 
-  function handlePreview(promptOverride?: string, sourceOverride?: PlanEditSourceContext) {
+  function handlePreview(promptOverride?: string, sourceOverride?: PlanEditSourceContext): PlanEditGenerationResult | null {
     const request = promptOverride ?? prompt
     const source = sourceOverride ?? workingSource
 
     if (!source || !request.trim()) {
-      return
+      return null
     }
 
     const nextProposals = generatePlanEditProposals(source.data, request, getConstraints())
@@ -260,19 +297,24 @@ export default function PlanEditAssistantPanel({
       mode: "local"
     })
     setGenerationMessage(`Generated local editable options from ${source.label}.`)
+
+    return {
+      mode: "local",
+      sourceLabel: source.label,
+      proposals: nextProposals
+    }
   }
 
-  async function handleOpenAIPreview(promptOverride?: string, sourceOverride?: PlanEditSourceContext) {
+  async function handleOpenAIPreview(promptOverride?: string, sourceOverride?: PlanEditSourceContext): Promise<PlanEditGenerationResult | null> {
     const request = (promptOverride ?? prompt).trim()
     const source = sourceOverride ?? workingSource
 
     if (!source || !request || isGeneratingAI) {
-      return
+      return null
     }
 
     if (!onGenerateWithAI) {
-      handlePreview(request, source)
-      return
+      return handlePreview(request, source)
     }
 
     setIsGeneratingAI(true)
@@ -291,6 +333,11 @@ export default function PlanEditAssistantPanel({
         mode: "openai"
       })
       setGenerationMessage(`OpenAI generated editable options from ${source.label}.`)
+      return {
+        mode: "openai",
+        sourceLabel: source.label,
+        proposals: nextProposals
+      }
     } catch (error) {
       const fallbackProposals = generatePlanEditProposals(source.data, request, getConstraints())
       recordRevision({
@@ -304,6 +351,11 @@ export default function PlanEditAssistantPanel({
           ? `OpenAI was unavailable (${error.message}); generated local fallback options.`
           : "OpenAI was unavailable; generated local fallback options."
       )
+      return {
+        mode: "fallback",
+        sourceLabel: source.label,
+        proposals: fallbackProposals
+      }
     } finally {
       setIsGeneratingAI(false)
     }
@@ -317,20 +369,56 @@ export default function PlanEditAssistantPanel({
     )
   }
 
-  function handleFollowUp(instruction: string) {
+  function getChatSource(): PlanEditSourceContext | null {
     if (!selectedProposal) {
-      return
+      return workingSource
     }
 
-    const nextPrompt = joinPrompt(prompt, instruction)
-    const nextSource = {
+    return {
       label: selectedProposal.title,
       data: selectedProposal.data,
       proposalId: selectedProposal.id
     }
+  }
+
+  async function submitChatInstruction(instruction: string) {
+    const request = instruction.trim()
+    const nextSource = getChatSource()
+
+    if (!request || !nextSource || isGeneratingAI) {
+      return
+    }
+
+    const nextPrompt = joinPrompt(prompt, request)
     setPrompt(nextPrompt)
     setIterationSource(nextSource)
-    setGenerationMessage(`${selectedProposal.title} is now the source. Run OpenAI or local generation to continue the revision.`)
+    setChatDraft("")
+    setChatMessages((current) => [
+      ...current,
+      makeChatMessage("user", request, nextSource.label)
+    ].slice(-10))
+
+    const result = await handleOpenAIPreview(request, nextSource)
+    if (!result) {
+      return
+    }
+
+    const recommended = result.proposals.find((proposal) => proposal.isRecommended) ?? result.proposals[0]
+    const modeLabel = result.mode === "openai" ? "OpenAI" : result.mode === "fallback" ? "Fallback" : "Local"
+    setChatMessages((current) => [
+      ...current,
+      makeChatMessage(
+        "assistant",
+        recommended
+          ? `${modeLabel} generated ${result.proposals.length} editable options from ${result.sourceLabel}. Best first pass: ${recommended.title}.`
+          : `${modeLabel} generated editable options from ${result.sourceLabel}.`,
+        result.sourceLabel
+      )
+    ].slice(-10))
+  }
+
+  function handleFollowUp(instruction: string) {
+    void submitChatInstruction(instruction)
   }
 
   function handleUseSelectedAsSource() {
@@ -409,6 +497,62 @@ export default function PlanEditAssistantPanel({
                 {example}
               </button>
             ))}
+          </div>
+
+          <div className="plan-edit-chat-thread-card">
+            <div className="plan-edit-chat-thread-header">
+              <div>
+                <strong>Conversation</strong>
+                <span>
+                  {selectedProposal
+                    ? `Next message will iterate from ${selectedProposal.title}.`
+                    : `Next message will start from ${sourceLabel}.`}
+                </span>
+              </div>
+              <span className="badge">{onGenerateWithAI ? "OpenAI" : "Local"}</span>
+            </div>
+
+            <div className="plan-edit-chat-thread" aria-live="polite">
+              {chatMessages.map((message) => (
+                <div key={message.id} className={`plan-edit-chat-message is-${message.role}`}>
+                  <span>
+                    {message.role === "assistant" ? "Assistant" : "You"}
+                    {message.sourceLabel ? ` · ${message.sourceLabel}` : ""}
+                  </span>
+                  <strong>{message.text}</strong>
+                </div>
+              ))}
+            </div>
+
+            <form
+              className="plan-edit-chat-composer"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void submitChatInstruction(chatDraft)
+              }}
+            >
+              <textarea
+                value={chatDraft}
+                onChange={(event) => setChatDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault()
+                    void submitChatInstruction(chatDraft)
+                  }
+                }}
+                placeholder="Ask for the next tweak..."
+                rows={2}
+                disabled={!workingSource || isGeneratingAI}
+              />
+              <button
+                type="submit"
+                className="icon-button"
+                aria-label="Send plan edit"
+                disabled={!workingSource || !chatDraft.trim() || isGeneratingAI}
+              >
+                <Send size={17} />
+              </button>
+            </form>
           </div>
 
           <div className="plan-edit-constraints-card">
@@ -538,6 +682,7 @@ export default function PlanEditAssistantPanel({
                     key={action.label}
                     type="button"
                     className="plan-edit-chip"
+                    disabled={isGeneratingAI}
                     onClick={() => handleFollowUp(action.instruction)}
                   >
                     <MessageSquareText size={14} />
