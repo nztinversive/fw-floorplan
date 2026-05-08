@@ -125,6 +125,10 @@ function getStyleLabelForPrompt(style: string) {
   return STYLE_PRESET_MAP[style as StylePresetId]?.name ?? style;
 }
 
+function formatFloorLabel(floor: number) {
+  return `Floor ${floor}`;
+}
+
 function summarizeCount(count: number, singular: string, plural: string) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
@@ -378,10 +382,44 @@ function describeFloorPlans(floorPlans: HydratedFloorPlanDoc[]) {
   return description;
 }
 
+function getRenderSource(project: ProjectWithFloorPlans, sourceFloor?: number) {
+  const requestedFloor = Number.isFinite(sourceFloor)
+    ? sourceFloor
+    : project.finalPlanFloor;
+  const requestedFloorPlan =
+    typeof requestedFloor === "number"
+      ? project.floorPlans.find((floorPlan) => floorPlan.floor === requestedFloor)
+      : null;
+
+  if (requestedFloorPlan) {
+    const isFinalPlan = project.finalPlanFloor === requestedFloorPlan.floor;
+    const sourcePlanLabel = isFinalPlan
+      ? project.finalPlanLabel ?? formatFloorLabel(requestedFloorPlan.floor)
+      : formatFloorLabel(requestedFloorPlan.floor);
+
+    return {
+      floorPlans: [requestedFloorPlan],
+      sourceFloor: requestedFloorPlan.floor,
+      sourcePlanLabel,
+      description: isFinalPlan
+        ? `Render source: final plan candidate "${sourcePlanLabel}" on ${formatFloorLabel(requestedFloorPlan.floor)}. Use this plan as the source of truth for layout, massing, room-aware windows, and exterior logic.`
+        : `Render source: ${formatFloorLabel(requestedFloorPlan.floor)}. Use this selected floor as the source of truth for layout, massing, room-aware windows, and exterior logic.`
+    };
+  }
+
+  return {
+    floorPlans: project.floorPlans,
+    sourceFloor: undefined,
+    sourcePlanLabel: "All saved floors",
+    description: "Render source: all saved floor plans. Use the combined saved plans as the source of truth for layout, massing, room-aware windows, and exterior logic."
+  };
+}
+
 function composePrompt(args: {
   architecturalDescription: string;
   projectName: string;
   address?: string;
+  renderSourceDescription: string;
   styleId: StylePresetId;
   renderBrief?: RenderBrief;
   settings: {
@@ -401,6 +439,7 @@ function composePrompt(args: {
 
   return [
     `Create a photorealistic exterior architectural render for ${projectReference}.`,
+    args.renderSourceDescription,
     args.architecturalDescription,
     `Style direction: ${preset.promptFragment}.`,
     `Material and form direction: ${args.settings.sidingMaterial} siding, ${args.settings.roofStyle} roof form, ${args.settings.colorPalette} color palette, ${args.settings.landscaping} landscaping.`,
@@ -456,6 +495,7 @@ function buildRenderPrompt(args: {
   };
   viewAngle: RenderViewAngle;
   renderBrief?: RenderBrief;
+  sourceFloor?: number;
 }) {
   const styleId = normalizeStyleId(args.style);
   const settings = {
@@ -463,11 +503,13 @@ function buildRenderPrompt(args: {
     style: styleId,
     viewAngle: args.viewAngle
   };
-  const architecturalDescription = describeFloorPlans(args.project.floorPlans);
+  const renderSource = getRenderSource(args.project, args.sourceFloor);
+  const architecturalDescription = describeFloorPlans(renderSource.floorPlans);
   const prompt = composePrompt({
     architecturalDescription,
     projectName: args.project.name,
     address: args.project.address,
+    renderSourceDescription: renderSource.description,
     styleId,
     renderBrief: args.renderBrief ?? args.project.renderBrief,
     settings
@@ -476,6 +518,8 @@ function buildRenderPrompt(args: {
   return {
     architecturalDescription,
     prompt,
+    sourceFloor: renderSource.sourceFloor,
+    sourcePlanLabel: renderSource.sourcePlanLabel,
     settings,
     styleId
   };
@@ -584,6 +628,7 @@ export const previewPrompt = query({
     style: v.string(),
     settings: renderSettingsValidator,
     viewAngle: renderViewAngleValidator,
+    sourceFloor: v.optional(v.number()),
     renderBrief: v.optional(renderBriefValidator)
   },
   handler: async (ctx, args) => {
@@ -599,6 +644,7 @@ export const previewPrompt = query({
       style: args.style,
       settings: args.settings,
       viewAngle: args.viewAngle,
+      sourceFloor: args.sourceFloor,
       renderBrief: args.renderBrief
     });
 
@@ -647,7 +693,9 @@ export const storeGeneratedRender = internalMutation({
     imageUrl: v.id("_storage"),
     parentRenderId: v.optional(v.id("renders")),
     sourceReviewId: v.optional(v.id("renderReviews")),
-    sourceCritiqueId: v.optional(v.id("renderCritiques"))
+    sourceCritiqueId: v.optional(v.id("renderCritiques")),
+    sourceFloor: v.optional(v.number()),
+    sourcePlanLabel: v.optional(v.string())
   },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
@@ -707,6 +755,8 @@ export const storeGeneratedRender = internalMutation({
       parentRenderId: args.parentRenderId,
       sourceReviewId: args.sourceReviewId,
       sourceCritiqueId: args.sourceCritiqueId,
+      sourceFloor: args.sourceFloor,
+      sourcePlanLabel: args.sourcePlanLabel,
       createdAt: now
     });
 
@@ -724,6 +774,7 @@ export const generateRender = action({
     style: v.string(),
     settings: renderSettingsValidator,
     viewAngle: renderViewAngleValidator,
+    sourceFloor: v.optional(v.number()),
     renderBrief: v.optional(renderBriefValidator),
     parentRenderId: v.optional(v.id("renders")),
     sourceReviewId: v.optional(v.id("renderReviews")),
@@ -751,6 +802,7 @@ export const generateRender = action({
       style: args.style,
       settings: args.settings,
       viewAngle: args.viewAngle,
+      sourceFloor: args.sourceFloor,
       renderBrief: args.renderBrief
     });
 
@@ -778,7 +830,9 @@ export const generateRender = action({
       imageUrl: storageId,
       parentRenderId: args.parentRenderId,
       sourceReviewId: args.sourceReviewId,
-      sourceCritiqueId: args.sourceCritiqueId
+      sourceCritiqueId: args.sourceCritiqueId,
+      ...(promptDetails.sourceFloor ? { sourceFloor: promptDetails.sourceFloor } : {}),
+      sourcePlanLabel: promptDetails.sourcePlanLabel
     });
 
     return renderId;
@@ -983,6 +1037,8 @@ export const list = query({
           parentRenderId: render.parentRenderId,
           sourceReviewId: render.sourceReviewId,
           sourceCritiqueId: render.sourceCritiqueId,
+          sourceFloor: render.sourceFloor,
+          sourcePlanLabel: render.sourcePlanLabel,
           sourceReview,
           sourceCritique,
           reviewHistory,

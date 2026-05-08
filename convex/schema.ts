@@ -249,6 +249,8 @@ export default defineSchema({
     parentRenderId: v.optional(v.id("renders")),
     sourceReviewId: v.optional(v.id("renderReviews")),
     sourceCritiqueId: v.optional(v.id("renderCritiques")),
+    sourceFloor: v.optional(v.number()),
+    sourcePlanLabel: v.optional(v.string()),
     createdAt: v.number()
   })
     .index("by_projectId", ["projectId"])

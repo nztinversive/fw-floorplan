@@ -182,6 +182,8 @@ export type StoredRender = {
   parentRenderId?: string;
   sourceReviewId?: string;
   sourceCritiqueId?: string;
+  sourceFloor?: number;
+  sourcePlanLabel?: string;
   sourceReview?: StoredRenderReview | null;
   sourceCritique?: StoredRenderCritique | null;
   reviewHistory: StoredRenderReview[];
@@ -238,6 +240,11 @@ export type StoredProject = {
   clientName?: string;
   ownerEmail?: string;
   renderBrief?: RenderBrief;
+  finalPlanFloor?: number;
+  finalPlanLabel?: string;
+  finalPlanSourceRevisionId?: string;
+  finalPlanProposalId?: string;
+  finalPlanUpdatedAt?: number;
   createdAt: number;
   updatedAt: number;
   thumbnail?: string;

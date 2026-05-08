@@ -54,7 +54,7 @@ import {
 } from "@/lib/design-dna"
 import { buildRenderStyleLockRevision, type RenderStyleLockKey } from "@/lib/render-style-locks"
 import { generateClientPackage, generateFloorPlanPreview } from "@/lib/pdf-export"
-import { sortFloors } from "@/lib/floor-utils"
+import { formatFloorLabel, sortFloors } from "@/lib/floor-utils"
 import {
   analyzeRenderConsistency,
   type RenderConsistencyCheck,
@@ -245,6 +245,8 @@ export default function ProjectRendersPage() {
   const [batchAngles, setBatchAngles] = useState<RenderViewAngle[]>([DEFAULT_RENDER_VIEW_ANGLE])
   const [comparisonMode, setComparisonMode] = useState(false)
   const [selectedRenderIds, setSelectedRenderIds] = useState<string[]>([])
+  const [selectedRenderSourceFloor, setSelectedRenderSourceFloor] = useState<number | null>(null)
+  const [renderSourceProjectId, setRenderSourceProjectId] = useState<string | null>(null)
   const [isExportingPackage, setIsExportingPackage] = useState(false)
   const [pendingRenderAction, setPendingRenderAction] = useState<{
     renderId: string
@@ -256,17 +258,52 @@ export default function ProjectRendersPage() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [previewSettings] = useDebounce(settings, 250)
+  const orderedFloorPlans = useMemo(
+    () => (project?.floorPlans ? sortFloors(project.floorPlans as PersistedFloorPlan[]) : []),
+    [project?.floorPlans]
+  )
+  const finalPlanFloor = typeof project?.finalPlanFloor === "number" ? project.finalPlanFloor : null
+  const defaultRenderSourceFloor = useMemo(() => {
+    const finalFloorPlan =
+      finalPlanFloor !== null
+        ? orderedFloorPlans.find((floorPlan) => floorPlan.floor === finalPlanFloor)
+        : null
+    return finalFloorPlan?.floor ?? orderedFloorPlans[0]?.floor ?? null
+  }, [finalPlanFloor, orderedFloorPlans])
+  const activeRenderSourceFloorPlan = useMemo(
+    () =>
+      selectedRenderSourceFloor !== null
+        ? orderedFloorPlans.find((floorPlan) => floorPlan.floor === selectedRenderSourceFloor) ?? null
+        : null,
+    [orderedFloorPlans, selectedRenderSourceFloor]
+  )
+  const renderSourceFloorPlans = useMemo(
+    () =>
+      activeRenderSourceFloorPlan
+        ? [activeRenderSourceFloorPlan]
+        : orderedFloorPlans,
+    [activeRenderSourceFloorPlan, orderedFloorPlans]
+  )
+  const isRenderingFromFinalPlan =
+    finalPlanFloor !== null && activeRenderSourceFloorPlan?.floor === finalPlanFloor
+  const activeRenderSourceLabel = activeRenderSourceFloorPlan
+    ? isRenderingFromFinalPlan
+      ? project?.finalPlanLabel ?? formatFloorLabel(activeRenderSourceFloorPlan.floor)
+      : formatFloorLabel(activeRenderSourceFloorPlan.floor)
+    : "All saved floors"
+  const finalPlanSourceLabel =
+    finalPlanFloor !== null ? project?.finalPlanLabel ?? formatFloorLabel(finalPlanFloor) : null
   const renderDesignSpec = useMemo(
     () =>
       project
         ? buildRenderDesignSpecReport({
-          floorPlans: project.floorPlans,
+          floorPlans: renderSourceFloorPlans,
           renderBrief,
           settings,
           styleLabel: getStyleLabel(selectedStyle)
         })
         : null,
-    [project, renderBrief, selectedStyle, settings]
+    [project, renderBrief, renderSourceFloorPlans, selectedStyle, settings]
   )
   const generationRenderBrief = useMemo(
     () => (renderDesignSpec ? applyRenderDesignSpecToBrief(renderBrief, renderDesignSpec) : renderBrief),
@@ -292,6 +329,8 @@ export default function ProjectRendersPage() {
         parentRenderId: render.parentRenderId,
         sourceReviewId: render.sourceReviewId,
         sourceCritiqueId: render.sourceCritiqueId,
+        sourceFloor: render.sourceFloor,
+        sourcePlanLabel: render.sourcePlanLabel,
         sourceReview: render.sourceReview
           ? {
             id: render.sourceReview._id,
@@ -403,13 +442,13 @@ export default function ProjectRendersPage() {
     return renders.reduce<Record<string, ReturnType<typeof analyzeRenderQuality>>>((qualityById, render) => {
       qualityById[render.id] = analyzeRenderQuality({
         render,
-        floorPlans: project.floorPlans,
+        floorPlans: renderSourceFloorPlans,
         renderBrief: project.renderBrief ?? EMPTY_RENDER_BRIEF,
         childRenders: childrenByRenderId[render.id] ?? []
       })
       return qualityById
     }, {})
-  }, [childrenByRenderId, project, renders])
+  }, [childrenByRenderId, project, renderSourceFloorPlans, renders])
   const renderSpecDeltaById = useMemo(() => {
     if (!project) {
       return {}
@@ -417,7 +456,7 @@ export default function ProjectRendersPage() {
 
     return renders.reduce<Record<string, RenderSpecDeltaReport>>((deltaById, render) => {
       const renderSpecificSpec = buildRenderDesignSpecReport({
-        floorPlans: project.floorPlans,
+        floorPlans: renderSourceFloorPlans,
         renderBrief,
         settings: render.settings,
         styleLabel: getStyleLabel(render.style)
@@ -429,7 +468,7 @@ export default function ProjectRendersPage() {
       })
       return deltaById
     }, {})
-  }, [project, renderBrief, renders])
+  }, [project, renderBrief, renderSourceFloorPlans, renders])
   const renderAcceptanceById = useMemo(() => {
     return renders.reduce<Record<string, ReturnType<typeof analyzeRenderAcceptance>>>((acceptanceById, render) => {
       acceptanceById[render.id] = analyzeRenderAcceptance({
@@ -441,13 +480,13 @@ export default function ProjectRendersPage() {
     }, {})
   }, [renderQualityById, renderSpecDeltaById, renders])
   const renderSourceUpdatedAt = useMemo(() => {
-    const floorPlanUpdatedAt = (project?.floorPlans ?? []).reduce((latest, floorPlan) => {
+    const floorPlanUpdatedAt = renderSourceFloorPlans.reduce((latest, floorPlan) => {
       const childDataUpdatedAt = (floorPlan as PersistedFloorPlan & { childDataUpdatedAt?: number }).childDataUpdatedAt ?? 0
       return Math.max(latest, childDataUpdatedAt)
     }, 0)
 
     return floorPlanUpdatedAt || undefined
-  }, [project?.floorPlans])
+  }, [renderSourceFloorPlans])
   const renderReviewQueue = useMemo(
     () =>
       buildRenderReviewQueueReport({
@@ -473,12 +512,12 @@ export default function ProjectRendersPage() {
   const designOutputQA = useMemo(
     () =>
       analyzeDesignOutputQA({
-        floorPlans: project?.floorPlans ?? [],
+        floorPlans: renderSourceFloorPlans,
         renders: exportRenders,
         qualityByRenderId: renderQualityById,
         renderBrief: project?.renderBrief ?? EMPTY_RENDER_BRIEF
       }),
-    [exportRenders, project?.floorPlans, project?.renderBrief, renderQualityById]
+    [exportRenders, project?.renderBrief, renderQualityById, renderSourceFloorPlans]
   )
   const designDNA = useMemo(
     () => buildProjectDesignDNAReport({ renders }),
@@ -488,7 +527,7 @@ export default function ProjectRendersPage() {
     () =>
       project
         ? buildPlanQualityGateReport({
-          floorPlans: project.floorPlans,
+          floorPlans: renderSourceFloorPlans,
           renderBrief,
           settings,
           styleLabel: getStyleLabel(selectedStyle),
@@ -496,18 +535,18 @@ export default function ProjectRendersPage() {
           designDNAText: designDNA.dnaText
         })
         : null,
-    [designDNA.dnaText, project, projectId, renderBrief, selectedStyle, settings]
+    [designDNA.dnaText, project, projectId, renderBrief, renderSourceFloorPlans, selectedStyle, settings]
   )
   const planToRenderReadiness = useMemo(
     () =>
       project
         ? buildPlanToRenderReadinessReport({
-          floorPlans: project.floorPlans,
+          floorPlans: renderSourceFloorPlans,
           renderBrief,
           planQualityGates
         })
         : null,
-    [project, renderBrief, planQualityGates]
+    [project, renderBrief, renderSourceFloorPlans, planQualityGates]
   )
   const generationRenderBriefWithReadiness = useMemo(
     () =>
@@ -528,12 +567,13 @@ export default function ProjectRendersPage() {
           style: selectedStyle
         },
         viewAngle: previewSettings.viewAngle,
+        ...(activeRenderSourceFloorPlan ? { sourceFloor: activeRenderSourceFloorPlan.floor } : {}),
         renderBrief: previewRenderBrief
       }
       : "skip"
   )
   const renderReadinessItems = useMemo(() => {
-    const hasPlanRooms = (project?.floorPlans ?? []).some((floorPlan) => floorPlan.data.rooms.length > 0)
+    const hasPlanRooms = renderSourceFloorPlans.some((floorPlan) => floorPlan.data.rooms.length > 0)
     const hasWinner = Boolean(finalRender || renders.some((render) => render.isFavorite))
     const hasVariants = renders.some((render) => render.parentRenderId)
     const hasFinal = Boolean(finalRender)
@@ -577,7 +617,7 @@ export default function ProjectRendersPage() {
         done: packageReady
       }
     ]
-  }, [finalRender, project?.floorPlans, renderAcceptanceById, renders])
+  }, [finalRender, renderAcceptanceById, renders, renderSourceFloorPlans])
 
   const lightboxImages = useMemo(
     () =>
@@ -612,12 +652,12 @@ export default function ProjectRendersPage() {
     () =>
       project
         ? analyzeRenderConsistency({
-          floorPlans: project.floorPlans,
+          floorPlans: renderSourceFloorPlans,
           renderBrief,
           settings
         })
         : null,
-    [project, renderBrief, settings]
+    [project, renderBrief, renderSourceFloorPlans, settings]
   )
   const renderDecision = useMemo(
     () =>
@@ -631,7 +671,7 @@ export default function ProjectRendersPage() {
     [comparisonRenders, designDNA, renderQualityById]
   )
   const designControlSignals = useMemo<DesignControlCenterSignal[]>(() => {
-    const planRoomCount = (project?.floorPlans ?? []).reduce(
+    const planRoomCount = renderSourceFloorPlans.reduce(
       (total, floorPlan) => total + floorPlan.data.rooms.length,
       0
     )
@@ -681,7 +721,7 @@ export default function ProjectRendersPage() {
         status: hasFinal ? "ready" : "review"
       }
     ]
-  }, [finalRender, hasRenderBriefContent, planQualityGates, project?.floorPlans, renderDesignSpec, renderReviewQueue, renders])
+  }, [finalRender, hasRenderBriefContent, planQualityGates, renderDesignSpec, renderReviewQueue, renders, renderSourceFloorPlans])
   const designControlQueueSummary = useMemo(() => {
     const { ready, review, needsRevision, stale, missingVisualQA } = renderReviewQueue.stats
     const staleCopy = stale > 0 ? `, ${stale} stale` : ""
@@ -694,6 +734,25 @@ export default function ProjectRendersPage() {
       setRenderBrief(JSON.parse(loadedRenderBriefKey) as RenderBrief)
     }
   }, [loadedProjectId, loadedRenderBriefKey])
+
+  useEffect(() => {
+    if (!loadedProjectId || defaultRenderSourceFloor === null) {
+      return
+    }
+
+    setSelectedRenderSourceFloor((current) => {
+      const didProjectChange = renderSourceProjectId !== loadedProjectId
+      const currentStillExists =
+        current !== null && orderedFloorPlans.some((floorPlan) => floorPlan.floor === current)
+
+      if (didProjectChange || !currentStillExists) {
+        return defaultRenderSourceFloor
+      }
+
+      return current
+    })
+    setRenderSourceProjectId(loadedProjectId)
+  }, [defaultRenderSourceFloor, loadedProjectId, orderedFloorPlans, renderSourceProjectId])
 
   function updateRenderBriefField(key: keyof RenderBrief, value: string) {
     setRenderBrief((current) => ({
@@ -909,7 +968,7 @@ export default function ProjectRendersPage() {
     }
     const generationDesignSpec = project
       ? buildRenderDesignSpecReport({
-        floorPlans: project.floorPlans,
+        floorPlans: renderSourceFloorPlans,
         renderBrief: baseRenderBriefForGeneration,
         settings: generationSettings,
         styleLabel: getStyleLabel(nextStyle)
@@ -917,7 +976,7 @@ export default function ProjectRendersPage() {
       : null
     const generationQualityGates = project
       ? buildPlanQualityGateReport({
-        floorPlans: project.floorPlans,
+        floorPlans: renderSourceFloorPlans,
         renderBrief: baseRenderBriefForGeneration,
         settings: generationSettings,
         styleLabel: getStyleLabel(nextStyle),
@@ -927,7 +986,7 @@ export default function ProjectRendersPage() {
       : null
     const generationReadiness = project
       ? buildPlanToRenderReadinessReport({
-        floorPlans: project.floorPlans,
+        floorPlans: renderSourceFloorPlans,
         renderBrief: baseRenderBriefForGeneration,
         planQualityGates: generationQualityGates
       })
@@ -966,6 +1025,7 @@ export default function ProjectRendersPage() {
           ...nextSettings,
           style: nextStyle
         },
+        ...(activeRenderSourceFloorPlan ? { sourceFloor: activeRenderSourceFloorPlan.floor } : {}),
         renderBrief: renderBriefForGeneration,
         parentRenderId: options.parentRenderId as Id<"renders"> | undefined,
         sourceReviewId: options.sourceReviewId as Id<"renderReviews"> | undefined,
@@ -1134,7 +1194,7 @@ export default function ProjectRendersPage() {
       }
       const batchQualityGates = project
         ? buildPlanQualityGateReport({
-          floorPlans: project.floorPlans,
+          floorPlans: renderSourceFloorPlans,
           renderBrief,
           settings: batchSettings,
           styleLabel: getStyleLabel(combination.styleId),
@@ -1144,7 +1204,7 @@ export default function ProjectRendersPage() {
         : null
       const batchDesignSpec = project
         ? buildRenderDesignSpecReport({
-          floorPlans: project.floorPlans,
+          floorPlans: renderSourceFloorPlans,
           renderBrief,
           settings: batchSettings,
           styleLabel: getStyleLabel(combination.styleId)
@@ -1155,7 +1215,7 @@ export default function ProjectRendersPage() {
         : renderBrief
       const batchReadiness = project
         ? buildPlanToRenderReadinessReport({
-          floorPlans: project.floorPlans,
+          floorPlans: renderSourceFloorPlans,
           renderBrief: batchRenderBrief,
           planQualityGates: batchQualityGates
         })
@@ -1170,6 +1230,7 @@ export default function ProjectRendersPage() {
           style: combination.styleId,
           viewAngle: combination.viewAngle,
           settings: batchSettings,
+          ...(activeRenderSourceFloorPlan ? { sourceFloor: activeRenderSourceFloorPlan.floor } : {}),
           renderBrief: batchRenderBriefWithReadiness
         })
         if (renderId) {
@@ -1999,8 +2060,8 @@ export default function ProjectRendersPage() {
       detail: hasGenerationBlocker
         ? "Resolve blockers before starting the next render."
         : renders.length > 0
-          ? "Create another controlled pass from the current brief."
-          : "Create the first exterior concept from the current plan and brief.",
+          ? `Create another controlled pass from ${activeRenderSourceLabel}.`
+          : `Create the first exterior concept from ${activeRenderSourceLabel}.`,
       status: hasGenerationBlocker ? "blocked" : renders.length > 0 ? "ready" : "review",
       actionLabel: renders.length > 0 ? "Generate" : "Generate first",
       onClick: handleGenerateRender,
@@ -2078,6 +2139,77 @@ export default function ProjectRendersPage() {
         />
 
         <RenderWorkflowPanel steps={renderWorkflowSteps} />
+
+        <section className={`panel render-source-panel${isRenderingFromFinalPlan ? " is-final" : finalPlanFloor !== null ? " is-off-final" : ""}`}>
+          <div className="panel-header">
+            <div>
+              <div className="section-title">Render source plan</div>
+              <div className="muted">
+                {isRenderingFromFinalPlan
+                  ? `Generating from final plan candidate ${activeRenderSourceLabel}.`
+                  : finalPlanFloor !== null
+                    ? `Rendering from ${activeRenderSourceLabel}; final plan is ${finalPlanSourceLabel}.`
+                    : `Rendering from ${activeRenderSourceLabel}. Promote a final plan from the overview when the layout direction is chosen.`}
+              </div>
+            </div>
+            <span className={`badge render-source-status${isRenderingFromFinalPlan ? " is-final" : finalPlanFloor !== null ? " is-warning" : ""}`}>
+              {isRenderingFromFinalPlan ? <CheckCircle2 size={16} /> : finalPlanFloor !== null ? <AlertTriangle size={16} /> : <Circle size={16} />}
+              {isRenderingFromFinalPlan ? "final plan source" : finalPlanFloor !== null ? "different source" : "manual source"}
+            </span>
+          </div>
+
+          <div className="render-source-layout">
+            <div className="render-source-summary">
+              <strong>{activeRenderSourceLabel}</strong>
+              <span>
+                {activeRenderSourceFloorPlan
+                  ? `${formatFloorLabel(activeRenderSourceFloorPlan.floor)} has ${activeRenderSourceFloorPlan.data.rooms.length} rooms, ${activeRenderSourceFloorPlan.data.windows.length} windows, and ${activeRenderSourceFloorPlan.data.doors.length} doors feeding the render prompt.`
+                  : "All saved floor plans are available, but no single source floor is selected yet."}
+              </span>
+            </div>
+
+            <div className="render-source-selector" aria-label="Render source floor">
+              {orderedFloorPlans.map((floorPlan) => {
+                const isSelected = activeRenderSourceFloorPlan?.floor === floorPlan.floor
+                const isFinalFloor = finalPlanFloor === floorPlan.floor
+
+                return (
+                  <button
+                    key={floorPlan._id}
+                    type="button"
+                    className={`render-source-option${isSelected ? " is-selected" : ""}${isFinalFloor ? " is-final" : ""}`}
+                    onClick={() => setSelectedRenderSourceFloor(floorPlan.floor)}
+                    disabled={isGenerationBusy}
+                  >
+                    <span>{formatFloorLabel(floorPlan.floor)}</span>
+                    <strong>{isFinalFloor ? project.finalPlanLabel ?? "Final plan" : `${floorPlan.data.rooms.length} rooms`}</strong>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="button-row">
+            {finalPlanFloor !== null && !isRenderingFromFinalPlan ? (
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => setSelectedRenderSourceFloor(finalPlanFloor)}
+                disabled={isGenerationBusy}
+              >
+                Use final plan
+              </button>
+            ) : null}
+            <Link href={`/projects/${projectId}`} className="button-ghost">
+              Review final plan
+            </Link>
+            {activeRenderSourceFloorPlan ? (
+              <Link href={`/projects/${projectId}/edit?floor=${activeRenderSourceFloorPlan.floor}`} className="button-ghost">
+                Tweak source plan
+              </Link>
+            ) : null}
+          </div>
+        </section>
 
         {planToRenderReadiness ? (
           <section
@@ -2218,7 +2350,7 @@ export default function ProjectRendersPage() {
           </div>
 
           <div className="field-hint">
-            Generate and batch generate automatically use the current brief plus the render-ready design spec. Unsaved brief edits are saved before generation starts.
+            Generate and batch generate use {activeRenderSourceLabel} plus the current brief and render-ready design spec. Unsaved brief edits are saved before generation starts.
           </div>
         </section>
 
@@ -2235,7 +2367,7 @@ export default function ProjectRendersPage() {
 
         <div id="room-design-directions-section">
           <RoomDesignDirectionsPanel
-            floorPlans={project.floorPlans}
+            floorPlans={renderSourceFloorPlans}
             styleLabel={getStyleLabel(selectedStyle)}
             disabled={isGenerationBusy || isSavingBrief}
             onApplyDirections={handleApplyRoomDesignDirections}

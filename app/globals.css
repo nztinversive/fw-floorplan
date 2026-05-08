@@ -2652,6 +2652,116 @@ button:disabled,
   cursor: not-allowed;
 }
 
+.render-source-panel {
+  display: grid;
+  gap: 0.9rem;
+  border-color: rgba(27, 42, 74, 0.12);
+}
+
+.render-source-panel.is-final {
+  border-color: rgba(34, 197, 94, 0.2);
+  background: linear-gradient(135deg, rgba(240, 253, 244, 0.78), rgba(255, 255, 255, 0.96));
+}
+
+.render-source-panel.is-off-final {
+  border-color: rgba(212, 168, 75, 0.28);
+  background: linear-gradient(135deg, rgba(255, 251, 235, 0.72), rgba(255, 255, 255, 0.96));
+}
+
+.render-source-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.render-source-status.is-final {
+  background: rgba(34, 197, 94, 0.1);
+  color: #166534;
+}
+
+.render-source-status.is-warning {
+  background: rgba(212, 168, 75, 0.16);
+  color: #735419;
+}
+
+.render-source-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(280px, 1.05fr);
+  gap: 0.85rem;
+  align-items: stretch;
+}
+
+.render-source-summary {
+  display: grid;
+  align-content: center;
+  gap: 0.24rem;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.68rem;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 0.82rem;
+}
+
+.render-source-summary strong {
+  color: var(--fw-navy);
+  font-size: 0.96rem;
+  line-height: 1.3;
+}
+
+.render-source-summary span {
+  color: var(--fw-slate);
+  font-size: 0.8rem;
+  line-height: 1.42;
+}
+
+.render-source-selector {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 0.55rem;
+}
+
+.render-source-option {
+  display: grid;
+  gap: 0.22rem;
+  min-height: 4.5rem;
+  border: 1px solid rgba(27, 42, 74, 0.1);
+  border-radius: 0.64rem;
+  background: rgba(248, 250, 252, 0.82);
+  color: var(--fw-navy);
+  padding: 0.7rem;
+  text-align: left;
+}
+
+.render-source-option:hover {
+  border-color: rgba(212, 168, 75, 0.45);
+  background: rgba(212, 168, 75, 0.1);
+}
+
+.render-source-option.is-selected {
+  border-color: rgba(27, 42, 74, 0.26);
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(27, 42, 74, 0.08);
+}
+
+.render-source-option.is-final {
+  border-color: rgba(34, 197, 94, 0.22);
+}
+
+.render-source-option span {
+  color: var(--fw-slate);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.render-source-option strong {
+  overflow: hidden;
+  color: var(--fw-navy);
+  font-size: 0.82rem;
+  line-height: 1.28;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .render-brief-grid {
   display: grid;
   gap: 1rem;
@@ -8806,6 +8916,7 @@ button.render-variant-row:disabled {
   .design-control-center-focus,
   .design-control-center-signals,
   .render-workflow-steps,
+  .render-source-layout,
   .overview-readiness-grid,
   .comparison-grid,
   .render-decision-score-grid,
