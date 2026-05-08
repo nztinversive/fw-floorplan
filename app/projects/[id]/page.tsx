@@ -193,6 +193,8 @@ export default function ProjectOverviewPage() {
     [orderedFloorPlans]
   )
   const comparisonOptionsCount = orderedFloorPlans.length + (versionsQuery?.length ?? 0)
+  const promptGeneratedPlan =
+    project?.renderBrief?.designNotes.includes("Generated from prompt:") ?? false
   const publicShareUrl =
     typeof window !== "undefined" && projectId && project?.publicShareEnabled && project.publicShareToken
       ? `${window.location.origin}/projects/${projectId}/share?token=${project.publicShareToken}`
@@ -245,12 +247,14 @@ export default function ProjectOverviewPage() {
   const demoFlowSteps = [
     {
       label: "Generate plans",
-      ready: savedPlanEditRevisions.length > 0 || orderedFloorPlans.length > 1,
+      ready: promptGeneratedPlan || savedPlanEditRevisions.length > 0 || orderedFloorPlans.length > 1,
       detail:
-        savedPlanEditRevisions.length > 0
+        promptGeneratedPlan
+          ? "Prompt-generated editable plan is saved and ready for refinement."
+          : savedPlanEditRevisions.length > 0
           ? `${savedPlanEditRevisions.length} edit round${savedPlanEditRevisions.length === 1 ? "" : "s"} saved.`
           : "Create editable options from the plan brief or chat assistant.",
-      actionLabel: savedPlanEditRevisions.length > 0 ? "Open options" : "Generate options",
+      actionLabel: promptGeneratedPlan || savedPlanEditRevisions.length > 0 ? "Generate more" : "Generate options",
       sectionId: "plan-edit-assistant-section",
       icon: Layers
     },

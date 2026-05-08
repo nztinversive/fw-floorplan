@@ -20,6 +20,7 @@ import {
   type FloorPlanConcept,
   type FloorPlanConceptBrief
 } from "@/lib/floor-plan-concepts"
+import type { RenderBrief } from "@/lib/types"
 
 const PROMPT_SUGGESTIONS = [
   "3-bed mountain cabin, open kitchen, mudroom, 1800 sqft",
@@ -191,14 +192,36 @@ function makeBriefSnapshot(input: BriefInput): BriefSnapshot {
 }
 
 function makeProjectName(concept: FloorPlanConcept, snapshot: BriefSnapshot) {
-  const firstPhrase = snapshot.prompt
-    .split(/[,.]/)[0]
-    .replace(/\s+/g, " ")
-    .trim()
+  return `${snapshot.beds}-bed ${snapshot.styleLabel} - ${concept.name}`
+}
 
-  if (!firstPhrase) return concept.name
-  const stem = firstPhrase.length > 44 ? `${firstPhrase.slice(0, 44).trim()}...` : firstPhrase
-  return `${stem} - ${concept.name}`
+function makeRenderBrief(concept: FloorPlanConcept, snapshot: BriefSnapshot): RenderBrief {
+  const highlights = concept.highlights.join("; ")
+  const tradeoffs = concept.tradeoffs.join("; ")
+  return {
+    designNotes: [
+      `Generated from prompt: ${snapshot.prompt.trim()}`,
+      `Selected editable plan: ${concept.name}. ${concept.summary}`,
+      `Exterior direction: ${snapshot.styleLabel}.`,
+      highlights ? `Plan strengths to express in the exterior: ${highlights}.` : ""
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    mustHave: [
+      `${snapshot.beds} bed, ${snapshot.baths} bath, approximately ${snapshot.sqft.toLocaleString()} sf.`,
+      snapshot.refinements.length > 0 ? snapshot.refinements.join("; ") : "",
+      `Preserve the saved floor plan footprint, room logic, doors, windows, and ${concept.estimatedSqFt.toLocaleString()} sf generated layout.`
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    avoid: [
+      "Do not invent unsupported wings, garages, porches, or extra floors unless they are visible in the saved plan.",
+      tradeoffs ? `Resolve carefully: ${tradeoffs}.` : ""
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    revisionNotes: ""
+  }
 }
 
 export default function GeneratePage() {
@@ -217,6 +240,8 @@ export default function GeneratePage() {
   const [refinements, setRefinements] = useState<string[]>([])
   const [generatedBrief, setGeneratedBrief] = useState<BriefSnapshot | null>(null)
   const createProject = useMutation(api.projects.createWithInitialFloorPlan)
+  const updateRenderBrief = useMutation(api.projects.updateRenderBrief)
+  const setFinalPlanCandidate = useMutation(api.projects.setFinalPlanCandidate)
 
   const styleLabel = useMemo(
     () => getStyleLabel(styleId),
@@ -315,6 +340,17 @@ export default function GeneratePage() {
         floor: 1,
         data: selectedCandidate.data
       })
+      await Promise.all([
+        updateRenderBrief({
+          id: projectId,
+          renderBrief: makeRenderBrief(selectedCandidate, resultBrief)
+        }),
+        setFinalPlanCandidate({
+          id: projectId,
+          floor: 1,
+          label: selectedCandidate.name
+        })
+      ])
       toast(`${selectedCandidate.name} created as an editable project`, "success")
       router.push(`/projects/${projectId}/edit?floor=1&from=prompt`)
     } catch (error) {
@@ -363,7 +399,7 @@ export default function GeneratePage() {
               lineHeight: 1.05,
               margin: 0,
               color: "var(--studio-ink)",
-              letterSpacing: "-0.01em"
+              letterSpacing: 0
             }}
           >
             Three <em style={{ fontStyle: "italic" }}>editable options</em>
@@ -467,7 +503,7 @@ export default function GeneratePage() {
             </div>
           </section>
 
-          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+          <div className="studio-gen-actionbar">
             <button
               type="button"
               className="studio-btn is-ghost"

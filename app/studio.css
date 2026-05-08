@@ -1055,10 +1055,10 @@ body {
 .studio-gen-inner {
   width: min(960px, calc(100% - 48px));
   margin: 0 auto;
-  padding: 56px 0 80px;
+  padding: 36px 0 64px;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 24px;
 }
 
 .studio-gen-hero {
@@ -1077,10 +1077,10 @@ body {
 .studio-gen-hero h1 {
   font-family: var(--font-display), Georgia, serif;
   font-weight: 400;
-  font-size: 56px;
+  font-size: 48px;
   line-height: 1.05;
-  letter-spacing: -0.02em;
-  margin: 0 0 12px;
+  letter-spacing: 0;
+  margin: 0 0 10px;
   color: var(--studio-ink);
 }
 
@@ -1106,7 +1106,7 @@ body {
 
 .studio-gen-promptbox textarea {
   width: 100%;
-  min-height: 120px;
+  min-height: 96px;
   border: 0;
   background: transparent;
   resize: vertical;
@@ -1343,6 +1343,62 @@ body {
   padding: 2px 6px;
 }
 
+.studio-gen-actionbar {
+  position: sticky;
+  bottom: 18px;
+  z-index: 20;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 10px;
+  margin: 0 -10px;
+  border-radius: var(--studio-r-md);
+  background: color-mix(in srgb, var(--studio-bg) 84%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.generated-handoff-panel {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(79, 126, 91, 0.2);
+  border-radius: var(--studio-r-md);
+  background: rgba(79, 126, 91, 0.08);
+  box-shadow: var(--studio-shadow-1);
+}
+
+.generated-handoff-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(79, 126, 91, 0.14);
+  color: var(--studio-good);
+}
+
+@media (max-width: 720px) {
+  .generated-handoff-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-gen-actionbar {
+    justify-content: stretch;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .studio-gen-actionbar .studio-btn,
+  .generated-handoff-panel .button-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 .studio-gen-progress {
   background: var(--studio-panel);
   border: 1px solid var(--studio-line);
@@ -1399,13 +1455,19 @@ body {
   margin-bottom: 1.25rem;
 }
 
+.page-heading > div {
+  min-width: 0;
+}
+
 .page-title {
   font-family: var(--font-display), Georgia, serif;
   font-weight: 400;
   font-style: italic;
   font-size: clamp(1.75rem, 3vw, 2.4rem);
-  line-height: 1.05;
-  letter-spacing: -0.01em;
+  line-height: 1.1;
+  letter-spacing: 0;
+  max-width: min(760px, 100%);
+  overflow-wrap: anywhere;
   color: var(--studio-ink);
 }
 
@@ -1414,7 +1476,7 @@ body {
   font-weight: 400;
   font-size: 1.25rem;
   line-height: 1.15;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
   color: var(--studio-ink);
 }
 

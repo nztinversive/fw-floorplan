@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import type Konva from "konva"
-import { Clock, MessageSquare } from "lucide-react"
+import { Clock, Image as ImageIcon, MessageSquare, Sparkles } from "lucide-react"
 import dynamic from "next/dynamic"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -114,6 +114,7 @@ export default function ProjectEditorPage() {
     [project?.floorPlans]
   )
   const rawFloorParam = searchParams.get("floor")
+  const isPromptGeneratedHandoff = searchParams.get("from") === "prompt"
   const selectedFloor = useMemo(
     () => {
       const requestedFloor = Number(rawFloorParam)
@@ -669,6 +670,24 @@ export default function ProjectEditorPage() {
         </div>
       </div>
 
+      {isPromptGeneratedHandoff ? (
+        <section className="generated-handoff-panel">
+          <div className="generated-handoff-icon">
+            <Sparkles size={18} />
+          </div>
+          <div>
+            <div className="section-title">Your generated plan is editable</div>
+            <div className="muted">
+              The selected concept is saved as {formatFloorLabel(selectedFloor)}, marked as the current plan source, and its prompt has been carried into the render brief.
+            </div>
+          </div>
+          <Link href={`/projects/${projectId}/renders`} className="button-secondary">
+            <ImageIcon size={16} />
+            Open renders
+          </Link>
+        </section>
+      ) : null}
+
       <div className="panel" style={{ marginBottom: "1rem" }}>
         <div className="panel-header" style={{ marginBottom: "0.75rem" }}>
           <div className="section-title">Floors</div>
@@ -855,7 +874,7 @@ export default function ProjectEditorPage() {
         </div>
       ) : null}
 
-      {!isMobileReadOnly ? <OnboardingTour /> : null}
+      {!isMobileReadOnly && !isPromptGeneratedHandoff ? <OnboardingTour /> : null}
     </main>
   )
 }
