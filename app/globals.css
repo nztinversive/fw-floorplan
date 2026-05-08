@@ -1886,6 +1886,102 @@ button:disabled,
   line-height: 1.38;
 }
 
+.overview-demo-flow-panel {
+  display: grid;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+  border-color: rgba(27, 42, 74, 0.12);
+}
+
+.overview-demo-flow-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.62rem;
+}
+
+.overview-demo-flow-step {
+  position: relative;
+  display: grid;
+  gap: 0.62rem;
+  min-width: 0;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.7rem;
+  background: rgba(248, 250, 252, 0.82);
+  padding: 0.75rem;
+}
+
+.overview-demo-flow-step.is-ready {
+  border-color: rgba(34, 197, 94, 0.18);
+  background: rgba(240, 253, 244, 0.58);
+}
+
+.overview-demo-flow-index {
+  position: absolute;
+  top: 0.62rem;
+  right: 0.62rem;
+  color: rgba(27, 42, 74, 0.38);
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.overview-demo-flow-icon {
+  display: grid;
+  place-items: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 0.58rem;
+  background: rgba(27, 42, 74, 0.08);
+  color: var(--fw-navy);
+}
+
+.overview-demo-flow-step.is-ready .overview-demo-flow-icon {
+  background: rgba(34, 197, 94, 0.12);
+  color: #166534;
+}
+
+.overview-demo-flow-step strong,
+.overview-demo-flow-step span {
+  display: block;
+}
+
+.overview-demo-flow-step strong {
+  color: var(--fw-navy);
+  font-size: 0.84rem;
+  line-height: 1.24;
+}
+
+.overview-demo-flow-step span {
+  margin-top: 0.18rem;
+  color: var(--fw-slate);
+  font-size: 0.73rem;
+  line-height: 1.38;
+}
+
+.overview-demo-flow-action {
+  display: inline-flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  border: 1px solid rgba(27, 42, 74, 0.1);
+  border-radius: 0.54rem;
+  background: #ffffff;
+  color: var(--fw-navy);
+  padding: 0.48rem 0.58rem;
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.overview-demo-flow-action:hover {
+  border-color: rgba(212, 168, 75, 0.5);
+  background: rgba(212, 168, 75, 0.12);
+}
+
+.overview-demo-flow-action:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
 .final-plan-candidate-panel {
   display: flex;
   align-items: center;
@@ -9164,6 +9260,7 @@ button.render-variant-row:disabled {
   .render-workflow-steps,
   .render-source-layout,
   .overview-readiness-grid,
+  .overview-demo-flow-grid,
   .comparison-grid,
   .render-decision-score-grid,
   .render-decision-variant-grid,

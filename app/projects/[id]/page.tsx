@@ -4,7 +4,7 @@ import Link from "next/link"
 import dynamic from "next/dynamic"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { useAction, useMutation, useQuery } from "convex/react"
-import { AlertTriangle, CalendarDays, CheckCircle2, DraftingCompass, Download, Image as ImageIcon, Info, Layers, Link2, MapPin, MessageSquare, MoreHorizontal, Pencil, RotateCw, Trash2, Trophy, User, X } from "lucide-react"
+import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, DraftingCompass, Download, Image as ImageIcon, Info, Layers, Link2, MapPin, MessageSquare, MoreHorizontal, Pencil, RotateCw, Trash2, Trophy, User, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import Breadcrumb from "@/components/Breadcrumb"
@@ -242,6 +242,68 @@ export default function ProjectOverviewPage() {
     }
   ]
   const clientPackageReadyCount = clientPackageChecks.filter((check) => check.ready).length
+  const demoFlowSteps = [
+    {
+      label: "Generate plans",
+      ready: savedPlanEditRevisions.length > 0 || orderedFloorPlans.length > 1,
+      detail:
+        savedPlanEditRevisions.length > 0
+          ? `${savedPlanEditRevisions.length} edit round${savedPlanEditRevisions.length === 1 ? "" : "s"} saved.`
+          : "Create editable options from the plan brief or chat assistant.",
+      actionLabel: savedPlanEditRevisions.length > 0 ? "Open options" : "Generate options",
+      sectionId: "plan-edit-assistant-section",
+      icon: Layers
+    },
+    {
+      label: "Pick winner",
+      ready: typeof project?.finalPlanFloor === "number",
+      detail: typeof project?.finalPlanFloor === "number"
+        ? `${project.finalPlanLabel ?? "Final plan"} is promoted.`
+        : "Use the option scoring and risks to promote the strongest plan.",
+      actionLabel: typeof project?.finalPlanFloor === "number" ? "View final" : "Promote winner",
+      sectionId: "plan-edit-assistant-section",
+      icon: Trophy
+    },
+    {
+      label: "Fix issues",
+      ready: activePlanToRenderReadiness?.status === "ready",
+      detail: activePlanToRenderReadiness
+        ? activePlanToRenderReadiness.summary
+        : "Run plan quality checks before rendering.",
+      actionLabel: activePlanToRenderReadiness?.status === "ready" ? "Ready" : "Review gates",
+      sectionId: "overview-plan-readiness-section",
+      icon: activePlanToRenderReadiness?.status === "ready" ? CheckCircle2 : AlertTriangle
+    },
+    {
+      label: "Render",
+      ready: (rendersQuery?.length ?? 0) > 0,
+      detail:
+        (rendersQuery?.length ?? 0) > 0
+          ? `${rendersQuery?.length ?? 0} render${rendersQuery?.length === 1 ? "" : "s"} generated.`
+          : "Generate at least one render from the final plan source.",
+      actionLabel: "Open renders",
+      href: `/projects/${projectId}/renders`,
+      icon: ImageIcon
+    },
+    {
+      label: "Share",
+      ready: Boolean(project?.publicShareEnabled && project.publicShareToken),
+      detail: project?.publicShareEnabled
+        ? "Read-only presentation link is enabled."
+        : "Enable the tokenized share link when ready for testers.",
+      actionLabel: project?.publicShareEnabled ? "Open public link" : "Enable link",
+      ...(project?.publicShareEnabled ? { href: publicShareUrl } : { sectionId: "share-link-section" }),
+      icon: Link2
+    }
+  ]
+  const demoFlowReadyCount = demoFlowSteps.filter((step) => step.ready).length
+
+  function handleScrollToOverviewSection(sectionId: string) {
+    document.getElementById(sectionId)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start"
+    })
+  }
 
   function startEditing() {
     if (!project) return
@@ -806,28 +868,82 @@ export default function ProjectOverviewPage() {
         </section>
       ) : null}
 
-      <FloorPlanConceptStudio
-        projectName={project.name}
-        floorCount={orderedFloorPlans.length}
-        isSaving={isSavingConceptFloor}
-        onGenerateConcepts={(brief) => generateAiConcepts({ projectId, brief })}
-        onSaveConcept={handleSaveConceptFloor}
-      />
+      <section className="panel overview-demo-flow-panel">
+        <div className="panel-header">
+          <div>
+            <div className="section-title">Launch demo path</div>
+            <div className="muted">
+              The core loop testers should understand in one pass: generate, choose, fix, render, share.
+            </div>
+          </div>
+          <span className="badge">
+            {demoFlowReadyCount}/{demoFlowSteps.length} complete
+          </span>
+        </div>
+        <div className="overview-demo-flow-grid">
+          {demoFlowSteps.map((step, index) => {
+            const Icon = step.icon
+            const action =
+              "href" in step && step.href ? (
+                <Link href={step.href} className="overview-demo-flow-action">
+                  {step.actionLabel}
+                  <ArrowRight size={14} />
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className="overview-demo-flow-action"
+                  onClick={() => "sectionId" in step && step.sectionId ? handleScrollToOverviewSection(step.sectionId) : undefined}
+                  disabled={step.ready && step.label === "Fix issues"}
+                >
+                  {step.actionLabel}
+                  <ArrowRight size={14} />
+                </button>
+              )
 
-      <PlanEditAssistantPanel
-        floorLabel={activeFloorPlan ? formatFloorLabel(activeFloorPlan.floor) : "the selected floor"}
-        sourceData={activeFloorPlan?.data ?? null}
-        isSaving={isSavingPlanEditFloor}
-        isApplying={isApplyingPlanEditFloor}
-        isPromoting={isPromotingPlanEditFloor}
-        onGenerateWithAI={handleGeneratePlanEditsWithAI}
-        savedRevisions={savedPlanEditRevisions}
-        onSaveRevision={handleSavePlanEditRevision}
-        onSelectRevisionOption={handleSelectPlanEditRevisionOption}
-        onSaveProposal={handleSavePlanEditFloor}
-        onApplyProposal={activeFloorPlan ? handleApplyPlanEditToCurrentFloor : undefined}
-        onPromoteProposal={handlePromotePlanEditProposal}
-      />
+            return (
+              <article key={step.label} className={`overview-demo-flow-step${step.ready ? " is-ready" : ""}`}>
+                <div className="overview-demo-flow-index">{index + 1}</div>
+                <div className="overview-demo-flow-icon">
+                  <Icon size={17} />
+                </div>
+                <div>
+                  <strong>{step.label}</strong>
+                  <span>{step.detail}</span>
+                </div>
+                {action}
+              </article>
+            )
+          })}
+        </div>
+      </section>
+
+      <div id="generate-plans-section">
+        <FloorPlanConceptStudio
+          projectName={project.name}
+          floorCount={orderedFloorPlans.length}
+          isSaving={isSavingConceptFloor}
+          onGenerateConcepts={(brief) => generateAiConcepts({ projectId, brief })}
+          onSaveConcept={handleSaveConceptFloor}
+        />
+      </div>
+
+      <div id="plan-edit-assistant-section">
+        <PlanEditAssistantPanel
+          floorLabel={activeFloorPlan ? formatFloorLabel(activeFloorPlan.floor) : "the selected floor"}
+          sourceData={activeFloorPlan?.data ?? null}
+          isSaving={isSavingPlanEditFloor}
+          isApplying={isApplyingPlanEditFloor}
+          isPromoting={isPromotingPlanEditFloor}
+          onGenerateWithAI={handleGeneratePlanEditsWithAI}
+          savedRevisions={savedPlanEditRevisions}
+          onSaveRevision={handleSavePlanEditRevision}
+          onSelectRevisionOption={handleSelectPlanEditRevisionOption}
+          onSaveProposal={handleSavePlanEditFloor}
+          onApplyProposal={activeFloorPlan ? handleApplyPlanEditToCurrentFloor : undefined}
+          onPromoteProposal={handlePromotePlanEditProposal}
+        />
+      </div>
 
       {typeof project.finalPlanFloor === "number" ? (
         <section className="panel final-plan-candidate-panel">
@@ -888,7 +1004,7 @@ export default function ProjectOverviewPage() {
       </section>
 
       {activePlanToRenderReadiness ? (
-        <section className={`panel plan-to-render-readiness-panel is-${activePlanToRenderReadiness.status}`}>
+        <section id="overview-plan-readiness-section" className={`panel plan-to-render-readiness-panel is-${activePlanToRenderReadiness.status}`}>
           <div className="panel-header">
             <div>
               <div className="section-title">Plan-to-render readiness</div>
@@ -1188,48 +1304,50 @@ export default function ProjectOverviewPage() {
         </section>
       ) : null}
 
-      <ShareLinkCard
-        url={publicShareUrl}
-        disabled={!project.publicShareEnabled}
-        description={
-          project.publicShareEnabled
-            ? "Public read-only client presentation link. Anyone with the token can view floor plans, renders, and comments."
-            : "Enable a tokenized public link when this package is ready for a client."
-        }
-        actions={
-          project.publicShareEnabled ? (
-            <>
+      <div id="share-link-section">
+        <ShareLinkCard
+          url={publicShareUrl}
+          disabled={!project.publicShareEnabled}
+          description={
+            project.publicShareEnabled
+              ? "Public read-only client presentation link. Anyone with the token can view floor plans, renders, and comments."
+              : "Enable a tokenized public link when this package is ready for a client."
+          }
+          actions={
+            project.publicShareEnabled ? (
+              <>
+                <button
+                  type="button"
+                  className="button-ghost"
+                  onClick={handleRotatePublicShare}
+                  disabled={isUpdatingShareLink}
+                >
+                  <RotateCw size={16} />
+                  Rotate
+                </button>
+                <button
+                  type="button"
+                  className="button-ghost"
+                  onClick={handleDisablePublicShare}
+                  disabled={isUpdatingShareLink}
+                >
+                  Disable
+                </button>
+              </>
+            ) : (
               <button
                 type="button"
-                className="button-ghost"
-                onClick={handleRotatePublicShare}
+                className="button-secondary"
+                onClick={handleEnablePublicShare}
                 disabled={isUpdatingShareLink}
               >
-                <RotateCw size={16} />
-                Rotate
+                <Link2 size={16} />
+                {isUpdatingShareLink ? "Enabling..." : "Enable public link"}
               </button>
-              <button
-                type="button"
-                className="button-ghost"
-                onClick={handleDisablePublicShare}
-                disabled={isUpdatingShareLink}
-              >
-                Disable
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              className="button-secondary"
-              onClick={handleEnablePublicShare}
-              disabled={isUpdatingShareLink}
-            >
-              <Link2 size={16} />
-              {isUpdatingShareLink ? "Enabling..." : "Enable public link"}
-            </button>
-          )
-        }
-      />
+            )
+          }
+        />
+      </div>
 
       {showComparisonDialog ? (
         <div className="dialog-backdrop" onClick={() => setShowComparisonDialog(false)}>

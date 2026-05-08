@@ -239,8 +239,8 @@ export default function PlanEditAssistantPanel({
 }: PlanEditAssistantPanelProps) {
   const [prompt, setPrompt] = useState(EXAMPLE_PROMPTS[0])
   const [lockedConstraintIds, setLockedConstraintIds] = useState<PlanEditConstraintId[]>([
-    "keep-bedroom-count",
-    "keep-kitchen"
+    "improve-privacy",
+    "improve-render-readiness"
   ])
   const [maxSqFt, setMaxSqFt] = useState("")
   const [proposals, setProposals] = useState<PlanEditProposal[]>([])
