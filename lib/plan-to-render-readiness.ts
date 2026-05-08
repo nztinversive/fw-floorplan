@@ -168,7 +168,8 @@ function buildPromptGuidance(args: {
     `${counts.rooms} rooms, ${counts.walls} walls, ${counts.doors} doors, and ${counts.windows} windows are present.`,
     labelText,
     issueText,
-    "Keep exterior renders faithful to the saved floor plan; do not invent extra stories, major wings, or facade openings that conflict with the plan."
+    "Keep exterior renders faithful to the saved floor plan; do not invent extra stories, major wings, offset side volumes, or facade openings that conflict with the plan.",
+    "Treat the saved wall envelope and opening count as a hard budget: style details may change, but the massing, roof complexity, porch size, and visible window rhythm should stay plan-faithful."
   ].join(" ");
 }
 

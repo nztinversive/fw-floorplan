@@ -343,12 +343,116 @@ function estimateFootprint(floorPlans: HydratedFloorPlanDoc[], totalSqFt: number
   return `The footprint is approximately ${Math.round(widthFeet)} feet wide by ${Math.round(depthFeet)} feet deep.`;
 }
 
+function getScaledFootprint(floorPlan: HydratedFloorPlanDoc) {
+  const bounds = getPlanBounds(floorPlan);
+  if (!bounds || floorPlan.data.scale <= 0) {
+    return null;
+  }
+
+  const widthFeet = (bounds.maxX - bounds.minX) / floorPlan.data.scale;
+  const depthFeet = (bounds.maxY - bounds.minY) / floorPlan.data.scale;
+
+  if (
+    !Number.isFinite(widthFeet) ||
+    !Number.isFinite(depthFeet) ||
+    widthFeet < 10 ||
+    widthFeet > 200 ||
+    depthFeet < 10 ||
+    depthFeet > 200
+  ) {
+    return null;
+  }
+
+  return {
+    widthFeet,
+    depthFeet,
+    aspectRatio: widthFeet / Math.max(depthFeet, 1)
+  };
+}
+
+function getFootprintShapeDirective(floorPlans: HydratedFloorPlanDoc[]) {
+  const primaryFloor = floorPlans[0];
+  if (!primaryFloor) {
+    return null;
+  }
+
+  const footprint = getScaledFootprint(primaryFloor);
+  if (!footprint) {
+    return "Preserve the saved footprint proportions and do not invent major wings, side volumes, extra stories, or detached masses.";
+  }
+
+  const width = Math.round(footprint.widthFeet);
+  const depth = Math.round(footprint.depthFeet);
+  const shape =
+    footprint.aspectRatio >= 1.55
+      ? "broad linear rectangular"
+      : footprint.aspectRatio <= 0.7
+        ? "deep narrow rectangular"
+        : "compact rectangular";
+
+  return `Preserve a ${shape} footprint of about ${width} ft wide by ${depth} ft deep; do not turn it into a multi-wing, highly offset, or multi-volume composition.`;
+}
+
+function buildRoomProgramDirective(floorPlans: HydratedFloorPlanDoc[]) {
+  const rooms = floorPlans
+    .flatMap((floorPlan) =>
+      floorPlan.data.rooms.map((room) => ({
+        floor: floorPlan.floor,
+        label: room.label.trim(),
+        area: Math.round(room.areaSqFt)
+      }))
+    )
+    .filter((room) => room.label.length > 0)
+    .slice(0, 10);
+
+  if (rooms.length === 0) {
+    return null;
+  }
+
+  return `Room program to express, not exceed: ${rooms
+    .map((room) => `${formatFloorLabel(room.floor)} ${room.label}${room.area > 0 ? ` (${room.area} sq ft)` : ""}`)
+    .join("; ")}.`;
+}
+
+function buildOpeningBudgetDirective(floorPlans: HydratedFloorPlanDoc[]) {
+  const windowCount = floorPlans.reduce((total, floorPlan) => total + floorPlan.data.windows.length, 0);
+  const doorCount = floorPlans.reduce((total, floorPlan) => total + floorPlan.data.doors.length, 0);
+
+  if (windowCount === 0 && doorCount === 0) {
+    return "No saved openings are available; keep facade openings conservative and avoid decorative extra windows or doors.";
+  }
+
+  const windowText =
+    windowCount > 0
+      ? `${summarizeCount(windowCount, "saved window marker", "saved window markers")}`
+      : "no saved window markers";
+  const doorText =
+    doorCount > 0
+      ? `${summarizeCount(doorCount, "saved door marker", "saved door markers")}`
+      : "no saved door markers";
+
+  return `Opening budget: ${windowText} and ${doorText}. In the visible elevations, stay close to this rhythm; do not add a dense facade of unsupported extra glazing.`;
+}
+
+function buildPlanFidelityDirectives(floorPlans: HydratedFloorPlanDoc[]) {
+  const directives = [
+    "Plan fidelity requirements:",
+    getFootprintShapeDirective(floorPlans),
+    buildRoomProgramDirective(floorPlans),
+    buildOpeningBudgetDirective(floorPlans),
+    "Use style to dress the saved massing, not to redesign the plan; rooflines, porches, entries, and windows must follow the saved floor-plan logic.",
+    "If a feature is not in the saved plan or brief, keep it modest and integrated instead of making it a dominant new volume."
+  ].filter(Boolean);
+
+  return directives.join(" ");
+}
+
 function describeFloorPlans(floorPlans: HydratedFloorPlanDoc[]) {
   const orderedFloorPlans = [...floorPlans].sort((left, right) => left.floor - right.floor);
   const totalSqFt = getTotalSqFt(orderedFloorPlans);
   const bedrooms = countRoomsByLabel(
     orderedFloorPlans,
-    (label) => label.includes("bedroom") || label.includes("bunk")
+    (label) => label.includes("bedroom") || label.includes("bunk") || label.includes("primary suite") || label.includes("suite")
   );
   const bathrooms = countRoomsByLabel(
     orderedFloorPlans,
@@ -417,6 +521,7 @@ function getRenderSource(project: ProjectWithFloorPlans, sourceFloor?: number) {
 
 function composePrompt(args: {
   architecturalDescription: string;
+  planFidelityDirectives: string;
   projectName: string;
   address?: string;
   renderSourceDescription: string;
@@ -441,6 +546,7 @@ function composePrompt(args: {
     `Create a photorealistic exterior architectural render for ${projectReference}.`,
     args.renderSourceDescription,
     args.architecturalDescription,
+    args.planFidelityDirectives,
     `Style direction: ${preset.promptFragment}.`,
     `Material and form direction: ${args.settings.sidingMaterial} siding, ${args.settings.roofStyle} roof form, ${args.settings.colorPalette} color palette, ${args.settings.landscaping} landscaping.`,
     args.renderBrief?.designNotes
@@ -505,8 +611,10 @@ function buildRenderPrompt(args: {
   };
   const renderSource = getRenderSource(args.project, args.sourceFloor);
   const architecturalDescription = describeFloorPlans(renderSource.floorPlans);
+  const planFidelityDirectives = buildPlanFidelityDirectives(renderSource.floorPlans);
   const prompt = composePrompt({
     architecturalDescription,
+    planFidelityDirectives,
     projectName: args.project.name,
     address: args.project.address,
     renderSourceDescription: renderSource.description,
@@ -606,6 +714,7 @@ function buildCritiquePrompt(args: {
     "You are an architectural design director running image-based visual QA on AI-generated exterior home renders for a modular home design workflow.",
     "Inspect the actual visible image against the saved render prompt, floor-plan summary, and render-ready design spec embedded in the prompt when present.",
     "Prioritize these QA categories: floor plan fidelity, design spec match, camera angle, missing or invented key elements, material/style fidelity, buildability, and client-ready polish.",
+    "Treat unsupported extra wings, extra stories, over-articulated roof volumes, oversized porches, and a denser window rhythm than the saved plan as floor plan fidelity issues, even when the image looks polished.",
     "For every non-strength issue, use a short actionable category such as floor plan fidelity, design spec, camera angle, key elements, materials/style, buildability, or client polish.",
     "Do not mention that you cannot perfectly verify dimensions from a single render. Ground every issue in what is visible or in a clear mismatch with the brief/spec.",
     "",

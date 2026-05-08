@@ -20,14 +20,14 @@ const VISUAL_QA_TARGETS: VisualQATarget[] = [
     label: "Fix plan fidelity",
     terms: ["floor", "plan", "room", "bedroom", "kitchen", "living", "door", "window", "facade rhythm"],
     instruction:
-      "Regenerate with stricter floor-plan fidelity: align rooms, doors, window rhythm, and visible facade cues to the saved plan instead of inventing unsupported elements."
+      "Regenerate with strict floor-plan fidelity: preserve the saved wall envelope, room program, door count, and window rhythm; remove unsupported wings, extra gables, dense glazing, oversized porches, or added volumes."
   },
   {
     id: "design-spec",
     label: "Match design spec",
     terms: ["spec", "brief", "constraint", "garage", "carport", "porch", "entry", "must include", "avoid"],
     instruction:
-      "Regenerate to match the render-ready design spec exactly, preserving must-have constraints and removing unsupported garage, carport, porch, or entry inventions."
+      "Regenerate to match the render-ready design spec exactly, preserving must-have constraints and removing unsupported garage, carport, porch, entry, roof, window, or massing inventions."
   },
   {
     id: "camera-angle",

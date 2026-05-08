@@ -81,7 +81,7 @@ export function analyzeRenderConsistency(args: {
   const checks: RenderConsistencyCheck[] = [];
   const bedrooms = countRooms(
     args.floorPlans,
-    (label) => label.includes("bedroom") || label.includes("bunk")
+    (label) => label.includes("bedroom") || label.includes("bunk") || label.includes("primary suite") || label.includes("suite")
   );
   const livingRooms = countRooms(args.floorPlans, (label) => includesAny(label, LIVING_TERMS));
   const roomCount = getRoomCount(args.floorPlans);

@@ -111,6 +111,39 @@ function getFootprintSummary(floorPlans: StoredFloorPlan[]) {
   return `${widthFeet} ft wide by ${depthFeet} ft deep`;
 }
 
+function getFootprintShapeConstraint(floorPlans: StoredFloorPlan[]) {
+  const firstFloor = [...floorPlans].sort((left, right) => left.floor - right.floor)[0];
+  if (!firstFloor || firstFloor.data.walls.length === 0 || firstFloor.data.scale <= 0) {
+    return "Preserve the saved footprint proportions; do not invent major wings, offset side volumes, extra stories, or detached masses.";
+  }
+
+  const points = firstFloor.data.walls.flatMap((wall) => [
+    { x: wall.x1, y: wall.y1 },
+    { x: wall.x2, y: wall.y2 }
+  ]);
+  const widthFeet = (Math.max(...points.map((point) => point.x)) - Math.min(...points.map((point) => point.x))) / firstFloor.data.scale;
+  const depthFeet = (Math.max(...points.map((point) => point.y)) - Math.min(...points.map((point) => point.y))) / firstFloor.data.scale;
+
+  if (
+    !Number.isFinite(widthFeet) ||
+    !Number.isFinite(depthFeet) ||
+    widthFeet <= 0 ||
+    depthFeet <= 0
+  ) {
+    return "Preserve the saved footprint proportions; do not invent major wings, offset side volumes, extra stories, or detached masses.";
+  }
+
+  const aspectRatio = widthFeet / Math.max(depthFeet, 1);
+  const shape =
+    aspectRatio >= 1.55
+      ? "broad linear rectangular"
+      : aspectRatio <= 0.7
+        ? "deep narrow rectangular"
+        : "compact rectangular";
+
+  return `Preserve the ${shape} footprint, roughly ${Math.round(widthFeet)} ft wide by ${Math.round(depthFeet)} ft deep; do not convert it into a multi-wing or highly articulated massing.`;
+}
+
 function makeAction(id: string, label: string, target: keyof RenderBrief, text: string): RenderDesignSpecAction {
   return { id, label, target, text };
 }
@@ -267,11 +300,14 @@ export function buildRenderDesignSpecReport(args: {
   }
   if (counts.windows > 0) {
     roomWindowAssumptions.push(`${pluralize(counts.windows, "window")} are saved and should guide facade rhythm.`);
+    roomWindowAssumptions.push(`Visible exterior openings should stay close to the saved ${pluralize(counts.windows, "window")} rather than adding a denser decorative window grid.`);
   }
   if (counts.doors > 0) {
     roomWindowAssumptions.push(`${pluralize(counts.doors, "door")} are saved and should anchor entry and service openings.`);
   }
 
+  constraints.push(getFootprintShapeConstraint(args.floorPlans));
+  constraints.push("Use exterior style to dress the saved plan, not to redesign the plan with unsupported wings, extra gables, extra porches, or extra floors.");
   constraints.push(`${args.styleLabel} exterior direction using ${args.settings.sidingMaterial}, ${args.settings.roofStyle}, and ${args.settings.colorPalette}.`);
   constraints.push(`Camera must stay aligned to ${args.settings.viewAngle.replace(/-/g, " ")} with ${args.settings.timeOfDay} lighting in ${args.settings.season}.`);
   if (hasPorchCue) {
