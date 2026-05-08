@@ -1,12 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { useQuery } from "convex/react"
-import { FolderPlus, Search, X, Upload, PenTool, Image as ImageIcon, ArrowRight } from "lucide-react"
+import { FolderPlus, Search, Sparkles, Upload } from "lucide-react"
 
 import ProjectCard from "@/components/ProjectCard"
-import { SkeletonProjectCard } from "@/components/Skeleton"
 import { api } from "@/convex/_generated/api"
 import type { ProjectSummary } from "@/lib/types"
 
@@ -20,68 +19,24 @@ function getDisplayImage(src?: string) {
   return src?.startsWith("http") || src?.startsWith("data:") ? src : undefined
 }
 
-const HERO_DISMISSED_KEY = "fw-hero-dismissed"
+const TABS = [
+  { id: "recent", label: "Recent" },
+  { id: "new", label: "New" },
+  { id: "withPlans", label: "With plans" },
+  { id: "needsPlan", label: "Needs plan" }
+] as const
 
-function HeroIllustration() {
-  return (
-    <svg viewBox="0 0 320 240" fill="none" className="hero-illustration" aria-hidden="true">
-      {/* Floor plan outline */}
-      <rect x="40" y="60" width="240" height="140" rx="4" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
-      {/* Interior walls */}
-      <line x1="160" y1="60" x2="160" y2="140" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
-      <line x1="160" y1="140" x2="280" y2="140" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
-      <line x1="40" y1="140" x2="120" y2="140" stroke="rgba(255,255,255,0.15)" strokeWidth="1.5" />
-      {/* Door arcs */}
-      <path d="M120 140 Q120 120 140 120" stroke="rgba(212,168,75,0.5)" strokeWidth="1" fill="none" strokeDasharray="3 3" />
-      <path d="M160 120 Q180 120 180 140" stroke="rgba(212,168,75,0.5)" strokeWidth="1" fill="none" strokeDasharray="3 3" />
-      {/* Room labels */}
-      <text x="90" y="110" fill="rgba(255,255,255,0.35)" fontSize="10" textAnchor="middle" fontFamily="inherit">Living</text>
-      <text x="220" y="110" fill="rgba(255,255,255,0.35)" fontSize="10" textAnchor="middle" fontFamily="inherit">Kitchen</text>
-      <text x="80" y="170" fill="rgba(255,255,255,0.35)" fontSize="9" textAnchor="middle" fontFamily="inherit">Bedroom</text>
-      <text x="220" y="170" fill="rgba(255,255,255,0.35)" fontSize="9" textAnchor="middle" fontFamily="inherit">Bath</text>
-      {/* Dimension lines */}
-      <line x1="40" y1="48" x2="280" y2="48" stroke="rgba(212,168,75,0.35)" strokeWidth="0.75" />
-      <line x1="40" y1="45" x2="40" y2="51" stroke="rgba(212,168,75,0.35)" strokeWidth="0.75" />
-      <line x1="280" y1="45" x2="280" y2="51" stroke="rgba(212,168,75,0.35)" strokeWidth="0.75" />
-      <text x="160" y="44" fill="rgba(212,168,75,0.45)" fontSize="8" textAnchor="middle" fontFamily="inherit">24&apos;-0&quot;</text>
-      {/* Decorative dots at corners */}
-      <circle cx="40" cy="60" r="2.5" fill="rgba(212,168,75,0.4)" />
-      <circle cx="280" cy="60" r="2.5" fill="rgba(212,168,75,0.4)" />
-      <circle cx="40" cy="200" r="2.5" fill="rgba(212,168,75,0.4)" />
-      <circle cx="280" cy="200" r="2.5" fill="rgba(212,168,75,0.4)" />
-    </svg>
-  )
-}
-
-const STEPS = [
-  {
-    icon: Upload,
-    title: "Upload",
-    description: "Drop a floor plan image or PDF. We extract walls and rooms automatically.",
-    tags: ["PDF support", "AI extraction", "HEIC/JPEG/PNG"],
-  },
-  {
-    icon: PenTool,
-    title: "Edit",
-    description: "Refine geometry, label rooms, add furniture. Professional editor with dark mode.",
-    tags: ["Dark mode", "Furniture library", "Undo/Redo"],
-  },
-  {
-    icon: ImageIcon,
-    title: "Render",
-    description: "Generate photorealistic exterior renders in Craftsman, Farmhouse, or Contemporary styles.",
-    tags: ["3 styles", "Batch generate", "PDF export"],
-  },
-]
+type TabId = (typeof TABS)[number]["id"]
 
 export default function DashboardPage() {
   const projectsQuery = useQuery(api.projects.list)
   const hasLoaded = projectsQuery !== undefined
+
   const projects = useMemo<ProjectSummary[]>(
     () =>
       (projectsQuery ?? []).map((project) => {
-        const projectWithThumbnail = project as typeof project & ProjectListItemWithThumbnailUrl
-
+        const projectWithThumbnail = project as typeof project &
+          ProjectListItemWithThumbnailUrl
         return {
           id: project._id,
           name: project.name,
@@ -99,20 +54,19 @@ export default function DashboardPage() {
   )
 
   const [searchQuery, setSearchQuery] = useState("")
+  const [tab, setTab] = useState<TabId>("recent")
   const [sortBy, setSortBy] = useState<"updated" | "created" | "name">("updated")
-  const [heroDismissed, setHeroDismissed] = useState(false)
-
-  useEffect(() => {
-    setHeroDismissed(localStorage.getItem(HERO_DISMISSED_KEY) === "1")
-  }, [])
-
-  function dismissHero() {
-    setHeroDismissed(true)
-    localStorage.setItem(HERO_DISMISSED_KEY, "1")
-  }
+  const activeTabLabel = TABS.find((item) => item.id === tab)?.label ?? "Recent"
 
   const filteredProjects = useMemo(() => {
     let result = projects
+    if (tab === "new") {
+      result = result.filter((project) => Date.now() - project.createdAt < 30 * 86400000)
+    } else if (tab === "withPlans") {
+      result = result.filter((project) => project.floorCount > 0)
+    } else if (tab === "needsPlan") {
+      result = result.filter((project) => project.floorCount === 0)
+    }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
@@ -123,111 +77,130 @@ export default function DashboardPage() {
           (p.clientName && p.clientName.toLowerCase().includes(q))
       )
     }
-
     return [...result].sort((a, b) => {
       if (sortBy === "name") return a.name.localeCompare(b.name)
       if (sortBy === "created") return b.createdAt - a.createdAt
       return b.updatedAt - a.updatedAt
     })
-  }, [projects, searchQuery, sortBy])
+  }, [projects, searchQuery, sortBy, tab])
 
-  const showCompactHero = heroDismissed && projects.length > 0
-  const showSteps = !heroDismissed && projects.length === 0
+  const totalFloors = projects.reduce((sum, p) => sum + (p.floorCount ?? 0), 0)
+  const avgUpdate = useMemo(() => {
+    if (projects.length === 0) return "—"
+    const recent = projects
+      .map((p) => p.updatedAt)
+      .sort((a, b) => b - a)
+      .slice(0, 3)
+    if (recent.length === 0) return "—"
+    const ms = Date.now() - recent[0]
+    const days = Math.floor(ms / 86400000)
+    if (days < 1) return "Today"
+    if (days === 1) return "Yesterday"
+    if (days < 7) return `${days}d ago`
+    return `${Math.floor(days / 7)}w ago`
+  }, [projects])
 
   return (
-    <main className="page-shell">
-      {/* ── Hero ── */}
-      {!heroDismissed ? (
-        <section className="hero-panel hero-panel-v2">
-          <button type="button" className="hero-dismiss" onClick={dismissHero} aria-label="Dismiss" style={{ position: "absolute", top: "1rem", right: "1rem" }}>
-            <X size={14} />
-          </button>
-          <div className="hero-content">
-            <div className="hero-eyebrow">Floor Plan Studio</div>
-            <div className="hero-title">Plan with precision.<br />Prepare for renders.</div>
-            <div className="hero-copy">
-              Upload floor plans, trace walls, clean up room geometry, and generate
-              photorealistic exterior renders — all in one place.
-            </div>
-            <div className="hero-actions">
-              <Link href="/projects/new" className="button">
-                <FolderPlus size={18} />
-                New project
-              </Link>
-            </div>
+    <main className="studio-page">
+      <div className="studio-page-inner">
+        {/* ── Hero ── */}
+        <section className="studio-hero">
+          <div>
+            <div className="studio-hero-eyebrow">Floor Plan Studio</div>
+            <h1>
+              Your <em>projects</em>
+            </h1>
+            <p>From a napkin sketch to a finished render — one workspace.</p>
           </div>
-          <div className="hero-visual">
-            <HeroIllustration />
+          <div className="studio-hero-actions">
+            <Link href="/projects/new" className="studio-btn is-ghost">
+              <Upload size={14} />
+              Import plan
+            </Link>
+            <Link href="/projects/new" className="studio-btn is-ghost">
+              <FolderPlus size={14} />
+              Blank canvas
+            </Link>
+            <Link href="/generate" className="studio-btn is-accent">
+              <Sparkles size={14} />
+              New from prompt
+            </Link>
           </div>
         </section>
-      ) : showCompactHero ? (
-        <section className="hero-panel is-compact">
-          <div className="hero-title">Floor Plan Studio</div>
-          <Link href="/projects/new" className="button">
-            <FolderPlus size={18} />
-            New project
-          </Link>
-        </section>
-      ) : null}
 
-      {/* ── How it works ── */}
-      {showSteps && (
-        <section className="steps-section">
-          <div className="steps-header">
-            <div className="section-title">How it works</div>
-            <div className="muted">Three steps from plan to render</div>
+        {/* ── KPIs ── */}
+        <section className="studio-kpi-row" aria-label="Project metrics">
+          <div className="studio-kpi">
+            <div className="studio-kpi-lbl">Active projects</div>
+            <div className="studio-kpi-val">{hasLoaded ? projects.length : "—"}</div>
+            <div className="studio-kpi-meta">
+              {hasLoaded
+                ? `${totalFloors} floor${totalFloors === 1 ? "" : "s"} across plans`
+                : "Loading…"}
+            </div>
           </div>
-          <div className="steps-grid">
-            {STEPS.map((step, i) => (
-              <div key={step.title} className="step-card">
-                <div className="step-number">{i + 1}</div>
-                <div className="step-icon">
-                  <step.icon size={22} />
-                </div>
-                <div className="step-title">{step.title}</div>
-                <div className="step-description">{step.description}</div>
-                <div className="step-tags">
-                  {step.tags.map((tag) => (
-                    <span key={tag} className="step-tag">{tag}</span>
-                  ))}
-                </div>
-              </div>
+          <div className="studio-kpi">
+            <div className="studio-kpi-lbl">Plans this month</div>
+            <div className="studio-kpi-val">
+              {hasLoaded
+                ? projects.filter(
+                    (p) => Date.now() - p.createdAt < 30 * 86400000
+                  ).length
+                : "—"}
+            </div>
+            <div className="studio-kpi-meta">New since 30 days</div>
+          </div>
+          <div className="studio-kpi">
+            <div className="studio-kpi-lbl">Saved floors</div>
+            <div className="studio-kpi-val">{hasLoaded ? totalFloors : "—"}</div>
+            <div className="studio-kpi-meta">Editable plan levels</div>
+          </div>
+          <div className="studio-kpi">
+            <div className="studio-kpi-lbl">Last update</div>
+            <div className="studio-kpi-val is-mono">{avgUpdate}</div>
+            <div className="studio-kpi-meta">Most recent edit</div>
+          </div>
+        </section>
+
+        {/* ── Recent plans ── */}
+        <div className="studio-section-h">
+          <h2>
+            Recent <em>plans</em>
+          </h2>
+          <div className="studio-tab-row" role="tablist">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.id}
+                className={tab === t.id ? "is-active" : ""}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+              </button>
             ))}
           </div>
-        </section>
-      )}
-
-      {/* ── Projects ── */}
-      <section style={{ marginTop: "1.5rem" }}>
-        <div className="page-heading">
-          <div>
-            <div className="page-title">Projects</div>
-            <div className="muted">
-              {hasLoaded ? `${projects.length} active ${projects.length === 1 ? "project" : "projects"}` : "Loading projects..."}
-            </div>
-          </div>
-          <Link href="/projects/new" className="button-secondary">
-            <FolderPlus size={16} />
-            Create project
-          </Link>
         </div>
 
         {hasLoaded && projects.length > 0 && (
-          <div className="search-sort-row" style={{ marginBottom: "1rem" }}>
-            <div className="search-bar" style={{ flex: 1, maxWidth: "400px" }}>
-              <Search size={16} className="search-bar-icon" />
+          <div className="studio-search-row">
+            <div className="studio-search">
+              <Search size={14} />
               <input
                 type="text"
-                className="search-bar-input"
-                placeholder="Search projects by name, address, or client..."
+                placeholder="Search projects by name, address, or client…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
             <select
-              className="sort-select"
+              className="studio-sort"
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as "updated" | "created" | "name")}
+              onChange={(e) =>
+                setSortBy(e.target.value as "updated" | "created" | "name")
+              }
+              aria-label="Sort projects"
             >
               <option value="updated">Recently updated</option>
               <option value="created">Recently created</option>
@@ -237,55 +210,69 @@ export default function DashboardPage() {
         )}
 
         {!hasLoaded ? (
-          <div className="project-grid">
-            <SkeletonProjectCard />
-            <SkeletonProjectCard />
-            <SkeletonProjectCard />
+          <div className="studio-proj-grid">
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
           </div>
         ) : projects.length > 0 ? (
           filteredProjects.length > 0 ? (
-            <div className="project-grid">
+            <div className="studio-proj-grid">
               {filteredProjects.map((project) => (
                 <ProjectCard key={project.id} project={project} />
               ))}
             </div>
           ) : (
-            <div className="empty-state">
-              <div className="section-title">No matching projects</div>
-              <div className="muted">
-                No projects match &ldquo;{searchQuery}&rdquo;. Try a different search term.
-              </div>
+            <div className="studio-empty">
+              <h3>
+                {searchQuery.trim() ? (
+                  <>
+                    Nothing matches <em>“{searchQuery}”</em>
+                  </>
+                ) : (
+                  <>
+                    No <em>{activeTabLabel.toLowerCase()}</em> projects
+                  </>
+                )}
+              </h3>
+              <p>
+                {searchQuery.trim()
+                  ? "Try a different search term or clear the filter."
+                  : "Switch filters or create another project to fill this view."}
+              </p>
             </div>
           )
         ) : (
-          <div className="empty-state empty-state-v2">
-            <div className="empty-state-icon">
-              <FolderPlus size={36} />
-            </div>
-            <div className="section-title">No projects yet</div>
-            <div className="muted" style={{ maxWidth: "28rem" }}>
-              Create your first project to upload a floor plan, refine room geometry in the editor, and generate photorealistic exterior renders.
-            </div>
-            <Link href="/projects/new" className="button">
-              <FolderPlus size={18} />
-              Create your first project
+          <div className="studio-empty">
+            <h3>
+              No projects <em>yet</em>
+            </h3>
+            <p>
+              Create your first project to upload a floor plan, refine geometry, and
+              generate photorealistic exterior renders.
+            </p>
+            <Link href="/generate" className="studio-btn is-accent">
+              <Sparkles size={14} />
+              New from prompt
             </Link>
           </div>
         )}
-      </section>
-
-      {/* ── Footer ── */}
-      <footer className="site-footer">
-        <div className="footer-brand">
-          <div className="brand-mark" style={{ width: "2rem", height: "2rem", fontSize: "0.85rem" }}>FW</div>
-          <span className="footer-brand-text">Fading West &middot; Floor Plan Studio</span>
-        </div>
-        <div className="footer-links">
-          <Link href="/projects/new">New Project</Link>
-          <span className="footer-sep">&middot;</span>
-          <span className="footer-copy">&copy; {new Date().getFullYear()} Fading West</span>
-        </div>
-      </footer>
+      </div>
     </main>
+  )
+}
+
+function SkeletonCard() {
+  return (
+    <div className="studio-proj-card" aria-hidden>
+      <div className="studio-skeleton" style={{ height: 180, borderRadius: 0 }} />
+      <div className="studio-proj-body">
+        <div className="studio-skeleton" style={{ height: 16, width: "60%" }} />
+        <div
+          className="studio-skeleton"
+          style={{ height: 12, width: "40%", marginTop: 8 }}
+        />
+      </div>
+    </div>
   )
 }
