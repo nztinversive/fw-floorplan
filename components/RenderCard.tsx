@@ -121,6 +121,36 @@ function getQualityComparison(parentReport?: RenderQualityReport, childReport?: 
   };
 }
 
+function getRenderSourceLine(render: StoredRender) {
+  if (render.sourcePlanLabel && typeof render.sourceFloor === "number") {
+    return `${render.sourcePlanLabel} / Floor ${render.sourceFloor}`;
+  }
+
+  if (render.sourcePlanLabel) {
+    return render.sourcePlanLabel;
+  }
+
+  if (typeof render.sourceFloor === "number") {
+    return `Floor ${render.sourceFloor}`;
+  }
+
+  const finalPlanMatch = render.prompt.match(/Render source:\s*final plan candidate\s+"([^"]+)"\s+on\s+Floor\s+(\d+)/i);
+  if (finalPlanMatch) {
+    return `${finalPlanMatch[1]} / Floor ${finalPlanMatch[2]}`;
+  }
+
+  const floorMatch = render.prompt.match(/Render source:\s*Floor\s+(\d+)/i);
+  if (floorMatch) {
+    return `Floor ${floorMatch[1]}`;
+  }
+
+  if (/Render source:\s*all saved floor plans/i.test(render.prompt)) {
+    return "All saved floors";
+  }
+
+  return "Saved floor plan";
+}
+
 export default function RenderCard({
   render,
   isFavoriting,
@@ -169,6 +199,7 @@ export default function RenderCard({
   const sourceReview = render.sourceReview ?? null;
   const sourceCritique = render.sourceCritique ?? null;
   const latestCritique = render.latestCritique ?? null;
+  const renderSourceLine = useMemo(() => getRenderSourceLine(render), [render]);
   const savedStyleLockSummary = useMemo(() => extractRenderStyleLockSummary(render.prompt), [render.prompt]);
   const styleLockTraits = useMemo(
     () => getRenderStyleLockTraits(render, selectedStyleLockKeys),
@@ -384,6 +415,14 @@ export default function RenderCard({
         <div className="render-meta">
           <div className="section-title">{getStyleLabel(render.style)}</div>
           <div className="render-meta-time">Generated {formatRelativeTime(render.createdAt)}</div>
+        </div>
+
+        <div className="render-source-lineage" onClick={(event) => event.stopPropagation()}>
+          <FileText size={15} />
+          <div>
+            <span>Generated from</span>
+            <strong>{renderSourceLine}</strong>
+          </div>
         </div>
 
         {qualityReport ? (

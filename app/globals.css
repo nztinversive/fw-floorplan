@@ -3787,6 +3787,45 @@ button:disabled,
   gap: 0.9rem;
 }
 
+.render-source-lineage {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.52rem;
+  align-items: center;
+  border: 1px solid rgba(27, 42, 74, 0.08);
+  border-radius: 0.58rem;
+  background: rgba(248, 250, 252, 0.78);
+  color: var(--fw-navy);
+  padding: 0.58rem 0.65rem;
+}
+
+.render-source-lineage svg {
+  color: rgba(27, 42, 74, 0.52);
+}
+
+.render-source-lineage span,
+.render-source-lineage strong {
+  display: block;
+  min-width: 0;
+}
+
+.render-source-lineage span {
+  color: var(--fw-slate);
+  font-size: 0.68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.render-source-lineage strong {
+  overflow: hidden;
+  margin-top: 0.08rem;
+  color: var(--fw-navy);
+  font-size: 0.84rem;
+  line-height: 1.28;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .render-feedback {
   display: grid;
   gap: 0.55rem;
