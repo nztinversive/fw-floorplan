@@ -95,7 +95,6 @@ export default function DesignControlCenterPanel({
             <div>
               <div className="design-control-center-signal-label">{signal.label}</div>
               <strong>{signal.value}</strong>
-              <span>{signal.detail}</span>
             </div>
           </article>
         ))}

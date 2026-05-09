@@ -115,6 +115,22 @@ const EMPTY_RENDER_BRIEF: RenderBrief = {
 }
 const ROOM_DESIGN_DIRECTIONS_HEADING = "Room-by-room design directions:"
 const PROJECT_DESIGN_DNA_HEADING = "Project Design DNA:"
+const RENDER_SETUP_SECTION_IDS = new Set([
+  "render-source-section",
+  "plan-to-render-readiness-section",
+  "plan-quality-gates-section",
+  "render-brief-section",
+  "design-dna-section",
+  "room-design-directions-section",
+  "render-design-spec-section",
+  "render-settings-section",
+  "prompt-preview-section"
+])
+const RENDER_REVIEW_SECTION_IDS = new Set([
+  "design-output-qa-section",
+  "render-review-queue-section",
+  "render-finalization-section"
+])
 
 function mergeDesignBriefBlock(existingText: string, heading: string, blockText: string) {
   const nextBlock = blockText
@@ -257,6 +273,8 @@ export default function ProjectRendersPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const [isRenderSetupOpen, setIsRenderSetupOpen] = useState(false)
+  const [isRenderReviewOpen, setIsRenderReviewOpen] = useState(false)
   const [previewSettings] = useDebounce(settings, 250)
   const orderedFloorPlans = useMemo(
     () => (project?.floorPlans ? sortFloors(project.floorPlans as PersistedFloorPlan[]) : []),
@@ -1779,12 +1797,19 @@ export default function ProjectRendersPage() {
   }
 
   function handleScrollToRenderSection(sectionId: string) {
-    window.requestAnimationFrame(() => {
+    if (RENDER_SETUP_SECTION_IDS.has(sectionId)) {
+      setIsRenderSetupOpen(true)
+    }
+    if (RENDER_REVIEW_SECTION_IDS.has(sectionId)) {
+      setIsRenderReviewOpen(true)
+    }
+
+    window.setTimeout(() => {
       document.getElementById(sectionId)?.scrollIntoView({
         behavior: "smooth",
         block: "start"
       })
-    })
+    }, 0)
   }
 
   function getDecisionRender(renderId?: string) {
@@ -2138,9 +2163,25 @@ export default function ProjectRendersPage() {
           secondaryActions={designControlSecondaryActions}
         />
 
-        <RenderWorkflowPanel steps={renderWorkflowSteps} />
+        <details
+          className="panel render-advanced-details render-page-fold"
+          open={isRenderSetupOpen}
+          onToggle={(event) => setIsRenderSetupOpen(event.currentTarget.open)}
+        >
+          <summary className="render-advanced-summary">
+            <div>
+              <div className="section-title">Create and tweak renders</div>
+              <div className="muted">
+                Source plan, brief, style, and generation settings live here when you need to adjust the next output.
+              </div>
+            </div>
+            <span className="badge">{isRenderSetupOpen ? "open" : "setup"}</span>
+          </summary>
 
-        <section className={`panel render-source-panel${isRenderingFromFinalPlan ? " is-final" : finalPlanFloor !== null ? " is-off-final" : ""}`}>
+          <div className="render-advanced-content render-page-fold-content">
+            <RenderWorkflowPanel steps={renderWorkflowSteps} />
+
+        <section id="render-source-section" className={`panel render-source-panel${isRenderingFromFinalPlan ? " is-final" : finalPlanFloor !== null ? " is-off-final" : ""}`}>
           <div className="panel-header">
             <div>
               <div className="section-title">Render source plan</div>
@@ -2384,7 +2425,7 @@ export default function ProjectRendersPage() {
           </div>
         ) : null}
 
-        <details className="panel prompt-preview-panel render-advanced-details">
+        <details id="prompt-preview-section" className="panel prompt-preview-panel render-advanced-details">
           <summary className="render-advanced-summary">
             <div>
               <div className="section-title">Prompt preview</div>
@@ -2423,7 +2464,7 @@ export default function ProjectRendersPage() {
           </div>
         </details>
 
-        <div className="render-controls">
+        <div id="render-settings-section" className="render-controls">
           <section className="panel">
             <div className="panel-header">
               <div>
@@ -2660,7 +2701,31 @@ export default function ProjectRendersPage() {
             </div>
           </aside>
         </div>
+          </div>
+        </details>
 
+        <details
+          className="panel render-advanced-details render-page-fold"
+          open={isRenderReviewOpen || revisionBriefDraft !== null}
+          onToggle={(event) => {
+            if (revisionBriefDraft !== null && !event.currentTarget.open) {
+              setIsRenderReviewOpen(false)
+              return
+            }
+            setIsRenderReviewOpen(event.currentTarget.open)
+          }}
+        >
+          <summary className="render-advanced-summary">
+            <div>
+              <div className="section-title">Advanced review and final package</div>
+              <div className="muted">
+                QA findings, revision queue, and final package checks are tucked away until you need them.
+              </div>
+            </div>
+            <span className="badge">{isRenderReviewOpen || revisionBriefDraft !== null ? "open" : "review"}</span>
+          </summary>
+
+          <div className="render-advanced-content render-page-fold-content">
         <div id="design-output-qa-section">
           <DesignOutputQAPanel
             report={designOutputQA}
@@ -2750,6 +2815,8 @@ export default function ProjectRendersPage() {
             </div>
           </div>
         </section>
+          </div>
+        </details>
 
         <section id="render-gallery-section" className="panel">
           <div className="panel-header">

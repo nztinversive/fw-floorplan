@@ -425,6 +425,15 @@ export default function RenderCard({
           </div>
         </div>
 
+        <details className="render-card-details" onClick={(event) => event.stopPropagation()}>
+          <summary>
+            <span>Review and tweak</span>
+            <span className="render-card-details-summary">
+              {qualityReport ? `${qualityReport.score}/100 quality` : "QA"}
+              {acceptanceReport ? ` | ${acceptanceReport.score} accept` : ""}
+            </span>
+          </summary>
+
         {qualityReport ? (
           <div className={`render-quality-panel is-${qualityReport.status}`} onClick={(event) => event.stopPropagation()}>
             <div className="render-quality-summary">
@@ -1096,6 +1105,7 @@ export default function RenderCard({
             </div>
           </details>
         ) : null}
+        </details>
       </div>
     </article>
   );
